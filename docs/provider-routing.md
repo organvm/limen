@@ -22,9 +22,15 @@ from the execution-profile schema instead of a label-name table. Provider adapte
 current reachable catalog by hard capabilities, rank the survivors from metadata and current
 pressure, and record the profile, catalog hash, selection source, and selected model when exposed.
 
-OpenCode is selected from `opencode models --verbose`. Empty, malformed, stale, or capability-poor
-results produce `failed_blocked`; there is no built-in model fallback and no name heuristic such as
-`free`, `code`, or a vendor family name.
+OpenCode is selected from `opencode models --verbose` when that catalog exposes complete capability
+metadata. An unavailable catalog leaves the invocation on provider Auto. A reachable catalog with no
+candidate satisfying the execution profile fails blocked.
+
+Claude, Codex, and Gemini default to provider Auto because their reachable discovery surfaces may
+provide identifiers without enough capability/cost metadata to rank a default honestly. An explicit
+`LIMEN_<PROVIDER>_MODEL` override is accepted only when its exact identifier is present in the live
+provider catalog; a missing or unreachable catalog fails the override before a worktree or provider
+side effect. The Claude fleet shim never injects a floor or trusts an environment pin on its own.
 
 Warp/Oz normally receives the execution profile with the Action's `model` input blank. Warp Auto owns
 the changing underlying catalog because Oz exposes model IDs but not enough capability/cost metadata
@@ -54,3 +60,48 @@ test that depends on a real model name is itself a regression. The implementatio
 
 Legacy production paths outside this dispatch integration are inventoried under owner issue #940;
 they are not precedent for adding another named default.
+
+## Execution trajectory
+
+`limen.execution_trajectory.v3` freezes one execution attempt at launch: task classification,
+executor, provider route and its selection source, profile, repository, session, contract, and start
+time. The deterministic attempt ID and launch-receipt digest bind those facts, so a later board edit
+cannot reassign that attempt. Exact duplicate attempts count once; divergent rows for one attempt
+identity are excluded.
+
+Every retry derives a new profile from the task's current contract before launch. Runtime selection
+may reuse only the exact active attempt's frozen profile, and its model-selection receipt must carry
+that attempt ID. Terminal conversion derives outcome from the canonical lifecycle status and rejects
+any conflicting asserted outcome. A routed retry therefore records the attempt's terminal event
+first, then a separate attempt-free `open` transition.
+
+Value credit additionally requires explicit, finite spend reconciliation plus bounded, typed output
+and side-effect reconciliation. Missing or unverifiable reconciliation remains structurally visible
+but earns zero; an empty output/effect list counts only when its owner explicitly reconciled it.
+
+Claim and result application both re-hash the current task contract against the launch receipt. If
+the contract changed, the provider cannot start or land against that attempt: the old attempt closes
+failed with its bounded output, effects, model receipt, and actual spend preserved for zero value,
+then an attempt-free `open` event binds the new current contract for a fresh reservation.
+
+Pre-v3 board rows remain lifecycle-readable, but they are not backfilled and cannot be converted
+into value-bearing trajectory receipts.
+
+The board is transport, not value authority. Success motion earns zero unless the predicate and
+owner receipt both bind the exact commit and a fresh owner adapter independently verifies the
+receipt. Credit belongs to `executing_keeper`, never to the provider route or the observer that
+later reconciled the row. The canonical signed receipt payload excludes its own digest and
+commit-bearing locator; those claims are attached only after exact-commit content readback,
+reachable-ancestor proof, envelope hashing, and independent owner-service signature verification.
+An owner-ref fast-forward therefore preserves older reachable receipts, while a diverged receipt
+fails closed.
+
+Publication has no local-shadow default. `publish_bounded` requires an owner adapter with atomic
+compare-and-set publication, rejects divergent existing attempts, and enforces finite record and
+byte bounds before the owner write. The GitHub adapter publishes the whole batch through one
+fast-forward commit/ref update. It returns a receipt only after the PATCH response, live ref,
+ancestor relation, and every exact-commit byte readback agree; a lost compare-and-set can leave
+unreachable blobs but exposes no partial trajectory paths. Production owner identity and
+credentials come only from the fixed root-custodied service documented in
+[`execution-owner-service.md`](execution-owner-service.md), never from a checkout registry,
+environment-selected binary, shell `PATH`, or executor GitHub login.

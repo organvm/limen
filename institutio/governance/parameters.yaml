@@ -136,7 +136,7 @@ parameters:
     env: LIMEN_LOCAL_FLOOR_CLASSES
     self_update: "per-class: add only on parity-gate pass; ledger waste_classes auto-rolls a class back at runtime"
     owner: dispatch
-    note: "Job classes the unmetered ollama floor may absorb (capacity.local_floor_classes). Reserved opus/fable classes are excluded in code regardless of this list."
+    note: "Job classes the unmetered ollama floor may absorb (capacity.local_floor_classes). Provider-neutral profiles requiring deep reasoning, attachments, or planning are excluded in code regardless of this list."
 
   # --- VITALS: the missing executive's thresholds (build order #1) --------------
   # These are the published 'reaction function' the heartbeat will enact. Seeds —
@@ -1882,55 +1882,31 @@ parameters:
     self_update: none
     owner: arms-agents
     note: "Prompt-level guard for isolated async/local worker packets. 1=explicitly forbid live-root and tasks.yaml mutation inside isolated worktrees; 0=omit the extra prompt block for tests or emergency rollback."
-  # --- the non-bypassable Claude model chokepoint (scripts/shims/claude) ----------
-  LIMEN_CLAUDE_SHIM_FLOOR:
-    default: "haiku"           # the cheapest rung — the SAME tier the per-task ladder assigns to unclassed work
-    env: LIMEN_CLAUDE_SHIM_FLOOR
+  LIMEN_TRAJECTORY_PUBLICATION:
+    default: "1"
+    env: LIMEN_TRAJECTORY_PUBLICATION
     self_update: none
     owner: arms-agents
-    note: "Floor the non-bypassable `claude` shim injects when a fleet spawn carries no --model. Spawns that earned more declare --model and pass through untouched; subagents inherit it. Capped by LIMEN_CLAUDE_MAX_INHERITED_TIER so this cannot silently become an Opus/Fable/1M default. See fleet-model-floor-bleed."
-  LIMEN_CLAUDE_MAX_INHERITED_TIER:
-    default: "sonnet"
-    env: LIMEN_CLAUDE_MAX_INHERITED_TIER
+    note: "Publish terminal execution attempts to the owner-native GitHub trajectory ref during harvest. 0 is an explicit operational pause; failures otherwise remain retry-visible on the exact terminal board event."
+  LIMEN_TRAJECTORY_MAX_RECORDS:
+    default: "25"
+    env: LIMEN_TRAJECTORY_MAX_RECORDS
     self_update: none
     owner: arms-agents
-    note: "Maximum tier allowed for inherited/default Claude choices such as shim floors and global LIMEN_CLAUDE_MODEL pins. Default Sonnet keeps routine fan-out cheap; task-specific declaration sites may still earn Opus/Fable through the ladder and acceptance gates."
-  LIMEN_CLAUDE_FABLE_FALLBACK_TIER:
-    default: "sonnet"
-    env: LIMEN_CLAUDE_FABLE_FALLBACK_TIER
+    note: "Positive per-task publication record bound. Invalid values fall back to 25."
+  LIMEN_TRAJECTORY_MAX_BYTES:
+    default: "262144"
+    env: LIMEN_TRAJECTORY_MAX_BYTES
     self_update: none
     owner: arms-agents
-    note: "Fallback tier when a Fable-class task or Fable model pin lacks a current LIMEN_FABLE_ACCEPTANCE receipt. Default Sonnet prevents unaccepted Fable requests from becoming default Opus spend; set to opus only for an explicit emergency policy change."
-  LIMEN_ALLOW_EXPENSIVE_CLAUDE_MODEL_PIN:
-    default: "0"
-    env: LIMEN_ALLOW_EXPENSIVE_CLAUDE_MODEL_PIN
-    self_update: none
-    owner: arms-agents
-    note: "Emergency override allowing a global LIMEN_CLAUDE_MODEL pin to route inherited/default fleet spawns to Opus or explicit large-context models. Default 0 forces expensive defaults back under LIMEN_CLAUDE_MAX_INHERITED_TIER."
-  LIMEN_ALLOW_CLAUDE_1M_CONTEXT:
-    default: "0"
-    env: LIMEN_ALLOW_CLAUDE_1M_CONTEXT
-    self_update: none
-    owner: arms-agents
-    note: "Emergency override allowing explicit 1M/large-context Claude model pins. Default 0 strips large-context pins from tier resolution unless a current Fable acceptance receipt is present."
-  LIMEN_CLAUDE_FABLE_CLASSES:
-    default: "fable,long-horizon,huge-context,ambiguous-root-cause,final-canonical-decision"
-    env: LIMEN_CLAUDE_FABLE_CLASSES
-    self_update: none
-    owner: arms-agents
-    note: "Comma-separated task classes that may select the reserved Fable rung. Class membership is not enough by itself: LIMEN_FABLE_ACCEPTANCE must point at a written scripts/fable-allotment.py receipt before dispatch may return fable instead of falling back to LIMEN_CLAUDE_FABLE_FALLBACK_TIER."
+    note: "Positive per-task canonical publication byte bound. Invalid values fall back to 262144."
+  # --- provider-neutral planning authority ----------------------------------------
   LIMEN_FABLE_ACCEPTANCE:
     default: ""
     env: LIMEN_FABLE_ACCEPTANCE
     self_update: none
     owner: arms-agents
     note: "Path to the current-week written Fable acceptance receipt emitted by scripts/fable-allotment.py accept. Empty, stale, malformed, or arbitrary paths make Fable selections fall back to Opus; value `1` is accepted only under pytest."
-  LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE:
-    default: "0"
-    env: LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE
-    self_update: none
-    owner: arms-agents
-    note: "Opt-in gate for tried:claude retry escalation from Opus to Fable. Requires LIMEN_FABLE_ACCEPTANCE as well; default caps retry bumping at Opus so Fable is never reached by inherited escalation."
   LIMEN_ALLOW_FABLE_FANOUT:
     default: "0"
     env: LIMEN_ALLOW_FABLE_FANOUT
@@ -1973,12 +1949,6 @@ parameters:
     self_update: none
     owner: arms-agents
     note: "Override path to the live weekly Fable balance file (default $LIMEN_ROOT/logs/fable-allotment.json). Read by the model_selection cap gate, the session guard, and the vendor advisor; used by tests to seed a mock balance. Empty means the default location."
-  LIMEN_CLAUDE_FABLE_CAP_TIER:
-    default: "opus"
-    env: LIMEN_CLAUDE_FABLE_CAP_TIER
-    self_update: none
-    owner: arms-agents
-    note: "Tier an OVER-CAP but acceptance-valid Fable selection lands on (the live weekly-cap downgrade in model_selection). Default Opus (the nearest tier below Fable for legitimately high-value work), capped to the ladder; distinct from the acceptance-absent LIMEN_CLAUDE_FABLE_FALLBACK_TIER."
   LIMEN_LATEST_SESSION_JSONL:
     default: ""
     env: LIMEN_LATEST_SESSION_JSONL
@@ -3175,30 +3145,42 @@ parameters:
     self_update: none
     owner: dispatch
     note: "Optional operator override. It is usable only when the exact value is present and code-capable in the current `opencode models --verbose` catalog; blank derives from live capabilities."
-  LIMEN_CODEX_TIER_SELECT:
-    default: "1"
-    env: LIMEN_CODEX_TIER_SELECT
+  LIMEN_CLAUDE_MODEL:
+    default: ""
+    env: LIMEN_CLAUDE_MODEL
     self_update: none
     owner: dispatch
-    note: "Enable per-task tier derivation for the Codex lane. 1 (default) derives haiku->o4-mini, opus/fable->o3 via _claude_tier_for; 0 disables derivation (provider Auto, prior behaviour). Per-tier overrides via LIMEN_CODEX_MODEL_<TIER>."
+    note: "Blank delegates to provider Auto. Nonblank fails blocked before provider execution because Claude CLI exposes no safe non-executing model catalog."
+  LIMEN_CODEX_MODEL:
+    default: ""
+    env: LIMEN_CODEX_MODEL
+    self_update: none
+    owner: dispatch
+    note: "Optional Codex override. Blank delegates to provider Auto. Nonblank must match an exact identifier in the current Codex CLI catalog before any worktree or provider side effect."
   LIMEN_GEMINI_MODEL:
     default: ""
     env: LIMEN_GEMINI_MODEL
     self_update: none
     owner: dispatch
-    note: "Blanket operator override for the Gemini agent model. Nonblank wins over all per-task tier derivation. Blank enables tier derivation (see LIMEN_GEMINI_TIER_SELECT)."
-  LIMEN_GEMINI_TIER_SELECT:
-    default: "1"
-    env: LIMEN_GEMINI_TIER_SELECT
+    note: "Optional Gemini override. Blank delegates to provider Auto. Nonblank must match an exact identifier in the current Gemini API catalog before any worktree or provider side effect."
+  LIMEN_CODEX_CATALOG_TIMEOUT:
+    default: 30
+    env: LIMEN_CODEX_CATALOG_TIMEOUT
     self_update: none
     owner: dispatch
-    note: "Enable per-task tier derivation for the Gemini lane. 1 (default) derives haiku/sonnet->gemini-2.5-flash, opus/fable->gemini-2.5-pro via _claude_tier_for; 0 disables derivation (bare invocation, prior behaviour). Per-tier overrides via LIMEN_GEMINI_MODEL_<TIER>."
+    note: "Seconds allowed to validate an explicit Codex override. Provider-Auto dispatch performs no catalog lookup."
+  LIMEN_GEMINI_CATALOG_TIMEOUT:
+    default: 30
+    env: LIMEN_GEMINI_CATALOG_TIMEOUT
+    self_update: none
+    owner: dispatch
+    note: "Seconds allowed to validate an explicit Gemini override. Provider-Auto dispatch performs no catalog lookup."
   LIMEN_OPENCODE_CATALOG_TIMEOUT:
     default: 30
     env: LIMEN_OPENCODE_CATALOG_TIMEOUT
     self_update: none
     owner: dispatch
-    note: "Seconds allowed for live OpenCode capability discovery before the affected task records failed_blocked. No named fallback is synthesized."
+    note: "Seconds allowed for rich OpenCode capability discovery. An unavailable catalog delegates to provider Auto; a reachable catalog with no capable model fails blocked."
   LIMEN_WARP_MODEL_OVERRIDE:
     default: ""
     env: LIMEN_WARP_MODEL_OVERRIDE

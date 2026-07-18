@@ -1,20 +1,28 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from datetime import date
 from pathlib import Path
 
+import limen.provider_selection as provider_selection
 from limen.models import DispatchLogEntry, Task
 from limen.provider_selection import (
     ExecutionProfile,
     ModelCapability,
     catalog_hash,
+    discover_anthropic_models,
+    discover_codex_models,
+    discover_gemini_models,
     effective_profile,
     execution_profile_for,
+    model_id_catalog_hash,
     paid_service_block_reason,
+    parse_model_id_catalog,
     parse_opencode_catalog,
     parse_warp_catalog,
     select_opencode_model,
+    validate_model_override,
     validate_warp_override,
 )
 
@@ -145,6 +153,28 @@ def test_catalog_parser_uses_metadata_not_reported_name_tokens() -> None:
     assert parsed[0].zero_cost is True
 
 
+def test_catalog_parser_preserves_unknown_price_instead_of_coercing_free() -> None:
+    payload = {
+        "id": "shape-unknown",
+        "providerID": "provider-z",
+        "status": "active",
+        "limit": {"context": 65536, "output": 8192},
+        "capabilities": {
+            "toolcall": True,
+            "input": {"text": True},
+            "output": {"text": True},
+        },
+    }
+
+    parsed = parse_opencode_catalog("provider-z/shape-unknown\n" + json.dumps(payload))
+
+    assert len(parsed) == 1
+    assert parsed[0].input_cost is None
+    assert parsed[0].output_cost is None
+    assert parsed[0].price_known is False
+    assert parsed[0].zero_cost is False
+
+
 def test_selection_changes_with_capabilities_and_pressure_not_names_or_order() -> None:
     cheap = model("p/alpha", reasoning=False)
     capable = model(
@@ -169,6 +199,14 @@ def test_unreachable_or_incapable_models_are_never_synthesized() -> None:
     assert select_opencode_model([unavailable, no_tools, too_small], profile()) is None
 
 
+def test_unknown_price_defers_entire_eligible_catalog_to_provider_auto() -> None:
+    known = model("p/known", input_cost=1, output_cost=1)
+    unknown = model("p/unknown", input_cost=None, output_cost=None)
+
+    assert select_opencode_model([known, unknown], profile()) is None
+    assert select_opencode_model([unknown, known], profile()) is None
+
+
 def test_attachment_requirement_filters_live_catalog() -> None:
     text_only = model("p/text")
     multimodal = model("p/multi", attachment=True)
@@ -180,6 +218,136 @@ def test_catalog_hash_is_order_independent_and_changes_with_capability() -> None
     second = model("p/b")
     assert catalog_hash([first, second]) == catalog_hash([second, first])
     assert catalog_hash([first]) != catalog_hash([model("p/a", reasoning=True)])
+
+
+def test_identifier_catalog_tracks_renamed_add_remove_and_reorder_without_code_changes() -> None:
+    first = parse_model_id_catalog(json.dumps({"models": [{"slug": "shape-z"}, {"slug": "shape-a"}]}))
+    reordered = parse_model_id_catalog(json.dumps({"models": [{"slug": "shape-a"}, {"slug": "shape-z"}]}))
+    expanded = parse_model_id_catalog(
+        json.dumps({"models": [{"slug": "shape-m"}, {"slug": "shape-z"}, {"slug": "shape-a"}]})
+    )
+
+    assert first == reordered == ["shape-a", "shape-z"]
+    assert model_id_catalog_hash(first) == model_id_catalog_hash(reordered)
+    assert model_id_catalog_hash(expanded) != model_id_catalog_hash(first)
+    assert validate_model_override(expanded, "shape-m") == "shape-m"
+    assert validate_model_override(first, "shape-m") is None
+
+
+def test_codex_cli_catalog_discovery_preserves_provider_ids_without_substitution(monkeypatch) -> None:
+    observed: list[list[str]] = []
+
+    def fake_run(command, **_kwargs):
+        observed.append(command)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            json.dumps({"models": [{"slug": "shape-q"}, {"slug": "shape-r"}]}),
+            "",
+        )
+
+    monkeypatch.setattr(provider_selection.subprocess, "run", fake_run)
+
+    assert discover_codex_models("codex-fixture") == ["shape-q", "shape-r"]
+    assert observed == [["codex-fixture", "debug", "models"]]
+
+
+def test_anthropic_catalog_tracks_renames_add_remove_and_reorder() -> None:
+    class Page:
+        def __init__(self, identifiers: list[str], next_page=None):
+            self.data = [type("Model", (), {"id": identifier})() for identifier in identifiers]
+            self._next_page = next_page
+
+        def has_next_page(self):
+            return self._next_page is not None
+
+        def get_next_page(self):
+            return self._next_page
+
+    class Client:
+        def __init__(self, page):
+            self._page = page
+            self.models = self
+
+        def list(self, **_kwargs):
+            return self._page
+
+    first = discover_anthropic_models(Client(Page(["shape-z"], Page(["shape-a"]))))
+    reordered = discover_anthropic_models(Client(Page(["shape-a", "shape-z"])))
+    expanded = discover_anthropic_models(Client(Page(["shape-new", "shape-z", "shape-a"])))
+    removed = discover_anthropic_models(Client(Page(["shape-new", "shape-a"])))
+
+    assert first == reordered == ["shape-a", "shape-z"]
+    assert expanded == ["shape-a", "shape-new", "shape-z"]
+    assert removed == ["shape-a", "shape-new"]
+    assert validate_model_override(expanded, "shape-new") == "shape-new"
+    assert validate_model_override(removed, "shape-z") is None
+
+
+def test_anthropic_catalog_failure_or_cycle_is_unverifiable() -> None:
+    class BrokenModels:
+        def list(self, **_kwargs):
+            raise RuntimeError("catalog unavailable")
+
+    broken = type("Client", (), {"models": BrokenModels()})()
+    assert discover_anthropic_models(broken) == []
+
+    class CyclicPage:
+        data = [type("Model", (), {"id": "shape-one"})()]
+
+        def has_next_page(self):
+            return True
+
+        def get_next_page(self):
+            return self
+
+    cyclic_page = CyclicPage()
+    cyclic = type("Client", (), {"models": type("Models", (), {"list": lambda _self, **_kwargs: cyclic_page})()})()
+    assert discover_anthropic_models(cyclic) == []
+
+
+def test_gemini_catalog_discovery_keeps_credential_out_of_url_and_follows_pagination(monkeypatch) -> None:
+    observed_urls: list[str] = []
+    observed_headers: list[dict[str, str]] = []
+    pages = [
+        {"models": [{"name": "models/shape-z"}], "nextPageToken": "provider page 2"},
+        {"models": [{"name": "models/shape-a"}]},
+    ]
+
+    class Response:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self) -> bytes:
+            return json.dumps(self.payload).encode()
+
+    def fake_urlopen(request, *, timeout):
+        assert timeout == 7
+        observed_urls.append(request.full_url)
+        observed_headers.append(dict(request.header_items()))
+        return Response(pages[len(observed_urls) - 1])
+
+    monkeypatch.setattr(provider_selection.urlrequest, "urlopen", fake_urlopen)
+
+    assert discover_gemini_models(api_key="fixture-secret", timeout=7) == [
+        "models/shape-a",
+        "models/shape-z",
+    ]
+    assert observed_urls == [
+        "https://generativelanguage.googleapis.com/v1beta/models",
+        "https://generativelanguage.googleapis.com/v1beta/models?pageToken=provider+page+2",
+    ]
+    assert all("fixture-secret" not in url for url in observed_urls)
+    assert observed_headers == [
+        {"X-goog-api-key": "fixture-secret"},
+        {"X-goog-api-key": "fixture-secret"},
+    ]
 
 
 def test_warp_defaults_to_provider_auto_and_only_validates_explicit_override() -> None:

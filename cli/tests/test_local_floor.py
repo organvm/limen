@@ -83,10 +83,10 @@ def test_unhealthy_ollama_falls_through(monkeypatch):
     assert route._local_floor_lane(_scan_task(), health) is None
 
 
-def test_reserved_classes_never_route_local(monkeypatch):
+def test_demanding_profiles_never_route_local(monkeypatch):
     _arm(monkeypatch)
-    assert route._local_floor_lane(_scan_task(labels=["canon"]), HEALTH) is None
-    assert route._local_floor_lane(_scan_task(labels=["long-horizon"]), HEALTH) is None
+    assert route._local_floor_lane(_scan_task(labels=["profile:reasoning-depth:1"]), HEALTH) is None
+    assert route._local_floor_lane(_scan_task(labels=["mode:plan-only"]), HEALTH) is None
 
 
 def test_non_floor_class_falls_through(monkeypatch):

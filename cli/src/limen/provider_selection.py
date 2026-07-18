@@ -9,11 +9,15 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
 import subprocess
 from dataclasses import asdict, dataclass, replace
 from datetime import date
 from typing import Any, Iterable, Sequence, get_type_hints
+from urllib import error as urlerror
+from urllib import parse as urlparse
+from urllib import request as urlrequest
 
 
 _ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
@@ -31,6 +35,18 @@ def _as_number(value: object, default: float = 0.0) -> float:
     except (TypeError, ValueError):
         return default
     return parsed if math.isfinite(parsed) else default
+
+
+def _optional_nonnegative_number(value: object) -> float | None:
+    """Preserve unknown provider metadata instead of coercing it to free."""
+
+    if isinstance(value, bool):
+        return None
+    try:
+        parsed = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return parsed if math.isfinite(parsed) and parsed >= 0 else None
 
 
 @dataclass(frozen=True)
@@ -169,14 +185,18 @@ class ModelCapability:
     attachment: bool
     context_limit: int
     output_limit: int
-    input_cost: float
-    output_cost: float
+    input_cost: float | None
+    output_cost: float | None
     variant_count: int
     release_ordinal: int
 
     @property
     def zero_cost(self) -> bool:
-        return self.input_cost <= 0 and self.output_cost <= 0
+        return self.price_known and self.input_cost == 0 and self.output_cost == 0
+
+    @property
+    def price_known(self) -> bool:
+        return self.input_cost is not None and self.output_cost is not None
 
     def satisfies(self, profile: ExecutionProfile) -> bool:
         return (
@@ -225,8 +245,8 @@ def _capability_from_payload(payload: dict[str, Any], reported_id: str = "") -> 
         attachment=bool(capabilities.get("attachment")),
         context_limit=max(0, int(_as_number(limits.get("context")))),
         output_limit=max(0, int(_as_number(limits.get("output")))),
-        input_cost=max(0.0, _as_number(costs.get("input"))),
-        output_cost=max(0.0, _as_number(costs.get("output"))),
+        input_cost=_optional_nonnegative_number(costs.get("input")),
+        output_cost=_optional_nonnegative_number(costs.get("output")),
         variant_count=len(variants),
         release_ordinal=_release_ordinal(payload.get("release_date")),
     )
@@ -271,7 +291,194 @@ def discover_opencode_models(binary: str = "opencode", *, timeout: int = 30) -> 
     return parse_opencode_catalog(result.stdout) if result.returncode == 0 else []
 
 
+_MODEL_ID_FIELDS = ("slug", "id", "model_id", "modelId", "name", "baseModelId")
+_MODEL_COLLECTION_FIELDS = ("models", "data", "availableModels", "items")
+
+
+def parse_model_id_catalog(output: str) -> list[str]:
+    """Extract exact provider-reported identifiers from a JSON model catalog.
+
+    Identifier-only catalogs are sufficient to validate a human override, but not
+    sufficient to infer capabilities or rank a default. Callers therefore leave
+    selection to provider Auto unless richer metadata is available.
+    """
+
+    text = _ANSI.sub("", output).strip()
+    if not text:
+        return []
+    try:
+        roots: list[object] = [json.loads(text)]
+    except json.JSONDecodeError:
+        roots = []
+        for line in text.splitlines():
+            try:
+                roots.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+
+    identifiers: set[str] = set()
+
+    def visit(value: object) -> None:
+        if isinstance(value, list):
+            for item in value:
+                visit(item)
+            return
+        if not isinstance(value, dict):
+            return
+        for field in _MODEL_ID_FIELDS:
+            reported = value.get(field)
+            if isinstance(reported, str) and reported.strip():
+                identifiers.add(reported.strip())
+        for field in _MODEL_COLLECTION_FIELDS:
+            nested = value.get(field)
+            if isinstance(nested, (dict, list)):
+                visit(nested)
+
+    for root in roots:
+        visit(root)
+    return sorted(identifiers)
+
+
+def discover_model_ids(command: Sequence[str], *, timeout: int = 30) -> list[str]:
+    """Run a provider-owned catalog command and return its exact live IDs."""
+
+    try:
+        result = subprocess.run(
+            list(command),
+            capture_output=True,
+            text=True,
+            timeout=max(1, timeout),
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return parse_model_id_catalog(result.stdout) if result.returncode == 0 else []
+
+
+def discover_codex_models(binary: str = "codex", *, timeout: int = 30) -> list[str]:
+    """Read the current Codex CLI catalog without selecting a model."""
+
+    return discover_model_ids([binary, "debug", "models"], timeout=timeout)
+
+
+def discover_anthropic_models(client: object, *, max_pages: int = 100) -> list[str]:
+    """Read exact IDs from Anthropic's non-executing, paginated model catalog.
+
+    The API catalog is identifier-only for Limen's purposes: it may validate an
+    explicit operator override, but it is not treated as capability metadata and
+    cannot select a default. Missing, malformed, cyclic, or failing pagination
+    returns an empty catalog so callers fail closed on an explicit override.
+    """
+
+    models = getattr(client, "models", None)
+    list_models = getattr(models, "list", None)
+    if not callable(list_models):
+        return []
+    try:
+        try:
+            page = list_models(limit=1000)
+        except TypeError:
+            # Small fixture clients and older SDKs may not accept ``limit``.
+            page = list_models()
+    except Exception:
+        return []
+
+    identifiers: set[str] = set()
+    seen_pages: set[int] = set()
+    for _ in range(max(1, max_pages)):
+        identity = id(page)
+        if identity in seen_pages:
+            return []
+        seen_pages.add(identity)
+
+        rows = getattr(page, "data", None)
+        if rows is None and isinstance(page, dict):
+            rows = page.get("data")
+        if rows is None and isinstance(page, (list, tuple)):
+            rows = page
+        try:
+            iterator = iter(rows or ())
+        except TypeError:
+            return []
+        for row in iterator:
+            identifier = row.get("id") if isinstance(row, dict) else getattr(row, "id", None)
+            if isinstance(identifier, str) and identifier.strip():
+                identifiers.add(identifier.strip())
+
+        has_next = getattr(page, "has_next_page", None)
+        get_next = getattr(page, "get_next_page", None)
+        if not callable(has_next):
+            return sorted(identifiers)
+        try:
+            if not has_next():
+                return sorted(identifiers)
+            if not callable(get_next):
+                return []
+            page = get_next()
+        except Exception:
+            return []
+    return []
+
+
+def discover_gemini_models(*, api_key: str | None = None, timeout: int = 30) -> list[str]:
+    """Read Gemini's live API catalog when provider credentials are reachable."""
+
+    key = (
+        api_key
+        or os.environ.get("GEMINI_API_KEY")
+        or os.environ.get("GOOGLE_API_KEY")
+        or os.environ.get("GOOGLE_GENERATIVE_AI_API_KEY")
+    )
+    if not key:
+        return []
+    base_url = "https://generativelanguage.googleapis.com/v1beta/models"
+    identifiers: set[str] = set()
+    page_token = ""
+    seen_tokens: set[str] = set()
+    for _page in range(100):
+        url = base_url
+        if page_token:
+            url += "?" + urlparse.urlencode({"pageToken": page_token})
+        request = urlrequest.Request(url, headers={"x-goog-api-key": key})
+        try:
+            with urlrequest.urlopen(request, timeout=max(1, timeout)) as response:
+                payload = response.read().decode("utf-8")
+            decoded = json.loads(payload)
+        except (OSError, TimeoutError, UnicodeError, ValueError, urlerror.URLError):
+            return []
+        if not isinstance(decoded, dict):
+            return []
+        identifiers.update(parse_model_id_catalog(payload))
+        raw_next = decoded.get("nextPageToken")
+        next_token = raw_next.strip() if isinstance(raw_next, str) else ""
+        if not next_token:
+            return sorted(identifiers)
+        if next_token in seen_tokens:
+            return []
+        seen_tokens.add(next_token)
+        page_token = next_token
+    return []
+
+
+def validate_model_override(catalog: Iterable[str], override: str | None) -> str | None:
+    """Accept an explicit override only when the exact ID is live now."""
+
+    available = {str(item).strip() for item in catalog if str(item).strip()}
+    candidate = override.strip() if override else ""
+    return candidate if candidate and candidate in available else None
+
+
+def model_id_catalog_hash(catalog: Iterable[str]) -> str:
+    """Stable receipt fingerprint independent of provider response order."""
+
+    identifiers = sorted({str(item).strip() for item in catalog if str(item).strip()})
+    return hashlib.sha256(json.dumps(identifiers, separators=(",", ":")).encode()).hexdigest()
+
+
 def _model_score(model: ModelCapability, profile: ExecutionProfile) -> tuple[float, str]:
+    if not model.price_known:
+        raise ValueError("unknown provider price cannot be ranked")
+    assert model.input_cost is not None and model.output_cost is not None
     cost = model.input_cost + model.output_cost
     context_headroom = math.log2(max(1, model.context_limit / max(1, profile.min_context)))
     output_headroom = math.log2(max(1, model.output_limit / max(1, profile.min_output)))
@@ -288,6 +495,10 @@ def _model_score(model: ModelCapability, profile: ExecutionProfile) -> tuple[flo
 
 def select_opencode_model(models: Iterable[ModelCapability], profile: ExecutionProfile) -> ModelCapability | None:
     eligible = [model for model in models if model.satisfies(profile)]
+    if any(not model.price_known for model in eligible):
+        # Auto owns the choice when the live catalog cannot support an honest
+        # cost comparison. Never promote an unknown price as zero-cost.
+        return None
     return max(eligible, key=lambda model: _model_score(model, profile)) if eligible else None
 
 

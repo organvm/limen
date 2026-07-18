@@ -46,6 +46,24 @@ def test_oracle_finds_only_multiverses(tmp_path, monkeypatch):
     assert len(mvs[0]["shots"]) == 2
 
 
+def test_live_kit_delegates_to_central_provider_auto_builder(tmp_path, monkeypatch):
+    import limen.converge as converge
+
+    observed = []
+    sentinel = {"synthesizer": object()}
+
+    def fake_builder(args):
+        observed.append(args)
+        return sentinel
+
+    monkeypatch.setattr(converge, "_build_live_kit", fake_builder)
+    m = _load(monkeypatch, tmp_path)
+
+    assert m._kit(True) is sentinel
+    assert len(observed) == 1
+    assert observed[0].model is None
+
+
 def test_apply_emits_gap_tasks(tmp_path, monkeypatch):
     (tmp_path / "logs").mkdir()
     created = "2026-06-20"

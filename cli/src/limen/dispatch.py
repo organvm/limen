@@ -20,6 +20,13 @@ from urllib.parse import quote, urlsplit
 import fcntl
 
 from limen import census
+from limen.attempt_custody import (
+    attempt_contract_is_current as _attempt_contract_is_current,
+    attempt_launch_for as _attempt_launch_for,
+    close_changed_contract_attempt as _close_changed_contract_attempt,
+    current_attempt_id as _current_attempt_id,
+    reconciliation_custody_updates,
+)
 from limen.capacity import (
     LOCAL_CHECKOUT_AGENTS,
     canonical_agent,
@@ -32,6 +39,8 @@ from limen.capacity import (
     select_lanes,
 )
 from limen.dispatch_ownership import ACTIVE_OWNER_STATUSES
+from limen.execution_contract import execution_contract_hash
+from limen.execution_trajectory import launch_attempt_id, launch_identity_digest
 from limen.io import load_limen_file, save_limen_file, queue_lock as _queue_lock
 from limen.intake import IntakeContractError, normalize_selected_legacy_task, validate_intake_contract
 from limen.jules_remote import (
@@ -45,13 +54,18 @@ from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task
 from limen.runtime_requirements import task_execution_ready
 from limen.doctor import stale_tasks
 from limen.provider_selection import (
+    ExecutionProfile,
     catalog_hash,
+    discover_codex_models,
+    discover_gemini_models,
     discover_opencode_models,
     discover_warp_override,
     effective_profile,
     execution_profile_for,
+    model_id_catalog_hash,
     paid_service_block_reason,
     select_opencode_model,
+    validate_model_override,
 )
 from limen.remote_execution import (
     GitHubWorkflowAdapter,
@@ -63,17 +77,7 @@ from limen.remote_execution import (
     resolve_pushed_sha,
     verification_context_for_task,
 )
-from limen.model_selection import (  # the shared model vocabulary — also used by the non-bypassable `claude` shim
-    _CLAUDE_TIER_ORDER,
-    _claude_fable_acceptance_present,
-    _claude_fable_classes,
-    _claude_opus_classes,
-    _fable_capped_tier,
-    _fable_fallback_tier,
-    _fable_reserve_receipt_present,
-    _guard_fable_model_pin,
-    _resolve_claude_model,
-)
+from limen.model_selection import _claude_fable_acceptance_present
 from limen.worktree_debt import (
     IMPACT_DEBT_CREATING,
     IMPACT_REMOTE,
@@ -1486,6 +1490,133 @@ _REMOTE_SUBMISSION_RECEIPTS: dict[str, dict[str, Any]] = {}
 _LANE_ROUTING_RECEIPTS: dict[str, dict[str, Any]] = {}
 
 
+class ProviderModelSelectionBlocked(RuntimeError):
+    """Live provider evidence cannot satisfy a required routing constraint."""
+
+
+_PROVIDER_MODEL_OVERRIDE_ENV = {
+    "claude": "LIMEN_CLAUDE_MODEL",
+    "codex": "LIMEN_CODEX_MODEL",
+    "gemini": "LIMEN_GEMINI_MODEL",
+}
+_PROVIDER_CATALOG_TIMEOUT_ENV = {
+    "codex": "LIMEN_CODEX_CATALOG_TIMEOUT",
+    "gemini": "LIMEN_GEMINI_CATALOG_TIMEOUT",
+}
+
+
+def _attempt_id(
+    task: Task,
+    *,
+    classification: dict[str, object],
+    profile: dict[str, object],
+    contract_hash: str,
+    provider_route: str,
+    route_selection_source: str,
+    executing_keeper: str,
+    executing_session: str,
+    started_at: datetime,
+) -> str:
+    """Derive one stable identity from facts persisted in the reservation row."""
+
+    return launch_attempt_id(
+        task_id=task.id,
+        contract_hash=contract_hash,
+        classification=classification,
+        repository=task.repo,
+        execution_profile=profile,
+        executing_keeper=executing_keeper,
+        executing_session=executing_session,
+        provider_route=provider_route,
+        route_selection_source=route_selection_source,
+        started_at=started_at,
+    )
+
+
+def _current_task_execution_profile(task: Task | None) -> ExecutionProfile:
+    """Derive a new attempt profile from the task's current execution contract."""
+
+    requested = execution_profile_for(task)
+    return effective_profile(requested, plan_accepted=_claude_fable_acceptance_present())
+
+
+def _dispatch_execution_profile(task: Task | None) -> ExecutionProfile:
+    """Reuse only the profile frozen for the exact attempt being executed."""
+
+    if task is not None and task.status in {"dispatched", "in_progress"}:
+        current_attempt = _current_attempt_id(task)
+        launch = _attempt_launch_for(task, current_attempt) if current_attempt else None
+        if launch is not None and launch.execution_profile is not None:
+            return ExecutionProfile(**launch.execution_profile)
+    return _current_task_execution_profile(task)
+
+
+def _attempt_launch_entry(
+    task: Task,
+    agent: str,
+    *,
+    reservation_session: str,
+    started_at: datetime,
+    status: str = "dispatched",
+    output: str,
+) -> DispatchLogEntry:
+    """Freeze launch facts in the owner board before any provider can execute."""
+
+    # Creating an attempt is not executing an existing one. Always derive from
+    # the current task, even if the caller has already marked the row dispatched.
+    profile = _current_task_execution_profile(task).as_dict()
+    classification = {
+        "task_type": task.type,
+        "labels": sorted({str(label) for label in task.labels}),
+        "workstream": task.workstream,
+    }
+    contract_hash = execution_contract_hash(task)
+    provider_route = f"provider:{agent}"
+    route_selection_source = "dispatch_target_agent"
+    executing_keeper = agent
+    executing_session = reservation_session
+    attempt_id = _attempt_id(
+        task,
+        classification=classification,
+        profile=profile,
+        contract_hash=contract_hash,
+        provider_route=provider_route,
+        route_selection_source=route_selection_source,
+        executing_keeper=executing_keeper,
+        executing_session=executing_session,
+        started_at=started_at,
+    )
+    return DispatchLogEntry(
+        timestamp=started_at,
+        agent=agent,
+        session_id=reservation_session,
+        status=status,
+        attempt_id=attempt_id,
+        attempt_classification=classification,
+        attempt_repository=task.repo,
+        attempt_contract_hash=contract_hash,
+        attempt_identity_digest=launch_identity_digest(
+            attempt_id=attempt_id,
+            task_id=task.id,
+            contract_hash=contract_hash,
+            classification=classification,
+            repository=task.repo,
+            execution_profile=profile,
+            executing_keeper=executing_keeper,
+            executing_session=executing_session,
+            provider_route=provider_route,
+            route_selection_source=route_selection_source,
+            started_at=started_at,
+        ),
+        execution_profile=profile,
+        provider_route=provider_route,
+        route_selection_source=route_selection_source,
+        executing_keeper=executing_keeper,
+        executing_session=executing_session,
+        output=output,
+    )
+
+
 def _record_model_selection(
     task: Task | None,
     *,
@@ -1496,12 +1627,93 @@ def _record_model_selection(
 ) -> None:
     if task is None:
         return
+    if task.status not in {"dispatched", "in_progress"}:
+        _MODEL_SELECTION_RECEIPTS.pop(task.id, None)
+        return
+    attempt_id = _current_attempt_id(task)
+    launch = _attempt_launch_for(task, attempt_id) if attempt_id else None
+    current_event = next(
+        (entry for entry in reversed(task.dispatch_log) if entry.attempt_id == attempt_id),
+        None,
+    )
+    if launch is None or current_event is None or current_event.status != task.status:
+        # Preview/standalone selection has no immutable launch identity and
+        # therefore cannot produce a value-bearing receipt.
+        _MODEL_SELECTION_RECEIPTS.pop(task.id, None)
+        return
+    if launch.execution_profile != profile:
+        raise ValueError("model-selection profile does not match the registered attempt")
     _MODEL_SELECTION_RECEIPTS[task.id] = {
+        "attempt_id": attempt_id,
         "execution_profile": profile,
         "selected_model": selected_model,
         "selection_source": source,
         "catalog_hash": fingerprint,
     }
+
+
+def _validated_model_selection_receipt(
+    task: Task,
+    *,
+    expected_attempt_id: str,
+    value: object,
+) -> dict[str, Any] | None:
+    """Authenticate detached model metadata against the persisted launch profile."""
+
+    if value in ({}, None):
+        return None
+    required_fields = {
+        "attempt_id",
+        "execution_profile",
+        "selected_model",
+        "selection_source",
+        "catalog_hash",
+    }
+    if (
+        not isinstance(value, dict)
+        or not required_fields.issubset(value)
+        or not set(value).issubset(required_fields | {"receipt"})
+    ):
+        raise ValueError("detached model-selection receipt has an invalid shape")
+    if value.get("attempt_id") != expected_attempt_id:
+        raise ValueError("detached model-selection receipt does not match the registered attempt identity")
+    launch = _attempt_launch_for(task, expected_attempt_id)
+    if launch is None or value.get("execution_profile") != launch.execution_profile:
+        raise ValueError("detached model-selection receipt does not match the registered attempt profile")
+    selected = value.get("selected_model")
+    source = value.get("selection_source")
+    fingerprint = value.get("catalog_hash")
+    if selected is not None and (not isinstance(selected, str) or not selected):
+        raise ValueError("detached model-selection receipt has an invalid selected model")
+    if not isinstance(source, str) or not source:
+        raise ValueError("detached model-selection receipt lacks a selection source")
+    if fingerprint is not None and (
+        not isinstance(fingerprint, str) or re.fullmatch(r"[0-9a-f]{64}", fingerprint) is None
+    ):
+        raise ValueError("detached model-selection receipt has an invalid catalog hash")
+    owner_receipt = value.get("receipt")
+    if owner_receipt is not None:
+        if not isinstance(owner_receipt, dict):
+            raise ValueError("detached model-selection authority is not a receipt object")
+        try:
+            encoded = json.dumps(owner_receipt, sort_keys=True, separators=(",", ":")).encode()
+        except (TypeError, ValueError) as exc:
+            raise ValueError("detached model-selection authority is not JSON-serializable") from exc
+        if not encoded or len(encoded) > _MAX_PENDING_AUTHORITY_RECEIPT_BYTES:
+            raise ValueError("detached model-selection authority exceeds bounded custody")
+        if owner_receipt.get("task_id") != task.id:
+            raise ValueError("detached model-selection authority does not match the task identity")
+        if owner_receipt.get("attempt_id") != expected_attempt_id:
+            raise ValueError("detached model-selection authority does not match the registered attempt identity")
+        for owner_field, selection_field in (
+            ("execution_profile", "execution_profile"),
+            ("selected_model", "selected_model"),
+            ("selection_source", "selection_source"),
+            ("catalog_hash", "catalog_hash"),
+        ):
+            if owner_field in owner_receipt and owner_receipt[owner_field] != value.get(selection_field):
+                raise ValueError(f"detached model-selection authority has conflicting {owner_field}")
+    return dict(value)
 
 
 def resolve_agent() -> str:
@@ -1598,9 +1810,17 @@ def _call_remote_adapter(agent: str, task: Task, dry_run: bool) -> bool | str:
     instruction = f"Verify completed implementation for task {remote_task.id}; do not modify code: {remote_task.title}"
     if dry_run:
         try:
+            preview_launch = _attempt_launch_entry(
+                remote_task,
+                agent,
+                reservation_session="remote-preview",
+                started_at=datetime.now(timezone.utc),
+                output="remote preview packet identity; not persisted or executable",
+            )
             preview = remote_request_from_task(
                 remote_task,
                 agent,
+                attempt_id=str(preview_launch.attempt_id),
                 base_sha="0" * 40,
                 control_repo=adapter.control_repo,
                 control_ref=adapter.control_ref,
@@ -1611,7 +1831,7 @@ def _call_remote_adapter(agent: str, task: Task, dry_run: bool) -> bool | str:
                 verification_context=verification_context,
                 instruction=instruction,
                 repo=repo,
-                execution_profile=execution_profile_for(remote_task).as_dict(),
+                execution_profile=_dispatch_execution_profile(remote_task).as_dict(),
             )
             adapter.preflight(preview)
             adapter.intent(preview)
@@ -1624,6 +1844,15 @@ def _call_remote_adapter(agent: str, task: Task, dry_run: bool) -> bool | str:
         )
         return True
     try:
+        attempt_id = _current_attempt_id(remote_task)
+        launch = _attempt_launch_for(remote_task, attempt_id)
+        if (
+            not attempt_id
+            or launch is None
+            or remote_task.status not in {"dispatched", "in_progress"}
+            or not _attempt_contract_is_current(remote_task, launch)
+        ):
+            raise RemoteExecutionError("remote submission lacks an active exact registered attempt")
         base_ref = os.environ.get("LIMEN_REMOTE_BASE_REF", "HEAD")
         base_sha = resolve_pushed_sha(
             repo,
@@ -1633,6 +1862,7 @@ def _call_remote_adapter(agent: str, task: Task, dry_run: bool) -> bool | str:
         request = remote_request_from_task(
             remote_task,
             agent,
+            attempt_id=attempt_id,
             base_sha=base_sha,
             control_repo=adapter.control_repo,
             control_ref=adapter.control_ref,
@@ -1643,7 +1873,7 @@ def _call_remote_adapter(agent: str, task: Task, dry_run: bool) -> bool | str:
             verification_context=verification_context,
             instruction=instruction,
             repo=repo,
-            execution_profile=execution_profile_for(remote_task).as_dict(),
+            execution_profile=_dispatch_execution_profile(remote_task).as_dict(),
         )
         run, receipt_path = RemoteLifecycle(adapter, _remote_receipt_store()).submit(request)
     except (RemoteExecutionError, ValueError, OSError) as exc:
@@ -1653,6 +1883,7 @@ def _call_remote_adapter(agent: str, task: Task, dry_run: bool) -> bool | str:
     _REMOTE_SUBMISSION_RECEIPTS[task.id] = {
         "provider": request.provider,
         "task_id": request.task_id,
+        "attempt_id": request.attempt_id,
         "repo": request.repo,
         "provider_run_id": run.provider_run_id,
         "provider_url": run.url,
@@ -1964,7 +2195,7 @@ def _call_warp_oz(agent: str, task: Task, dry_run: bool) -> bool | str:
         return _blocked_result(reason)
     requested_profile = execution_profile_for(task)
     plan_accepted = _claude_fable_acceptance_present()
-    profile = effective_profile(requested_profile, plan_accepted=plan_accepted)
+    profile = _dispatch_execution_profile(task)
     router_override = os.environ.get("LIMEN_WARP_MODEL_OVERRIDE")
     router = None
     if router_override:
@@ -2052,15 +2283,14 @@ def _call_warp_oz(agent: str, task: Task, dry_run: bool) -> bool | str:
 #   - gemini: requires GEMINI_API_KEY / settings.json auth (not configured;
 #     lane is wired but will fail until auth is set).
 def _opencode_model(task: Task | None = None) -> str | None:
-    """Select a reachable OpenCode model by live capabilities, never by name."""
+    """Select from rich live metadata, otherwise defer to provider Auto."""
 
     binary = os.environ.get("LIMEN_OPENCODE_BIN", "opencode")
     models = discover_opencode_models(
         binary,
         timeout=max(1, _env_int("LIMEN_OPENCODE_CATALOG_TIMEOUT", 30)),
     )
-    requested = execution_profile_for(task)
-    profile = effective_profile(requested, plan_accepted=_claude_fable_acceptance_present())
+    profile = _dispatch_execution_profile(task)
     override = os.environ.get("LIMEN_OPENCODE_MODEL")
     if override:
         selected = next((model for model in models if model.model_id == override and model.satisfies(profile)), None)
@@ -2071,16 +2301,43 @@ def _opencode_model(task: Task | None = None) -> str | None:
             source="opencode_override" if selected else "opencode_override_missing",
             fingerprint=catalog_hash(models),
         )
-        return selected.model_id if selected else None
+        if selected:
+            return selected.model_id
+        if models:
+            raise ProviderModelSelectionBlocked(
+                "opencode model override is absent or incapable in the live provider catalog"
+            )
+        raise ProviderModelSelectionBlocked(
+            "opencode model override cannot be validated because the live provider catalog is unavailable"
+        )
+    if not models:
+        _record_model_selection(
+            task,
+            profile=profile.as_dict(),
+            selected_model=None,
+            source="opencode_auto",
+        )
+        return None
     selected = select_opencode_model(models, profile)
+    eligible_with_unknown_price = any(model.satisfies(profile) and not model.price_known for model in models)
     _record_model_selection(
         task,
         profile=profile.as_dict(),
         selected_model=selected.model_id if selected else None,
-        source="opencode_live_catalog" if selected else "opencode_no_capable_model",
+        source=(
+            "opencode_live_catalog"
+            if selected
+            else "opencode_auto_unknown_price"
+            if eligible_with_unknown_price
+            else "opencode_capability_blocked"
+        ),
         fingerprint=catalog_hash(models),
     )
-    return selected.model_id if selected else None
+    if selected:
+        return selected.model_id
+    if eligible_with_unknown_price:
+        return None
+    raise ProviderModelSelectionBlocked("no model in the live OpenCode catalog satisfies the execution profile")
 
 
 _LOCAL_AGENTS: dict[str, list[str]] = {
@@ -2358,7 +2615,8 @@ def _local_floor_allowed_for_task(task: Task) -> bool:
         classes = _task_classes(task)
         if not classes & local_floor_classes():
             return False
-        if classes & (_claude_opus_classes() | _claude_fable_classes()):
+        profile = execution_profile_for(task)
+        if profile.planning_only or profile.attachments_required or profile.reasoning_depth > 0.75:
             return False
         return ollama_model() is not None
     except Exception:
@@ -3060,6 +3318,316 @@ def _blocked_reason(result: bool | str) -> str:
     if not _is_blocked_result(result):
         return ""
     return str(result)[len(_FAILED_BLOCKED_PREFIX) :]
+
+
+_PENDING_DISPATCH_RESULT_SCHEMA = "limen.pending_dispatch_result.v1"
+_MAX_PENDING_DISPATCH_RESULT_BYTES = 262_144
+_MAX_PENDING_AUTHORITY_RECEIPT_BYTES = 65_536
+_AUTHORITY_RECEIPT_FIELDS = frozenset(
+    {
+        "fable_packet_receipt",
+        "builder_handoff_receipt",
+        "implementation_receipt",
+    }
+)
+
+
+def _pending_dispatch_result_root(tasks_path: Path) -> Path:
+    return tasks_path.parent / "logs" / "dispatch-results" / "pending"
+
+
+def _pending_dispatch_result_path(tasks_path: Path, task_id: str, attempt_id: str) -> Path:
+    identity = hashlib.sha256(f"{task_id}\0{attempt_id}".encode()).hexdigest()
+    return _pending_dispatch_result_root(tasks_path) / f"{identity}.json"
+
+
+def _pending_dispatch_result_files(tasks_path: Path) -> list[Path]:
+    root = _pending_dispatch_result_root(tasks_path)
+    return sorted(root.glob("*.json")) if root.exists() else []
+
+
+def _bounded_dispatch_result(result: bool | str) -> bool | str:
+    if type(result) is bool:
+        return result
+    if not isinstance(result, str):
+        return _blocked_result("provider returned an unsupported result type")
+    if len(result) <= 4096:
+        return result
+    return _blocked_result("provider result exceeded the bounded custody receipt")
+
+
+def _fsync_directory(path: Path) -> None:
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(path, flags)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _fsync_file_and_parent(path: Path) -> None:
+    """Seal a replaced file and its directory before dependent custody moves."""
+
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    _fsync_directory(path.parent)
+
+
+def _atomic_exclusive_bytes(destination: Path, payload: bytes) -> None:
+    """Publish bytes once, durably, without overwriting an existing attempt."""
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    parent_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    parent_fd = os.open(destination.parent, parent_flags)
+    temporary_name = f".{destination.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
+    fd: int | None = None
+    try:
+        fd = os.open(
+            temporary_name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+            dir_fd=parent_fd,
+        )
+        with os.fdopen(fd, "wb") as handle:
+            fd = None
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(
+                temporary_name,
+                destination.name,
+                src_dir_fd=parent_fd,
+                dst_dir_fd=parent_fd,
+                follow_symlinks=False,
+            )
+        except FileExistsError:
+            existing_fd = os.open(
+                destination.name,
+                os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=parent_fd,
+            )
+            try:
+                existing = b""
+                while chunk := os.read(existing_fd, 64 * 1024):
+                    existing += chunk
+                    if len(existing) > _MAX_PENDING_DISPATCH_RESULT_BYTES:
+                        break
+            finally:
+                os.close(existing_fd)
+            if existing != payload:
+                raise ValueError("pending dispatch result already exists with different evidence")
+        os.fsync(parent_fd)
+    finally:
+        if fd is not None:
+            os.close(fd)
+        try:
+            os.unlink(temporary_name, dir_fd=parent_fd)
+        except FileNotFoundError:
+            pass
+        finally:
+            os.close(parent_fd)
+
+
+def _validated_authority_receipts(
+    task: Task,
+    *,
+    expected_attempt_id: str,
+    value: object,
+) -> dict[str, dict[str, Any]]:
+    """Bind detached authority artifacts to the same task and provider attempt."""
+
+    if value in ({}, None):
+        return {}
+    if not isinstance(value, dict) or not set(value).issubset(_AUTHORITY_RECEIPT_FIELDS):
+        raise ValueError("detached authority receipts have an invalid shape")
+    validated: dict[str, dict[str, Any]] = {}
+    for name, receipt in value.items():
+        if not isinstance(receipt, dict):
+            raise ValueError(f"{name} is not a receipt object")
+        try:
+            encoded = json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{name} is not JSON-serializable") from exc
+        if not encoded or len(encoded) > _MAX_PENDING_AUTHORITY_RECEIPT_BYTES:
+            raise ValueError(f"{name} exceeds bounded authority custody")
+        if receipt.get("task_id") != task.id:
+            raise ValueError(f"{name} does not match the task identity")
+        binding_field = {
+            "fable_packet_receipt": "attempt_id",
+            "builder_handoff_receipt": "parent_attempt_id",
+            "implementation_receipt": "attempt_id",
+        }[name]
+        if receipt.get(binding_field) != expected_attempt_id:
+            raise ValueError(f"{name} does not match the registered attempt identity")
+        validated[name] = dict(receipt)
+    return validated
+
+
+def _persist_pending_dispatch_result(
+    tasks_path: Path,
+    *,
+    task_id: str,
+    agent: str,
+    attempt_id: str,
+    attempt_contract_hash: str,
+    result: bool | str,
+    model_selection: dict[str, Any] | None = None,
+    authority_receipts: dict[str, Any] | None = None,
+    remote_submission: dict[str, Any] | None = None,
+    reconciliation: dict[str, Any] | None = None,
+) -> Path:
+    """Atomically preserve an exact-attempt provider result before releasing admission."""
+
+    if not attempt_id:
+        raise ValueError("pending dispatch result requires an attempt identity")
+    if not re.fullmatch(r"[0-9a-f]{64}", attempt_contract_hash):
+        raise ValueError("pending dispatch result requires the frozen contract hash")
+    payload: dict[str, Any] = {
+        "schema": _PENDING_DISPATCH_RESULT_SCHEMA,
+        "task_id": task_id,
+        "agent": agent,
+        "attempt_id": attempt_id,
+        "attempt_contract_hash": attempt_contract_hash,
+        "result": _bounded_dispatch_result(result),
+        "model_selection": dict(model_selection or {}),
+        "authority_receipts": dict(authority_receipts or {}),
+        "remote_submission": dict(remote_submission or {}),
+        "reconciliation": dict(reconciliation or {}),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    if len(encoded) > _MAX_PENDING_DISPATCH_RESULT_BYTES:
+        payload.update(
+            {
+                "result": _blocked_result("provider receipts exceeded bounded result custody"),
+                "model_selection": {},
+                "authority_receipts": {},
+                "remote_submission": {},
+                "reconciliation": {},
+            }
+        )
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    destination = _pending_dispatch_result_path(tasks_path, task_id, attempt_id)
+    payload_bytes = encoded + b"\n"
+    if destination.exists():
+        try:
+            existing = json.loads(destination.read_text())
+        except (OSError, TypeError, ValueError) as exc:
+            raise ValueError("pending dispatch result already exists but is unreadable") from exc
+        proposed = json.loads(payload_bytes)
+        if isinstance(existing, dict) and isinstance(proposed, dict):
+            proposed["created_at"] = existing.get("created_at")
+            payload_bytes = json.dumps(proposed, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+    _atomic_exclusive_bytes(destination, payload_bytes)
+    return destination
+
+
+def _load_pending_dispatch_results(
+    tasks_path: Path,
+) -> list[tuple[Path, dict[str, Any] | None, str, str | None]]:
+    loaded: list[tuple[Path, dict[str, Any] | None, str, str | None]] = []
+    for path in _pending_dispatch_result_files(tasks_path):
+        digest = f"sha256:{hashlib.sha256(f'unreadable:{path.name}'.encode()).hexdigest()}"
+        try:
+            hasher = hashlib.sha256()
+            chunks: list[bytes] = []
+            total = 0
+            with path.open("rb") as handle:
+                while chunk := handle.read(64 * 1024):
+                    hasher.update(chunk)
+                    total += len(chunk)
+                    if total <= _MAX_PENDING_DISPATCH_RESULT_BYTES:
+                        chunks.append(chunk)
+            digest = f"sha256:{hasher.hexdigest()}"
+            if total > _MAX_PENDING_DISPATCH_RESULT_BYTES:
+                loaded.append((path, None, digest, "oversized"))
+                continue
+            raw = b"".join(chunks)
+            if len(raw) > _MAX_PENDING_DISPATCH_RESULT_BYTES:
+                loaded.append((path, None, digest, "oversized"))
+                continue
+            payload = json.loads(raw)
+            if not isinstance(payload, dict):
+                loaded.append((path, None, digest, "non-object"))
+                continue
+            created_at = datetime.fromisoformat(str(payload.get("created_at") or ""))
+            result = payload.get("result")
+            valid = bool(
+                payload.get("schema") == _PENDING_DISPATCH_RESULT_SCHEMA
+                and isinstance(payload.get("task_id"), str)
+                and payload.get("task_id")
+                and isinstance(payload.get("agent"), str)
+                and payload.get("agent")
+                and isinstance(payload.get("attempt_id"), str)
+                and payload.get("attempt_id")
+                and re.fullmatch(r"[0-9a-f]{64}", str(payload.get("attempt_contract_hash") or ""))
+                and (type(result) is bool or isinstance(result, str))
+                and isinstance(payload.get("model_selection"), dict)
+                # Backward-compatible read: v1 pending artifacts created before
+                # authority custody existed carry no authority_receipts member.
+                and isinstance(payload.get("authority_receipts", {}), dict)
+                and isinstance(payload.get("remote_submission"), dict)
+                and isinstance(payload.get("reconciliation"), dict)
+                and created_at.tzinfo is not None
+            )
+        except OSError:
+            loaded.append((path, None, digest, "unreadable"))
+            continue
+        except (ValueError, TypeError):
+            loaded.append((path, None, digest, "invalid-json-or-fields"))
+            continue
+        if valid:
+            loaded.append((path, payload, digest, None))
+        else:
+            loaded.append((path, None, digest, "invalid-schema-or-fields"))
+    return loaded
+
+
+def _durable_move_pending_dispatch_result(path: Path, destination: Path) -> None:
+    """No-clobber, crash-replay-safe move using link/unlink plus directory seals."""
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.link(path, destination, follow_symlinks=False)
+    except FileExistsError:
+        source_bytes = path.read_bytes()
+        if destination.is_symlink() or destination.read_bytes() != source_bytes:
+            raise OSError("pending result archive collision has different evidence")
+    _fsync_directory(destination.parent)
+    path.unlink()
+    _fsync_directory(path.parent)
+
+
+def _archive_pending_dispatch_result(path: Path, reason: str) -> None:
+    archive = path.parent.parent / "archive" / re.sub(r"[^a-z0-9-]+", "-", reason.lower()).strip("-")
+    _durable_move_pending_dispatch_result(path, archive / path.name)
+
+
+def _quarantine_pending_dispatch_result(path: Path, reason: str) -> None:
+    quarantine = path.parent.parent / "quarantine" / re.sub(r"[^a-z0-9-]+", "-", reason.lower()).strip("-")
+    _durable_move_pending_dispatch_result(path, quarantine / path.name)
+
+
+def _consumed_result_receipt_digest(task: Task, attempt_id: str | None) -> str | None:
+    if not attempt_id:
+        return None
+    return next(
+        (
+            entry.result_receipt_digest
+            for entry in reversed(task.dispatch_log)
+            if entry.attempt_id == attempt_id and entry.result_receipt_digest
+        ),
+        None,
+    )
+
+
+def _task_has_pending_dispatch_result(tasks_path: Path, task: Task) -> bool:
+    attempt_id = _current_attempt_id(task)
+    return bool(attempt_id and _pending_dispatch_result_path(tasks_path, task.id, attempt_id).is_file())
 
 
 _REPO_UNAVAILABLE_PATTERNS = re.compile(
@@ -4069,7 +4637,13 @@ def _resolve_agent_binary(agent: str) -> str:
     return binary
 
 
-def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
+def _isolated_local_run(
+    agent: str,
+    task: Task,
+    dry_run: bool,
+    *,
+    agent_args: list[str] | None = None,
+) -> bool | str:
     binary = _resolve_agent_binary(agent)
     repo_dir = _resolve_repo_dir(task)
     if repo_dir is None and not dry_run:
@@ -4103,7 +4677,7 @@ def _isolated_local_run(agent: str, task: Task, dry_run: bool) -> bool | str:
     branch = f"limen/{slug}-{suffix}"
     isolation_root = _isolation_root()
     wt = isolation_root / (re.sub(r"[^a-zA-Z0-9._-]+", "-", task.id.lower()) + "-" + suffix)
-    agent_args = _agent_argv(agent, task)
+    agent_args = list(agent_args) if agent_args is not None else _agent_argv(agent, task)
     prompt = _build_prompt(task)
     if os.environ.get("LIMEN_ISOLATION_PROMPT_GUARD", "1") == "1":
         prompt = (
@@ -4211,23 +4785,25 @@ def _call_local_agent(agent: str, task: Task, dry_run: bool) -> bool | str:
         except ClaudeLaunchContractError as exc:
             print(f"  BLOCKED {task.id}: {exc}; refusing provider launch so the lane can cascade")
             return False
-    if agent == "opencode" and "-m" not in _agent_argv(agent, task):
-        reason = "no code-capable model is exposed by the live OpenCode catalog"
+    try:
+        agent_args = _agent_argv(agent, task)
+    except ProviderModelSelectionBlocked as exc:
+        reason = str(exc)
         if dry_run:
             print(f"  would BLOCK {task.id}: {reason}")
             return True
         print(f"  BLOCKED {task.id}: {reason}")
         return _blocked_result(reason)
     if _worktree_isolation_enabled():
-        return _isolated_local_run(agent, task, dry_run)
+        return _isolated_local_run(agent, task, dry_run, agent_args=agent_args)
     # ── legacy in-place path (escape hatch; edits the live checkout directly)
     binary = _resolve_agent_binary(agent)
-    cmd = [binary, *_agent_argv(agent, task), _build_prompt(task)]
+    cmd = [binary, *agent_args, _build_prompt(task)]
     cwd = _resolve_repo_dir(task)
     if cwd is None:
         msg = f"no local checkout of {task.repo or '(no repo)'}"
         if dry_run:
-            print(f"  would [{msg}; clone first]: {binary} {' '.join(_agent_argv(agent, task))} …")
+            print(f"  would [{msg}; clone first]: {binary} {' '.join(agent_args)} …")
             return True
         print(f"  SKIP {task.id}: {msg} — clone it under $LIMEN_WORKDIR first")
         return False
@@ -4295,25 +4871,134 @@ def _remaining_budget(limen: LimenFile, agent: str, budget: int) -> int:
     return max(0, budget - track.spent)
 
 
+def _reserve_serial_attempt(
+    tasks_path: Path,
+    *,
+    task_id: str,
+    agent: str,
+    expected_contract_hash: str,
+) -> tuple[Task, str] | None:
+    """Atomically persist dispatched→in_progress before a serial provider call."""
+
+    with _queue_lock(tasks_path) as got:
+        if not got:
+            return None
+        fresh = load_limen_file(tasks_path)
+        task = next((candidate for candidate in fresh.tasks if candidate.id == task_id), None)
+        if task is not None and not task.predicate and not task.receipt_target:
+            try:
+                normalize_selected_legacy_task(task)
+            except IntakeContractError:
+                return None
+        if (
+            task is None
+            or not _dispatchable(task)
+            or task.target_agent not in {agent, "any"}
+            or not agent_can_run_task(agent, task)
+            or execution_contract_hash(task) != expected_contract_hash
+        ):
+            return None
+        reserved_at = datetime.now(timezone.utc)
+        launch = _attempt_launch_entry(
+            task,
+            agent,
+            reservation_session=session_id(),
+            started_at=reserved_at,
+            output="dispatch: durable reservation before serial provider execution",
+        )
+        task.status = "in_progress"
+        task.updated = reserved_at
+        task.dispatch_log.extend(
+            [
+                launch,
+                launch.model_copy(
+                    update={
+                        "status": "in_progress",
+                        "output": "dispatch: exact registered attempt claimed for serial execution",
+                    }
+                ),
+            ]
+        )
+        save_limen_file(tasks_path, fresh)
+        return task, str(launch.attempt_id)
+
+
+def _claim_registered_attempt(
+    tasks_path: Path,
+    *,
+    task_id: str,
+    agent: str,
+    expected_attempt_id: str,
+) -> Task | None:
+    """Advance one persisted reservation once; duplicate workers cannot execute it."""
+
+    with _queue_lock(tasks_path) as got:
+        if not got:
+            return None
+        fresh = load_limen_file(tasks_path)
+        task = next((candidate for candidate in fresh.tasks if candidate.id == task_id), None)
+        if task is None or task.status != "dispatched" or _current_attempt_id(task) != expected_attempt_id:
+            return None
+        launch = _attempt_launch_for(task, expected_attempt_id)
+        latest = task.dispatch_log[-1] if task.dispatch_log else None
+        if launch is None or latest is None or latest.status != "dispatched" or latest.agent != agent:
+            return None
+        claimed_at = datetime.now(timezone.utc)
+        if not _attempt_contract_is_current(task, launch):
+            _close_changed_contract_attempt(
+                task,
+                launch,
+                now=claimed_at,
+                agent=agent,
+                phase="pre-claim",
+            )
+            save_limen_file(tasks_path, fresh)
+            return None
+        task.status = "in_progress"
+        task.updated = claimed_at
+        task.dispatch_log.append(
+            launch.model_copy(
+                update={
+                    "timestamp": claimed_at,
+                    "status": "in_progress",
+                    "output": "dispatch: exact registered attempt claimed before provider execution",
+                }
+            )
+        )
+        save_limen_file(tasks_path, fresh)
+        return task
+
+
 def _commit_dispatch_results(
     tasks_path: Path,
     limen: LimenFile,
     results: list[tuple[str, str, bool | str]],
     now: datetime,
-) -> None:
+    *,
+    attempt_ids: dict[str, str] | None = None,
+    model_selection_receipts: dict[str, dict[str, Any]] | None = None,
+    authority_receipts: dict[str, dict[str, Any]] | None = None,
+    remote_submission_receipts: dict[str, dict[str, Any]] | None = None,
+    reconciliation_receipts: dict[str, dict[str, Any]] | None = None,
+) -> bool:
     """COMMIT for the serial path, mirroring dispatch_parallel's commit: reload FRESH under the
     queue lock and re-apply each result by id. The caller's snapshot is minutes stale by the time
     agents finish — saving it whole erases every concurrent write made meanwhile (keeper folds,
     route stamps, status transitions): the lost-update board wipe. A task completed elsewhere in
     the interim keeps its terminal status (_apply_result's lifecycle guards); a task removed from
     the fresh board is skipped."""
+    pending_count = len(_pending_dispatch_result_files(tasks_path))
     with _queue_lock(tasks_path) as got:
         if not got:
             print(
-                f"── dispatch: queue busy — {len(results)} result(s) NOT committed this round; "
-                "harvest reconciles from PR state (self-corrects next beat)"
+                f"── dispatch: queue busy — {len(results) + pending_count} exact-attempt "
+                "result(s) remain in durable pending custody"
             )
-            return
+            return False
+        # Load artifacts only after acquiring the same queue lock that guards
+        # their board consumption. This prevents a replaced file from being
+        # archived under an earlier digest.
+        pending_rows = _load_pending_dispatch_results(tasks_path)
         fresh = load_limen_file(tasks_path) if tasks_path.exists() else limen
         _reset_budget_if_needed(fresh, now)
         fid = {t.id: t for t in fresh.tasks}
@@ -4321,9 +5006,66 @@ def _commit_dispatch_results(
             t.id: (t.predicate, t.receipt_target) for t in limen.tasks if t.predicate and t.receipt_target
         }
         ftrack = fresh.portal.budget.track
-        for agent, tid, res in results:
+        records: dict[tuple[str, str], dict[str, Any]] = {}
+        pending_paths: dict[tuple[str, str], Path] = {}
+        malformed_rows: list[tuple[Path, str, str]] = []
+        for path, payload, receipt_digest, malformed_reason in pending_rows:
+            if payload is None:
+                malformed_rows.append((path, receipt_digest, malformed_reason or "invalid"))
+                continue
+            tid = str(payload["task_id"])
+            attempt_id = str(payload["attempt_id"])
+            key = (tid, attempt_id)
+            records[key] = {
+                "agent": str(payload["agent"]),
+                "task_id": tid,
+                "attempt_id": attempt_id,
+                "attempt_contract_hash": str(payload["attempt_contract_hash"]),
+                "result": payload["result"],
+                "model_selection": dict(payload["model_selection"]),
+                "authority_receipts": dict(payload.get("authority_receipts", {})),
+                "remote_submission": dict(payload["remote_submission"]),
+                "reconciliation": dict(payload["reconciliation"]),
+                "result_receipt_digest": receipt_digest,
+            }
+            pending_paths[key] = path
+        for index, (agent, tid, res) in enumerate(results):
+            attempt_id = (attempt_ids or {}).get(tid)
+            key = (tid, attempt_id or f"unbound-direct-{index}")
+            # The durable artifact is authoritative for a result already
+            # persisted before admission was released. Do not replace its
+            # identity or bounded receipts with the in-memory duplicate.
+            if key in records:
+                continue
+            records[key] = {
+                "agent": agent,
+                "task_id": tid,
+                "attempt_id": attempt_id,
+                "attempt_contract_hash": None,
+                "result": res,
+                "model_selection": (model_selection_receipts or {}).get(tid),
+                "authority_receipts": (authority_receipts or {}).get(tid),
+                "remote_submission": (remote_submission_receipts or {}).get(tid),
+                "reconciliation": (reconciliation_receipts or {}).get(tid),
+                "result_receipt_digest": None,
+            }
+        archive_reasons: dict[Path, str] = {}
+        quarantine_reasons: dict[Path, str] = {}
+        for key, record in records.items():
+            agent = str(record["agent"])
+            tid = str(record["task_id"])
+            res = record["result"]
+            attempt_id = record.get("attempt_id")
             ft = fid.get(tid)
             if ft is not None:
+                result_receipt_digest = record.get("result_receipt_digest")
+                consumed_digest = _consumed_result_receipt_digest(ft, attempt_id)
+                if consumed_digest is not None:
+                    if key in pending_paths:
+                        archive_reasons[pending_paths[key]] = (
+                            "duplicate-consumed" if consumed_digest == result_receipt_digest else "conflicting-consumed"
+                        )
+                    continue
                 contract = selected_contracts.get(tid)
                 # Backfill normalization only when the fresh task is still fully
                 # legacy. A concurrent keeper/owner update to either field wins;
@@ -4331,9 +5073,97 @@ def _commit_dispatch_results(
                 # bug this fresh-reload commit path exists to prevent.
                 if contract and not ft.predicate and not ft.receipt_target:
                     ft.predicate, ft.receipt_target = contract
-                _apply_result(ft, agent, res, now, ftrack)
-                _REMOTE_SUBMISSION_RECEIPTS.pop(tid, None)
+                stored_contract_hash = record.get("attempt_contract_hash")
+                launch = _attempt_launch_for(ft, attempt_id) if attempt_id else None
+                if stored_contract_hash is not None and (
+                    launch is None or launch.attempt_contract_hash != stored_contract_hash
+                ):
+                    res = _blocked_result("pending provider result failed immutable attempt-contract validation")
+                    record["model_selection"] = None
+                    record["authority_receipts"] = None
+                    record["remote_submission"] = None
+                    record["reconciliation"] = None
+                try:
+                    _apply_result(
+                        ft,
+                        agent,
+                        res,
+                        now,
+                        ftrack,
+                        expected_attempt_id=attempt_id,
+                        model_selection_receipt=record.get("model_selection"),
+                        authority_receipts=record.get("authority_receipts"),
+                        remote_submission_receipt=record.get("remote_submission"),
+                        reconciliation_receipt=record.get("reconciliation"),
+                        result_receipt_digest=result_receipt_digest,
+                        consume_transient_receipts=False,
+                    )
+                except (TypeError, ValueError):
+                    if key not in pending_paths:
+                        raise
+                    _apply_result(
+                        ft,
+                        agent,
+                        _blocked_result("pending provider receipt failed exact-attempt validation"),
+                        now,
+                        ftrack,
+                        expected_attempt_id=attempt_id,
+                        result_receipt_digest=result_receipt_digest,
+                        consume_transient_receipts=False,
+                    )
+                if key in pending_paths:
+                    archive_reasons[pending_paths[key]] = "reconciled"
+            elif key in pending_paths:
+                archive_reasons[pending_paths[key]] = "owner-row-missing"
+        for path, receipt_digest, malformed_reason in malformed_rows:
+            owner: Task | None = None
+            owner_attempt_id: str | None = None
+            for candidate in fresh.tasks:
+                candidate_attempt_id = _current_attempt_id(candidate)
+                if candidate_attempt_id and (
+                    _pending_dispatch_result_path(tasks_path, candidate.id, candidate_attempt_id).name == path.name
+                ):
+                    owner = candidate
+                    owner_attempt_id = candidate_attempt_id
+                    break
+            if owner is not None and _consumed_result_receipt_digest(owner, owner_attempt_id) is None:
+                _apply_result(
+                    owner,
+                    "limen",
+                    _blocked_result(
+                        f"malformed pending provider custody owner-routed ({malformed_reason}; {receipt_digest})"
+                    ),
+                    now,
+                    ftrack,
+                    expected_attempt_id=owner_attempt_id,
+                    result_receipt_digest=receipt_digest,
+                    consume_transient_receipts=False,
+                )
+            quarantine_reasons[path] = "malformed-owner-routed" if owner is not None else "malformed-owner-missing"
         save_limen_file(tasks_path, fresh)
+        # save_limen_file fsyncs its temporary bytes before rename. Seal the new
+        # board inode and directory entry before any exact-attempt evidence is
+        # removed from pending custody or transient memory.
+        _fsync_file_and_parent(tasks_path)
+        for _key, record in records.items():
+            tid = str(record["task_id"])
+            _MODEL_SELECTION_RECEIPTS.pop(tid, None)
+            _REMOTE_SUBMISSION_RECEIPTS.pop(tid, None)
+        for path, reason in archive_reasons.items():
+            try:
+                _archive_pending_dispatch_result(path, reason)
+            except OSError:
+                # The board is already terminal/fenced. Keeping the original
+                # pending receipt is safer than deleting custody on archive IO.
+                pass
+        for path, reason in quarantine_reasons.items():
+            try:
+                _quarantine_pending_dispatch_result(path, reason)
+            except OSError:
+                # An owner-bound malformed result is already terminal and
+                # digest-fenced in the board. A replay is therefore inert.
+                pass
+    return True
 
 
 def dispatch_tasks(
@@ -4347,6 +5177,11 @@ def dispatch_tasks(
 ) -> None:
     now = datetime.now(timezone.utc)
     budget = budget or limen.portal.budget.daily
+
+    if not dry_run and _pending_dispatch_result_files(tasks_path):
+        _commit_dispatch_results(tasks_path, limen, [], now)
+        if tasks_path.exists():
+            limen = load_limen_file(tasks_path)
 
     admission = dispatch_admission_check(tasks_path, task_id=task_id)
     if not admission.get("allow", False):
@@ -4431,6 +5266,10 @@ def dispatch_tasks(
 
     dispatched = 0
     results: list[tuple[str, str, bool | str]] = []
+    attempt_ids: dict[str, str] = {}
+    model_selection_receipts: dict[str, dict[str, Any]] = {}
+    remote_submission_receipts: dict[str, dict[str, Any]] = {}
+    reconciliation_receipts: dict[str, dict[str, Any]] = {}
     for task in candidates:
         if limit is not None and dispatched >= max(0, limit):
             break
@@ -4463,18 +5302,73 @@ def dispatch_tasks(
             print(f"  Worktree admission blocked {task.id}: {msg}")
             continue
 
+        run_task = task
+        if not dry_run:
+            reserved = _reserve_serial_attempt(
+                tasks_path,
+                task_id=task.id,
+                agent=agent_filter,
+                expected_contract_hash=execution_contract_hash(task),
+            )
+            if reserved is None:
+                _release_machine_admission(task.id)
+                print(f"  SKIP {task.id}: current owner row could not be durably reserved")
+                continue
+            run_task, attempt_id = reserved
+            attempt_ids[task.id] = attempt_id
         try:
-            result = call_agent_dispatch(agent_filter, task, dry_run)
+            result = call_agent_dispatch(agent_filter, run_task, dry_run)
+            if not dry_run:
+                # Provider receipts belong to the immutable attempt. Persist the
+                # full bounded result before releasing machine admission; the
+                # fresh-board commit may contend, but custody may not disappear.
+                model_selection_receipts[task.id] = dict(_MODEL_SELECTION_RECEIPTS.get(task.id, {}))
+                remote_submission_receipts[task.id] = dict(_REMOTE_SUBMISSION_RECEIPTS.get(task.id, {}))
+                latest_attempt = next(
+                    (entry for entry in reversed(run_task.dispatch_log) if entry.attempt_id == attempt_ids[task.id]),
+                    None,
+                )
+                reconciliation_receipts[task.id] = {
+                    field: value
+                    for field in (
+                        "actual_spend",
+                        "trajectory_outputs",
+                        "trajectory_outputs_reconciled",
+                        "trajectory_side_effects",
+                        "trajectory_side_effects_reconciled",
+                    )
+                    if latest_attempt is not None and (value := getattr(latest_attempt, field, None)) is not None
+                }
+                launch = _attempt_launch_for(run_task, attempt_ids[task.id])
+                if launch is None or launch.attempt_contract_hash is None:
+                    raise ValueError("registered serial attempt lost its immutable launch receipt")
+                _persist_pending_dispatch_result(
+                    tasks_path,
+                    task_id=task.id,
+                    agent=agent_filter,
+                    attempt_id=attempt_ids[task.id],
+                    attempt_contract_hash=launch.attempt_contract_hash,
+                    result=result,
+                    model_selection=model_selection_receipts[task.id],
+                    remote_submission=remote_submission_receipts[task.id],
+                    reconciliation=reconciliation_receipts[task.id],
+                )
         finally:
             if not dry_run:
                 _release_machine_admission(task.id)
         if not dry_run:
-            # In-memory apply keeps this loop's bookkeeping consistent; persistence happens
-            # once at commit, re-applied onto a FRESH board (never this stale snapshot).
-            _apply_result(task, agent_filter, result, now, track)
             results.append((agent_filter, task.id, result))
             if result == _RATELIMIT:
-                _commit_dispatch_results(tasks_path, limen, results, now)
+                _commit_dispatch_results(
+                    tasks_path,
+                    limen,
+                    results,
+                    datetime.now(timezone.utc),
+                    attempt_ids=attempt_ids,
+                    model_selection_receipts=model_selection_receipts,
+                    remote_submission_receipts=remote_submission_receipts,
+                    reconciliation_receipts=reconciliation_receipts,
+                )
                 print(f"── lane {agent_filter} rate-limited — cooling, {dispatched} dispatched this cycle")
                 return
             elif result and result not in (_NOOP, _RATELIMIT, _TIMEOUT) and not _is_blocked_result(result):
@@ -4483,7 +5377,16 @@ def dispatch_tasks(
         dispatched += 1
 
     if not dry_run:
-        _commit_dispatch_results(tasks_path, limen, results, now)
+        _commit_dispatch_results(
+            tasks_path,
+            limen,
+            results,
+            datetime.now(timezone.utc),
+            attempt_ids=attempt_ids,
+            model_selection_receipts=model_selection_receipts,
+            remote_submission_receipts=remote_submission_receipts,
+            reconciliation_receipts=reconciliation_receipts,
+        )
 
     print(f"── {mode}: {dispatched} task(s)")
 
@@ -4496,11 +5399,31 @@ def _apply_result(
     track: BudgetTrack,
     *,
     charge_budget: bool = True,
-) -> None:
+    expected_attempt_id: str | None = None,
+    model_selection_receipt: dict[str, Any] | None = None,
+    authority_receipts: dict[str, Any] | None = None,
+    remote_submission_receipt: dict[str, Any] | None = None,
+    reconciliation_receipt: dict[str, Any] | None = None,
+    result_receipt_digest: str | None = None,
+    consume_transient_receipts: bool = True,
+) -> bool:
     """Apply one dispatch result to a task (same semantics as the serial path):
     success → dispatched + spend; no-op/fail → recoverable failed; rate-limit → cascade."""
+    if result_receipt_digest is not None and not re.fullmatch(
+        r"sha256:[0-9a-f]{64}",
+        result_receipt_digest,
+    ):
+        raise ValueError("provider result receipt digest is invalid")
+    if result_receipt_digest is not None and not expected_attempt_id:
+        raise ValueError("provider result receipt digest lacks an exact attempt")
+    if _consumed_result_receipt_digest(task, expected_attempt_id) is not None:
+        return False
+    if expected_attempt_id is not None and _current_attempt_id(task) != expected_attempt_id:
+        return False
+    active_attempt_id = expected_attempt_id or _current_attempt_id(task)
+    launch = _attempt_launch_for(task, active_attempt_id) if active_attempt_id else None
     if task.status in {"done", "archived"} and _has_done_transition(task):
-        return
+        return False
     if _restore_done_status(
         task,
         now,
@@ -4508,34 +5431,110 @@ def _apply_result(
         session_id="result-lifecycle-guard",
         output="dispatch result ignored because this task already recorded done",
     ):
-        return
+        return False
+    if launch is not None and not _attempt_contract_is_current(task, launch):
+        cached_selection = (
+            _MODEL_SELECTION_RECEIPTS.pop(task.id, None)
+            if consume_transient_receipts
+            else _MODEL_SELECTION_RECEIPTS.get(task.id)
+        )
+        stale_selection = model_selection_receipt if model_selection_receipt is not None else cached_selection
+        validated_stale_selection = None
+        if stale_selection:
+            try:
+                validated_stale_selection = _validated_model_selection_receipt(
+                    task,
+                    expected_attempt_id=str(launch.attempt_id),
+                    value=stale_selection,
+                )
+            except ValueError:
+                pass
+        closed = _close_changed_contract_attempt(
+            task,
+            launch,
+            now=now,
+            agent=agent,
+            phase="result",
+            stale_result=result,
+            model_selection=validated_stale_selection,
+            remote_submission=(
+                remote_submission_receipt
+                if remote_submission_receipt is not None
+                else _REMOTE_SUBMISSION_RECEIPTS.get(task.id)
+            ),
+            reconciliation=reconciliation_receipt,
+        )
+        if closed and result_receipt_digest:
+            terminal = next(
+                (
+                    entry
+                    for entry in reversed(task.dispatch_log)
+                    if entry.attempt_id == launch.attempt_id
+                    and entry.status in {"done", "failed", "failed_blocked", "needs_human"}
+                ),
+                None,
+            )
+            if terminal is not None:
+                terminal.result_receipt_digest = result_receipt_digest
+        return False
     if result in {_NOOP, False} and _restore_pr_open_status(
         task,
         now,
         agent=agent,
         session_id="result-lifecycle-guard",
     ):
-        return
+        if consume_transient_receipts:
+            _MODEL_SELECTION_RECEIPTS.pop(task.id, None)
+        return False
+    detached_selection = model_selection_receipt
+    cached_selection = (
+        _MODEL_SELECTION_RECEIPTS.pop(task.id, None)
+        if consume_transient_receipts
+        else _MODEL_SELECTION_RECEIPTS.get(task.id)
+    )
+    selection = detached_selection if detached_selection is not None else cached_selection
+    if selection:
+        if not active_attempt_id:
+            raise ValueError("model-selection receipt lacks a registered attempt identity")
+        selection = _validated_model_selection_receipt(
+            task,
+            expected_attempt_id=active_attempt_id,
+            value=selection,
+        )
+    validated_authority = (
+        _validated_authority_receipts(
+            task,
+            expected_attempt_id=active_attempt_id,
+            value=authority_receipts,
+        )
+        if authority_receipts
+        else {}
+    )
+    reconciliation_updates = reconciliation_custody_updates(reconciliation_receipt)
 
     entry = DispatchLogEntry(timestamp=now, agent=agent, session_id=session_id(), status="dispatched")
+    entry.result_receipt_digest = result_receipt_digest
     if result == _NOOP:
         entry.status = "failed"
         entry.output = "No-op result; failed for recovery instead of archived."
+        entry.trajectory_outcome = "failed"
         task.status = "failed"
         if "noop" not in task.labels:
             task.labels.append("noop")
     elif result == _RATELIMIT:
         nxt = _cascade_or_requeue(agent)
-        entry.status = "open"
+        entry.status = "failed_blocked"
         entry.route_to = nxt
         entry.output = f"rate limited on {agent}; reopened to live fleet route"
+        entry.trajectory_outcome = "blocked"
         task.target_agent = nxt
         task.status = "open"
     elif result == _TIMEOUT:
         # too big for a sync local lane → hand to jules (async, no wall-clock cap)
-        entry.status = "open"
+        entry.status = "failed"
         entry.route_to = "jules"
         entry.output = f"timeout on {agent}; reopened to asynchronous lane"
+        entry.trajectory_outcome = "failed"
         task.target_agent = "jules"
         task.status = "open"
         if "slow" not in task.labels:
@@ -4543,6 +5542,7 @@ def _apply_result(
     elif _is_blocked_result(result):
         entry.status = "failed_blocked"
         entry.output = _blocked_reason(result)
+        entry.trajectory_outcome = "blocked"
         task.status = "failed_blocked"
         if "blocked:routing" not in task.labels:
             task.labels.append("blocked:routing")
@@ -4559,26 +5559,47 @@ def _apply_result(
             task.labels.append(tried)
         if agent in _REMOTE_SERVICE_LANES:
             fallback = _remote_service_failure_lane(task, agent)
-            entry.status = "open"
+            entry.status = "failed"
             entry.route_to = fallback
             entry.output = "remote/service lane failed; reopened to healthy fleet cascade"
+            entry.trajectory_outcome = "failed"
             task.target_agent = fallback
             task.status = "open"
         elif next_lane := _next_lane(agent):
-            entry.status = "open"
+            entry.status = "failed"
             entry.route_to = next_lane
             entry.output = f"{agent} lane failed; reopened to healthy fleet cascade"
+            entry.trajectory_outcome = "failed"
             task.target_agent = next_lane
             task.status = "open"
         else:
             entry.status = "failed"
+            entry.trajectory_outcome = "failed"
             task.status = "failed"
-    if selection := _MODEL_SELECTION_RECEIPTS.pop(task.id, None):
-        entry.execution_profile = selection.get("execution_profile")
+    if launch is not None:
+        entry.attempt_id = launch.attempt_id
+        entry.attempt_classification = launch.attempt_classification
+        entry.attempt_repository = launch.attempt_repository
+        entry.attempt_contract_hash = launch.attempt_contract_hash
+        entry.attempt_identity_digest = launch.attempt_identity_digest
+        entry.execution_profile = launch.execution_profile
+        entry.provider_route = launch.provider_route
+        entry.route_selection_source = launch.route_selection_source
+        entry.executing_keeper = launch.executing_keeper or launch.agent
+        entry.executing_session = launch.executing_session or launch.session_id
+    if selection:
+        entry.execution_profile = entry.execution_profile or selection.get("execution_profile")
         entry.selected_model = selection.get("selected_model")
         entry.selection_source = selection.get("selection_source")
         entry.catalog_hash = selection.get("catalog_hash")
-    if remote := _REMOTE_SUBMISSION_RECEIPTS.get(task.id):
+        if isinstance(selection.get("receipt"), dict):
+            entry.model_selection_receipt = dict(selection["receipt"])
+    for receipt_field, receipt in validated_authority.items():
+        setattr(entry, receipt_field, receipt)
+    remote = (
+        remote_submission_receipt if remote_submission_receipt is not None else _REMOTE_SUBMISSION_RECEIPTS.get(task.id)
+    )
+    if remote:
         entry.provider_run_id = remote.get("provider_run_id")
         entry.provider_url = remote.get("provider_url")
         entry.base_sha = remote.get("base_sha")
@@ -4593,8 +5614,22 @@ def _apply_result(
         entry.remote_state = remote.get("remote_state")
         entry.remote_request_id = remote.get("remote_request_id")
         entry.remote_receipt = remote.get("remote_receipt")
+    for field, value in reconciliation_updates.items():
+        setattr(entry, field, value)
     task.updated = now
     task.dispatch_log.append(entry)
+    if task.status == "open" and entry.status != "open":
+        task.dispatch_log.append(
+            DispatchLogEntry(
+                timestamp=now,
+                agent=agent,
+                session_id="result-requeue",
+                status="open",
+                route_to=entry.route_to,
+                output=f"dispatch: reopened after terminal {entry.status} attempt",
+            )
+        )
+    return True
 
 
 # ── RESET-WINDOW FRONT-LOAD ACCELERATOR ──────────────────────────────────────────────────────
@@ -4718,200 +5753,71 @@ def _accel_limit(limen: LimenFile, agent: str, base_limit: int, now: datetime) -
         return base_limit
 
 
-_CODEX_TIER_MODELS_DEFAULT: dict[str, str] = {
-    "haiku": "o4-mini",
-    "sonnet": "o4-mini",
-    "opus": "o3",
-    "fable": "o3",
-}
+def _provider_model_override(agent: str, task: Task | None = None) -> str | None:
+    """Use provider Auto unless an exact operator override is live now.
 
-_GEMINI_TIER_MODELS_DEFAULT: dict[str, str] = {
-    "haiku": "gemini-2.5-flash",
-    "sonnet": "gemini-2.5-flash",
-    "opus": "gemini-2.5-pro",
-    "fable": "gemini-2.5-pro",
-}
+    Identifier-only catalogs never authorize automatic ranking because they do
+    not expose enough metadata to match the provider-neutral execution profile.
+    """
 
-
-def _codex_model(task: "Task | None" = None) -> str | None:
-    """Derive the Codex model for THIS task. Order:
-      1. LIMEN_CODEX_MODEL --- blanket operator pin, always wins;
-      2. LIMEN_CODEX_TIER_SELECT != "1" -> None (provider Auto, old behaviour);
-      3. derive tier via _claude_tier_for(task) (same class->tier semantics);
-      4. LIMEN_CODEX_MODEL_<TIER> per-tier env override -> _CODEX_TIER_MODELS_DEFAULT[tier];
-      5. Record selection; return model.
-    Fail-open to None on any exception --- never block the lane."""
-    env = os.environ.get("LIMEN_CODEX_MODEL")
-    if env:
-        _record_model_selection(
-            task, profile={"tier": "override", "source": "codex_override"}, selected_model=env, source="codex_override"
-        )
-        return env
-    if os.environ.get("LIMEN_CODEX_TIER_SELECT", "1") != "1":
+    override = os.environ.get(_PROVIDER_MODEL_OVERRIDE_ENV[agent])
+    profile = _dispatch_execution_profile(task)
+    if not override:
         _record_model_selection(
             task,
-            profile={"tier": None, "source": "codex_tier_disabled"},
+            profile=profile.as_dict(),
             selected_model=None,
-            source="codex_tier_disabled",
+            source=f"{agent}_auto",
         )
         return None
-    try:
-        tier = _claude_tier_for(task)
-        per_tier_env = f"LIMEN_CODEX_MODEL_{tier.upper()}"
-        model = os.environ.get(per_tier_env) or _CODEX_TIER_MODELS_DEFAULT.get(tier)
-        _record_model_selection(
-            task,
-            profile={"tier": tier, "source": "codex_tier_derived"},
-            selected_model=model,
-            source="codex_tier_derived",
-        )
-        return model
-    except Exception:
-        return None
 
-
-def _gemini_model(task: "Task | None" = None) -> str | None:
-    """Derive the Gemini model for THIS task. Order:
-      1. LIMEN_GEMINI_MODEL --- blanket operator pin, always wins;
-      2. LIMEN_GEMINI_TIER_SELECT != "1" -> None (bare invocation, old behaviour);
-      3. derive tier via _claude_tier_for(task) (same class->tier semantics);
-      4. LIMEN_GEMINI_MODEL_<TIER> per-tier env override -> _GEMINI_TIER_MODELS_DEFAULT[tier];
-      5. Record selection; return model.
-    Fail-open to None on any exception --- never block the lane."""
-    env = os.environ.get("LIMEN_GEMINI_MODEL")
-    if env:
+    if agent == "claude":
         _record_model_selection(
             task,
-            profile={"tier": "override", "source": "gemini_override"},
-            selected_model=env,
-            source="gemini_override",
-        )
-        return env
-    if os.environ.get("LIMEN_GEMINI_TIER_SELECT", "1") != "1":
-        _record_model_selection(
-            task,
-            profile={"tier": None, "source": "gemini_tier_disabled"},
+            profile=profile.as_dict(),
             selected_model=None,
-            source="gemini_tier_disabled",
+            source="claude_override_unvalidated",
         )
-        return None
-    try:
-        tier = _claude_tier_for(task)
-        per_tier_env = f"LIMEN_GEMINI_MODEL_{tier.upper()}"
-        model = os.environ.get(per_tier_env) or _GEMINI_TIER_MODELS_DEFAULT.get(tier)
-        _record_model_selection(
-            task,
-            profile={"tier": tier, "source": "gemini_tier_derived"},
-            selected_model=model,
-            source="gemini_tier_derived",
+        raise ProviderModelSelectionBlocked(
+            "claude model override cannot be validated because Claude CLI exposes no safe metadata catalog"
         )
-        return model
-    except Exception:
-        return None
 
+    timeout = max(1, _env_int(_PROVIDER_CATALOG_TIMEOUT_ENV[agent], 30))
+    if agent == "codex":
+        binary = _resolve_agent_binary(agent)
+        catalog = discover_codex_models(binary, timeout=timeout)
+    elif agent == "gemini":
+        catalog = discover_gemini_models(timeout=timeout)
+    else:  # pragma: no cover - every caller is a fixed lane adapter
+        raise ValueError(f"unsupported provider model override: {agent}")
 
-# ─── Claude-lane earned-tier ladder (haiku-first-with-cheap-verify) ──────────
-# The claude lane invoked `claude -p` with NO -m, so the account picked the tier. Now the
-# tier is DERIVED per task: a coding task's failure is cheaply detectable (CI/PR/auto-merge/
-# reconcile), so verifiable classes start at HAIKU and rely on the EXISTING _LANE_CASCADE +
-# chronic escalation as the escalate rung — only UNDETECTABLE-failure classes get a higher
-# tier up front. No new escalation machinery. Mirrors _codex_model/_opencode_model: env pin
-# wins, derive at call-time, fail-open. ([[model-tiering-policy]], [[value-is-discovered-never-assumed]])
-#
-# The shared VOCABULARY this ladder sorts with — _CLAUDE_TIER_ORDER, reserved class sets,
-# acceptance gates, and _resolve_claude_model() — lives in model_selection.py (imported at the
-# top) so the NON-BYPASSABLE `claude` shim sorts with the EXACT same vocabulary. One source of
-# truth: this file owns the per-TASK sort; the shim owns the per-SPAWN floor.
-# ([[fleet-model-floor-bleed]])
-
-
-def _claude_tier_overrides() -> dict[str, list[str]]:
-    """Optional operator OVERRIDE map logs/model-tiers.json → the claude lane's {tier: [classes]}.
-    Fail-open to {} (→ the ledger-DISCOVERED default). Demoted to an override: the default
-    pre-assign set is discovered from the ledger, not pinned. Same read pattern as _ledger_lanes()."""
-    try:
-        root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
-        return json.loads((root / "logs" / "model-tiers.json").read_text()).get("claude") or {}
-    except Exception:
-        return {}
-
-
-def _earned_fable_tier() -> str:
-    """A Fable selection that already cleared the acceptance receipt, resolved against the LIVE
-    weekly cap (`logs/fable-allotment.json`): 'fable' when the cap still allows it, else the
-    fallback tier (Opus). This is the runtime backstop the receipt gate alone cannot provide —
-    it enforces the 40% deliberate / 50% hard ladder against actual tokens burned this week."""
-    capped = _fable_capped_tier(_fable_reserve_receipt_present())
-    return capped if capped is not None else "fable"
-
-
-def _claude_tier_for(task: Task | None) -> str:
-    """DERIVE the Claude tier for a task. Default = haiku (verifiable → escalate via the existing
-    cascade). Pre-assign a higher tier ONLY where failure is undetectable:
-      • fable — the narrow reserved top tier plus a written acceptance receipt/command;
-      • opus  — the reserved principled set (_claude_opus_classes) or an explicit override;
-      • sonnet— classes the ledger has DISCOVERED this lane wastes on (waste_classes): work that
-                shipped low-value yet passed whatever gate exists ⇒ failure not caught cheaply here.
-    A per-task `claude_tier` pin and an optional logs/model-tiers.json override layer on top.
-    Fable is additionally gated by the LIVE weekly cap (`_earned_fable_tier`): a valid receipt is
-    necessary-not-sufficient once the week's Fable spend is at/over cap. Fail-open → haiku."""
-    if task is None:
-        return "haiku"
-    pin = task.claude_tier
-    if pin in _CLAUDE_TIER_ORDER:
-        if pin == "fable" and not _claude_fable_acceptance_present():
-            return _fable_fallback_tier()
-        if pin == "fable":
-            return _earned_fable_tier()
-        return str(pin)
-    classes = _task_classes(task)
-    override = _claude_tier_overrides()
-    if classes & (_claude_fable_classes() | set(override.get("fable") or [])):
-        return _earned_fable_tier() if _claude_fable_acceptance_present() else _fable_fallback_tier()
-    if classes & (_claude_opus_classes() | set(override.get("opus") or [])):
-        return "opus"
-    lane_data = _ledger_lanes().get("claude") or {}
-    waste = set(lane_data.get("waste_classes") or [])
-    if classes & (waste | set(override.get("sonnet") or [])):
-        return "sonnet"
-    return "haiku"
-
-
-def _bump_tier(tier: str, task: Task | None) -> str:
-    """Escalate-on-failed-cheap-check, in-tier: if THIS task already failed on the claude lane
-    (carries the cascade's own 'tried:claude' breadcrumb), the cheap verify failed once here, so
-    step up one rung (capped at opus unless LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE=1 and a Fable
-    acceptance is present). State lives in the EXISTING label — no new retry counter, no schema
-    change. Env-gated LIMEN_CLAUDE_RETRY_BUMP (default on)."""
-    if task is None or os.environ.get("LIMEN_CLAUDE_RETRY_BUMP", "1") != "1":
-        return tier
-    if "tried:claude" not in (getattr(task, "labels", None) or []):
-        return tier
-    i = _CLAUDE_TIER_ORDER.index(tier)
-    bumped = _CLAUDE_TIER_ORDER[min(i + 1, len(_CLAUDE_TIER_ORDER) - 1)]
-    if bumped == "fable" and not (
-        os.environ.get("LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE") == "1" and _claude_fable_acceptance_present()
-    ):
-        return "opus"
-    return bumped
+    selected = validate_model_override(catalog, override)
+    _record_model_selection(
+        task,
+        profile=profile.as_dict(),
+        selected_model=selected,
+        source=f"{agent}_override" if selected else f"{agent}_override_unvalidated",
+        fingerprint=model_id_catalog_hash(catalog),
+    )
+    if selected:
+        return selected
+    if catalog:
+        raise ProviderModelSelectionBlocked(f"{agent} model override is absent from the live provider catalog")
+    raise ProviderModelSelectionBlocked(
+        f"{agent} model override cannot be validated because the live provider catalog is unavailable"
+    )
 
 
 def _claude_model(task: Task | None = None) -> str | None:
-    """Lazily pick the Claude tier for THIS task, resolved only when the claude lane runs (names
-    are outputs). Order mirrors _codex_model:
-      1. explicit LIMEN_CLAUDE_MODEL — a manual pin always wins;
-      2. feature flag LIMEN_CLAUDE_TIER_SELECT (default on; off → None = today's bare invocation);
-      3. derive the tier (class-based), bump it if the task already failed here, resolve to a model.
-    Fail-open to None everywhere → bare `claude -p` (account default), never a blocked lane."""
-    env = os.environ.get("LIMEN_CLAUDE_MODEL")
-    if env:
-        return _guard_fable_model_pin(env)
-    if os.environ.get("LIMEN_CLAUDE_TIER_SELECT", "1") != "1":
-        return None
-    try:
-        return _resolve_claude_model(_bump_tier(_claude_tier_for(task), task))
-    except Exception:
-        return None  # never block the lane on a tier-selection hiccup
+    return _provider_model_override("claude", task)
+
+
+def _codex_model(task: Task | None = None) -> str | None:
+    return _provider_model_override("codex", task)
+
+
+def _gemini_model(task: Task | None = None) -> str | None:
+    return _provider_model_override("gemini", task)
 
 
 def _select_parallel_reservations(
@@ -5038,12 +5944,12 @@ def _select_parallel_reservations(
             t.status = "dispatched"  # reserve so nothing else grabs it
             t.updated = now
             t.dispatch_log.append(
-                DispatchLogEntry(
-                    timestamp=now,
-                    agent=agent,
-                    session_id="reserve",
-                    status="dispatched",
-                    output="dispatch-parallel: reserved before agent execution",
+                _attempt_launch_entry(
+                    t,
+                    agent,
+                    reservation_session="reserve",
+                    started_at=now,
+                    output="dispatch-parallel: durable reservation before agent execution",
                 )
             )
             picked.append((agent, t.id))
@@ -5063,6 +5969,10 @@ def dispatch_parallel(
     process (serial), the slow agent runs happen concurrently in a thread pool, and a
     lane that hits its real rate-limit is cooled (its remaining reserved tasks re-queued)."""
     now = datetime.now(timezone.utc)
+    if not dry_run and _pending_dispatch_result_files(tasks_path):
+        _commit_dispatch_results(tasks_path, limen, [], now)
+        if tasks_path.exists():
+            limen = load_limen_file(tasks_path)
     admission = dispatch_admission_check(tasks_path)
     if not admission.get("allow", False):
         print_dispatch_admission_block("dispatch-parallel", admission)
@@ -5101,13 +6011,14 @@ def dispatch_parallel(
             return
         with _machine_admission_lock():
             fresh = load_limen_file(tasks_path) if tasks_path.exists() else limen
-            reset = _reset_budget_if_needed(fresh, now)
+            reservation_now = datetime.now(timezone.utc)
+            reset = _reset_budget_if_needed(fresh, reservation_now)
             live_snapshot, used_slots = _snapshot_with_machine_reservations()
             picked = _select_parallel_reservations(
                 fresh,
                 agents,
                 per_agent_limit,
-                now,
+                reservation_now,
                 dry_run=False,
                 admission_snapshot=live_snapshot,
                 local_slots=max(0, max_workers - used_slots),
@@ -5129,59 +6040,99 @@ def dispatch_parallel(
 
     # ── RUN: concurrent agent executions (worktree→PR / jules), no tasks.yaml access here
     id2task = {t.id: t for t in limen.tasks}
+    attempt_ids = {tid: str(_current_attempt_id(id2task[tid]) or "") for _agent, tid in picked}
     cooled: set[str] = set()  # lanes that hit their real rate-limit this round
+    reconciliation_receipts: dict[str, dict[str, Any]] = {}
+    reconciliation_lock = threading.Lock()
 
     def run_one(at: tuple[str, str]) -> tuple[str, str, bool | str]:
         agent, tid = at
+        run_task = _claim_registered_attempt(
+            tasks_path,
+            task_id=tid,
+            agent=agent,
+            expected_attempt_id=attempt_ids[tid],
+        )
+        if run_task is None:
+            _release_machine_admission(tid)
+            return (agent, tid, _blocked_result("registered attempt could not be claimed before provider execution"))
         try:
-            res = call_agent_dispatch(agent, id2task[tid], dry_run=False)
-        except Exception as e:  # never let one task kill the pool
-            print(f"  ERROR {agent} {tid}: {str(e)[:160]}")
-            res = False
+            try:
+                res = call_agent_dispatch(agent, run_task, dry_run=False)
+            except Exception as e:  # never let one task kill the pool
+                print(f"  ERROR {agent} {tid}: {str(e)[:160]}")
+                res = False
+            latest_attempt = next(
+                (entry for entry in reversed(run_task.dispatch_log) if entry.attempt_id == attempt_ids[tid]),
+                None,
+            )
+            reconciliation = {
+                field: value
+                for field in (
+                    "actual_spend",
+                    "trajectory_outputs",
+                    "trajectory_outputs_reconciled",
+                    "trajectory_side_effects",
+                    "trajectory_side_effects_reconciled",
+                )
+                if latest_attempt is not None and (value := getattr(latest_attempt, field, None)) is not None
+            }
+            with reconciliation_lock:
+                reconciliation_receipts[tid] = reconciliation
+            launch = _attempt_launch_for(run_task, attempt_ids[tid])
+            if launch is None or launch.attempt_contract_hash is None:
+                raise ValueError("registered parallel attempt lost its immutable launch receipt")
+            _persist_pending_dispatch_result(
+                tasks_path,
+                task_id=tid,
+                agent=agent,
+                attempt_id=attempt_ids[tid],
+                attempt_contract_hash=launch.attempt_contract_hash,
+                result=res,
+                model_selection=dict(_MODEL_SELECTION_RECEIPTS.get(tid, {})),
+                remote_submission=dict(_REMOTE_SUBMISSION_RECEIPTS.get(tid, {})),
+                reconciliation=reconciliation,
+            )
         finally:
             _release_machine_admission(tid)
         return (agent, tid, res)
 
     results = _run_parallel_batch(picked, run_one, max_workers)
+    model_selection_receipts = {tid: dict(_MODEL_SELECTION_RECEIPTS.get(tid, {})) for _agent, tid, _res in results}
+    remote_submission_receipts = {tid: dict(_REMOTE_SUBMISSION_RECEIPTS.get(tid, {})) for _agent, tid, _res in results}
     for agent, _tid, res in results:
         if res == _RATELIMIT:
             cooled.add(agent)
 
-    # ── COMMIT: reload FRESH under the lock so writes a supervisor (seed/heal/verify) made
-    # during the unlocked run aren't clobbered; re-apply each result to the fresh task by id.
-    # This is the #11 keystone — without the reload, this save would silently overwrite seeds.
     n_pr = n_noop = n_fail = n_rl = n_to = n_blocked = 0
-    with _queue_lock(tasks_path) as got:
-        if not got:
-            # Lock timed out — do NOT write unprotected (that is the #111 clobber this reload guards
-            # against). The agents already ran; their PRs exist, so harvest/reconcile recovers the
-            # results from GitHub PR state on a later beat. Skip the commit rather than corrupt it.
-            print(
-                f"── PARALLEL: queue busy — {len(results)} result(s) NOT committed this round; "
-                "harvest reconciles from PR state (self-corrects next beat)"
-            )
-            return
-        fresh = load_limen_file(tasks_path)
-        fid = {t.id: t for t in fresh.tasks}
-        ftrack = fresh.portal.budget.track
-        for agent, tid, res in results:
-            ft = fid.get(tid)
-            if ft is not None:
-                _apply_result(ft, agent, res, now, ftrack)
-                _REMOTE_SUBMISSION_RECEIPTS.pop(tid, None)
-            if res == _RATELIMIT:
-                n_rl += 1
-            elif res == _NOOP:
-                n_noop += 1
-            elif res == _TIMEOUT:
-                n_to += 1
-            elif _is_blocked_result(res):
-                n_blocked += 1
-            elif res and not _is_blocked_result(res):
-                n_pr += 1
-            else:
-                n_fail += 1
-        save_limen_file(tasks_path, fresh)
+    for _agent, _tid, res in results:
+        if res == _RATELIMIT:
+            n_rl += 1
+        elif res == _NOOP:
+            n_noop += 1
+        elif res == _TIMEOUT:
+            n_to += 1
+        elif _is_blocked_result(res):
+            n_blocked += 1
+        elif res and not _is_blocked_result(res):
+            n_pr += 1
+        else:
+            n_fail += 1
+    # One commit implementation owns serial and parallel replay semantics. The
+    # pending artifact is loaded under the queue lock, and its digest is saved
+    # atomically with lifecycle and spend before archival is attempted.
+    committed = _commit_dispatch_results(
+        tasks_path,
+        limen,
+        results,
+        datetime.now(timezone.utc),
+        attempt_ids=attempt_ids,
+        model_selection_receipts=model_selection_receipts,
+        remote_submission_receipts=remote_submission_receipts,
+        reconciliation_receipts=reconciliation_receipts,
+    )
+    if not committed:
+        return
     print(
         f"── PARALLEL done: {len(results)} ran · {n_pr} dispatched/PR · {n_noop} no-op · "
         f"{n_fail} failed→cascade · {n_blocked} blocked · {n_rl} rate-limited · {n_to} timeout→jules"
@@ -5335,7 +6286,10 @@ def release_stale_tasks(
                     )
                     print(f"  RESTORE done: {task.id} {original_status} {task.target_agent} — {task.title}")
                     continue
-                action, remote_status = _release_stale_route(task, snapshot)
+                if _task_has_pending_dispatch_result(tasks_path, task):
+                    action, remote_status = "harvest", "pending_dispatch_result"
+                else:
+                    action, remote_status = _release_stale_route(task, snapshot)
                 candidate_rows.append(
                     {
                         "id": task.id,
@@ -5382,6 +6336,8 @@ def release_stale_tasks(
         for task in candidates:
             if _has_done_transition(task):
                 action, remote_status = "restore_done", "prior_done"
+            elif _task_has_pending_dispatch_result(tasks_path, task):
+                action, remote_status = "harvest", "pending_dispatch_result"
             else:
                 action, remote_status = _release_stale_route(task, snapshot)
             candidate_rows.append(

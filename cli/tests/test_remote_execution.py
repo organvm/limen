@@ -14,10 +14,10 @@ from typing import Callable, Sequence
 import pytest
 
 from limen.census import Budget, Status, Vendor
+from limen.dispatch import _attempt_launch_entry
 from limen.harvest import check_remote_harvest
 from limen.io import save_limen_file
 from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task
-from limen.provider_selection import execution_profile_for
 from limen.remote_execution import (
     CommandResult,
     DurableOutput,
@@ -42,6 +42,7 @@ from limen.remote_predicate import (
     SANDBOX_OK,
     SANDBOX_OUTPUT_LIMIT,
     SANDBOX_PROFILE_DIGEST,
+    SCHEMA_VERSION,
     PredicateContractError,
     ReceiptTarget,
     _attest_sandbox_runtime,
@@ -117,6 +118,7 @@ def request(provider: str = "github_actions", **overrides: object) -> RemoteRequ
     values: dict[str, object] = {
         "provider": provider,
         "task_id": task_id,
+        "attempt_id": "attempt-" + "1" * 64,
         "repo": "organvm/limen",
         "base_sha": SHA,
         "control_repo": "organvm/limen",
@@ -207,6 +209,7 @@ def test_request_rejects_nonfinite_profile_and_model_pins() -> None:
 
 def test_request_id_changes_with_control_sha_workflow_or_verification_context() -> None:
     baseline = request()
+    assert request(attempt_id="attempt-" + "2" * 64).request_id != baseline.request_id
     assert request(control_ref="release", control_ref_kind="tag").request_id != baseline.request_id
     assert request(control_sha="d" * 40).request_id != baseline.request_id
     assert request(workflow_id=WORKFLOW_ID + 1).request_id != baseline.request_id
@@ -404,6 +407,7 @@ def _worker_args(repo: Path, req: RemoteRequest, packet_digest: str | None = Non
         request_id=req.request_id,
         provider=req.provider,
         task_id=req.task_id,
+        attempt_id=req.attempt_id,
         repo=req.repo,
         control_repo=req.control_repo,
         control_ref=req.control_ref,
@@ -467,6 +471,7 @@ def test_worker_recomputes_packet_and_emits_counts_only_receipt(tmp_path: Path) 
     receipt = execute_attested(_worker_args(repo, req), sandbox_runner=runner)
 
     assert receipt["predicate_exit_code"] == 0
+    assert receipt["attempt_id"] == req.attempt_id
     assert receipt["workspace_clean"] is True
     assert receipt["instruction_digest"] == digest_text(req.instruction)
     assert receipt["control_sha"] == sha == receipt["observed_control_sha"]
@@ -1123,10 +1128,11 @@ def test_actions_catalog_fails_closed_on_request_id_identity_collision() -> None
 
 def workflow_payload(req: RemoteRequest, observed: RemoteRun) -> dict[str, object]:
     payload: dict[str, object] = {
-        "schema_version": "limen.remote-execution.v3",
+        "schema_version": SCHEMA_VERSION,
         "request_id": observed.request_id,
         "provider": req.provider,
         "task_id": req.task_id,
+        "attempt_id": req.attempt_id,
         "repo": req.repo,
         "base_sha": req.base_sha,
         "observed_sha": req.base_sha,
@@ -1172,6 +1178,7 @@ def workflow_payload(req: RemoteRequest, observed: RemoteRun) -> dict[str, objec
         "request_id",
         "provider",
         "task_id",
+        "attempt_id",
         "repo",
         "base_sha",
         "observed_sha",
@@ -1226,37 +1233,56 @@ def test_workflow_receipt_digest_is_verified_before_fields() -> None:
 
 
 def _task(req: RemoteRequest, observed: RemoteRun, receipt_path: str) -> Task:
-    return verification_task(
+    task = verification_task(
         req.task_id,
         status="dispatched",
-        dispatch_log=[
-            DispatchLogEntry(
-                timestamp=datetime.fromisoformat(observed.observed_at),
-                agent=req.provider,
-                session_id=observed.provider_run_id,
-                status="dispatched",
-                provider_run_id=observed.provider_run_id,
-                provider_url=observed.url,
-                base_sha=observed.base_sha,
-                control_repo=observed.control_repo,
-                control_ref=observed.control_ref,
-                control_ref_kind=observed.control_ref_kind,
-                control_sha=observed.control_sha,
-                workflow_id=observed.workflow_id,
-                workflow_path=observed.workflow_path,
-                workflow_event=observed.workflow_event,
-                verification_context_digest=observed.verification_context_digest,
-                remote_state=observed.state.value,
-                remote_request_id=observed.request_id,
-                remote_receipt=receipt_path,
-            )
-        ],
     )
+    launch = _attempt_launch_entry(
+        task,
+        req.provider,
+        reservation_session="remote-reserve",
+        started_at=datetime.fromisoformat(NOW),
+        output="registered exact attempt before remote submission",
+    )
+    assert launch.attempt_id == req.attempt_id
+    task.dispatch_log = [
+        launch.model_copy(
+            update={
+                "timestamp": datetime.fromisoformat(observed.observed_at),
+                "session_id": observed.provider_run_id,
+                "provider_run_id": observed.provider_run_id,
+                "provider_url": observed.url,
+                "base_sha": observed.base_sha,
+                "control_repo": observed.control_repo,
+                "control_ref": observed.control_ref,
+                "control_ref_kind": observed.control_ref_kind,
+                "control_sha": observed.control_sha,
+                "workflow_id": observed.workflow_id,
+                "workflow_path": observed.workflow_path,
+                "workflow_event": observed.workflow_event,
+                "verification_context_digest": observed.verification_context_digest,
+                "remote_state": observed.state.value,
+                "remote_request_id": observed.request_id,
+                "remote_receipt": receipt_path,
+            }
+        )
+    ]
+    return task
 
 
 def _harvest_request() -> RemoteRequest:
     template = verification_task()
-    return request(execution_profile=execution_profile_for(template).as_dict())
+    launch = _attempt_launch_entry(
+        template,
+        "github_actions",
+        reservation_session="remote-reserve",
+        started_at=datetime.fromisoformat(NOW),
+        output="registered exact attempt before remote submission",
+    )
+    return request(
+        attempt_id=str(launch.attempt_id),
+        execution_profile=dict(launch.execution_profile or {}),
+    )
 
 
 def harvest_board(task: Task) -> LimenFile:
@@ -1303,6 +1329,14 @@ def test_remote_harvest_adopts_intent_after_crash_before_board_write(
         req.task_id,
         status="in_progress",
     )
+    launch = _attempt_launch_entry(
+        task,
+        req.provider,
+        reservation_session="remote-reserve",
+        started_at=datetime.fromisoformat(NOW),
+        output="registered exact attempt before remote submission",
+    )
+    task.dispatch_log = [launch.model_copy(update={"status": "in_progress"})]
     board = harvest_board(task)
     adapter = StableAdapter(req)
     monkeypatch.setattr("limen.harvest.discover_adapters", lambda: ({req.provider: adapter}, []))
@@ -1311,6 +1345,70 @@ def test_remote_harvest_adopts_intent_after_crash_before_board_write(
     assert task.status == "in_progress"
     assert task.dispatch_log[-1].remote_request_id == req.request_id
     assert task.dispatch_log[-1].provider_run_id == pending.provider_run_id
+    assert task.dispatch_log[-1].attempt_id == launch.attempt_id
+
+
+def test_remote_harvest_never_adopts_old_receipt_onto_new_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    old_request = _harvest_request()
+    completed = run(old_request, RemoteState.SUCCEEDED)
+    store = ReceiptStore(tmp_path / "logs" / "remote-execution")
+    store.write(
+        RemoteReceipt(
+            old_request,
+            completed,
+            completed.state,
+            observed_at=completed.observed_at,
+            detail=completed.detail,
+        )
+    )
+    task = verification_task(old_request.task_id, status="in_progress")
+    new_launch = _attempt_launch_entry(
+        task,
+        old_request.provider,
+        reservation_session="new-remote-reserve",
+        started_at=datetime.fromisoformat(NOW),
+        output="new exact attempt after older receipt was written",
+    )
+    assert new_launch.attempt_id != old_request.attempt_id
+    task.dispatch_log = [new_launch.model_copy(update={"status": "in_progress"})]
+    monkeypatch.setattr(
+        "limen.harvest.discover_adapters",
+        lambda: ({old_request.provider: StableAdapter(old_request)}, []),
+    )
+
+    assert check_remote_harvest(harvest_board(task), tmp_path / "tasks.yaml") == []
+    assert task.status == "in_progress"
+    assert len(task.dispatch_log) == 1
+    assert task.dispatch_log[0].attempt_id == new_launch.attempt_id
+    assert task.dispatch_log[0].remote_request_id is None
+
+
+def test_remote_harvest_never_adopts_or_terminalizes_without_registered_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    req = _harvest_request()
+    completed = run(req, RemoteState.SUCCEEDED)
+    store = ReceiptStore(tmp_path / "logs" / "remote-execution")
+    store.write(
+        RemoteReceipt(
+            req,
+            completed,
+            completed.state,
+            observed_at=completed.observed_at,
+            detail=completed.detail,
+        )
+    )
+    task = verification_task(req.task_id, status="in_progress")
+    monkeypatch.setattr(
+        "limen.harvest.discover_adapters",
+        lambda: ({req.provider: StableAdapter(req)}, []),
+    )
+
+    assert check_remote_harvest(harvest_board(task), tmp_path / "tasks.yaml") == []
+    assert task.status == "in_progress"
+    assert task.dispatch_log == []
 
 
 def test_remote_harvest_routes_missing_adapter_to_named_blocker(
@@ -1392,8 +1490,11 @@ def test_remote_harvest_never_false_dones_task_changed_to_implementation(
     monkeypatch.setattr("limen.harvest.discover_adapters", lambda: ({req.provider: adapter}, []))
 
     assert check_remote_harvest(board, tmp_path / "tasks.yaml") == [req.task_id]
-    assert task.status == "failed_blocked"
-    assert "verification-only" in (task.dispatch_log[-1].output or "")
+    assert task.status == "open"
+    assert task.dispatch_log[-2].status == "failed"
+    assert task.dispatch_log[-2].attempt_id == req.attempt_id
+    assert task.dispatch_log[-1].attempt_id is None
+    assert "changed after reservation" in (task.dispatch_log[-2].output or "")
 
 
 def test_github_actions_route_and_targeted_dispatch_reject_code_task(
@@ -1512,6 +1613,8 @@ def test_workflow_has_no_raw_shell_predicate_or_patch_upload() -> None:
     assert "actions/upload-artifact@v" not in workflow
     assert "persist-credentials: false" in workflow
     assert "remote_predicate.py" in workflow
+    assert "inputs.attempt_id" in workflow
+    assert '--attempt-id "$LIMEN_ATTEMPT_ID"' in workflow
     assert "inputs.base_sha" in workflow
     assert "inputs.control_ref" in workflow
     assert "inputs.control_ref_kind" in workflow

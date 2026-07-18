@@ -45,6 +45,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "cli" / "src"))
@@ -63,9 +64,9 @@ from limen.capacity import (  # noqa: E402
     select_lanes,
     task_has_github_issue,
 )
-from limen.model_selection import _claude_fable_classes, _claude_opus_classes  # noqa: E402
 from limen.io import load_limen_file, queue_lock, save_limen_file  # noqa: E402
 from limen.dispatch import _down_lanes, _reset_budget_if_needed  # noqa: E402
+from limen.provider_selection import execution_profile_for  # noqa: E402
 from limen.workstream import UNASSIGNED, assign_channel  # noqa: E402
 
 
@@ -519,8 +520,8 @@ def _local_floor_lane(task: dict, health: dict[str, bool]) -> str | None:
 
     Only fires when LIMEN_LOCAL_FLOOR=1 (the arm is the parity gate's decision — see
     organvm/manumissio; operator rule 2026-07-09: nothing switches over until the math maths)
-    AND the floor is actually lit (ollama healthy + a model pulled). Reserved opus/fable classes
-    never route local. A class the value ledger has graded wasted on the ollama lane falls back
+    AND the floor is actually lit (ollama healthy + a model pulled). Tasks whose provider-neutral
+    profile requires deep reasoning, attachments, or planning never route local. A class the value ledger has graded wasted on the ollama lane falls back
     automatically (self-correcting rollback, same source as _ledger_bias). Fail-soft: any error
     -> None, i.e. today's routing byte-identical."""
     try:
@@ -531,8 +532,20 @@ def _local_floor_lane(task: dict, health: dict[str, bool]) -> str | None:
         classes = _task_classes(task)
         if not classes & local_floor_classes():
             return None
-        if classes & (set(_claude_opus_classes()) | set(_claude_fable_classes())):
-            return None  # reserved tiers never drop to the floor
+        profile = execution_profile_for(
+            SimpleNamespace(
+                title=task.get("title"),
+                description=task.get("description"),
+                context=task.get("context"),
+                priority=task.get("priority"),
+                budget_cost=task.get("budget_cost"),
+                depends_on=task.get("depends_on"),
+                dispatch_log=task.get("dispatch_log"),
+                labels=task.get("labels"),
+            )
+        )
+        if profile.reasoning_depth > 0.75 or profile.attachments_required or profile.planning_only:
+            return None
         try:
             lanes = json.loads((ROOT / "logs" / "ledger.json").read_text()).get("lanes", {})
             if classes & set((lanes.get("ollama") or {}).get("waste_classes") or []):

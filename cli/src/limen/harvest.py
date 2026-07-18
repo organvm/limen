@@ -4,7 +4,13 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from limen.io import save_limen_file
+from limen.attempt_custody import (
+    attempt_contract_is_current,
+    attempt_launch_for,
+    close_changed_contract_attempt,
+    current_attempt_id,
+)
+from limen.io import load_limen_file, queue_lock, save_limen_file
 from limen.models import DispatchLogEntry, LimenFile, Task
 from limen.provider_selection import execution_profile_for
 from limen.remote_execution import (
@@ -19,6 +25,7 @@ from limen.remote_execution import (
     remote_request_from_task,
     verification_context_for_task,
 )
+from limen.trajectory_publication import publish_task_trajectories
 
 
 def _get_jules_sessions(harvest_dir: Path) -> dict[str, str]:
@@ -85,6 +92,45 @@ def _diff_is_real(diff_text: str) -> bool:
     return False
 
 
+def _terminal_attempt_entry(
+    task: Task,
+    *,
+    timestamp: datetime,
+    agent: str,
+    session_id: str,
+    status: str,
+    output: str,
+) -> DispatchLogEntry:
+    """Carry immutable attempt/model receipts into a terminal harvest row."""
+
+    source = next((entry for entry in reversed(task.dispatch_log) if entry.attempt_id), None)
+    outcome = {
+        "done": "succeeded",
+        "failed": "failed",
+        "failed_blocked": "blocked",
+        "needs_human": "blocked",
+    }.get(status)
+    if source is None:
+        return DispatchLogEntry(
+            timestamp=timestamp,
+            agent=agent,
+            session_id=session_id,
+            status=status,
+            trajectory_outcome=outcome,
+            output=output,
+        )
+    return source.model_copy(
+        update={
+            "timestamp": timestamp,
+            "agent": agent,
+            "session_id": session_id,
+            "status": status,
+            "trajectory_outcome": outcome,
+            "output": output,
+        }
+    )
+
+
 def check_jules_harvest(limen: LimenFile, harvest_dir: Path) -> list[str]:
     updated: list[str] = []
     if not harvest_dir.exists():
@@ -109,6 +155,18 @@ def check_jules_harvest(limen: LimenFile, harvest_dir: Path) -> list[str]:
             if diff_file.exists():
                 now = datetime.now(timezone.utc)
                 result = diff_file.read_text().strip()
+                launch = attempt_launch_for(task, current_attempt_id(task))
+                if launch is not None and not attempt_contract_is_current(task, launch):
+                    close_changed_contract_attempt(
+                        task,
+                        launch,
+                        now=now,
+                        agent="jules",
+                        phase="jules-harvest",
+                        stale_result=result,
+                    )
+                    updated.append(task.id)
+                    continue
                 if not _diff_is_real(result):
                     # jules finished but produced nothing usable (empty/garbage
                     # diff). Do NOT mark done, and do NOT archive/cancel it:
@@ -118,7 +176,8 @@ def check_jules_harvest(limen: LimenFile, harvest_dir: Path) -> list[str]:
                         task.labels.append("noop")
                     task.updated = now
                     task.dispatch_log.append(
-                        DispatchLogEntry(
+                        _terminal_attempt_entry(
+                            task,
                             timestamp=now,
                             agent="jules",
                             session_id=session_id,
@@ -126,20 +185,31 @@ def check_jules_harvest(limen: LimenFile, harvest_dir: Path) -> list[str]:
                             output=result[:500],
                         )
                     )
+                    updated.append(task.id)
                     print(f"  rejected {task.id}: jules diff empty/garbage — not 'done'")
                     continue
-                task.status = "done"
+                # A patch is a preserved work product, not completion proof. The
+                # legacy Jules surface has no owner predicate, exact-head check,
+                # or authenticated receipt, so it must never mint `done`.
+                task.status = "failed"
+                if "completion-proof-required" not in task.labels:
+                    task.labels.append("completion-proof-required")
                 task.updated = now
                 task.dispatch_log.append(
-                    DispatchLogEntry(
+                    _terminal_attempt_entry(
+                        task,
                         timestamp=now,
                         agent="jules",
                         session_id=session_id,
-                        status="done",
-                        output=result[:500],
+                        status="failed",
+                        output=(
+                            "Jules work product preserved; owner predicate, exact-head "
+                            f"verification, and owner receipt are required: {result[:400]}"
+                        ),
                     )
                 )
                 updated.append(task.id)
+                print(f"  preserved {task.id}: Jules diff lacks owner completion proof")
                 continue
 
         task_dir = harvest_dir / task.id
@@ -149,15 +219,33 @@ def check_jules_harvest(limen: LimenFile, harvest_dir: Path) -> list[str]:
             if not result:
                 # empty result file is not completion — don't false-done it.
                 continue
-            task.status = "done"
+            launch = attempt_launch_for(task, current_attempt_id(task))
+            if launch is not None and not attempt_contract_is_current(task, launch):
+                close_changed_contract_attempt(
+                    task,
+                    launch,
+                    now=now,
+                    agent="jules",
+                    phase="jules-harvest",
+                    stale_result=result,
+                )
+                updated.append(task.id)
+                continue
+            task.status = "failed"
+            if "completion-proof-required" not in task.labels:
+                task.labels.append("completion-proof-required")
             task.updated = now
             task.dispatch_log.append(
-                DispatchLogEntry(
+                _terminal_attempt_entry(
+                    task,
                     timestamp=now,
                     agent="jules",
                     session_id=task.dispatch_log[-1].session_id if task.dispatch_log else "harvest",
-                    status="done",
-                    output=result[:500],
+                    status="failed",
+                    output=(
+                        "Jules result preserved; owner predicate, exact-head verification, "
+                        f"and owner receipt are required: {result[:400]}"
+                    ),
                 )
             )
             updated.append(task.id)
@@ -247,10 +335,23 @@ def _adopt_orphan_remote_entry(
 ) -> DispatchLogEntry | None:
     """Adopt an intent persisted before a worker crashed prior to its board write."""
 
+    attempt_id = current_attempt_id(task)
+    launch = attempt_launch_for(task, attempt_id)
+    if (
+        not attempt_id
+        or launch is None
+        or not attempt_contract_is_current(task, launch)
+        or task.status not in {"dispatched", "in_progress"}
+    ):
+        # Content-addressed remote intent may only rejoin the board through the
+        # exact registered attempt that authorized it. A manifest alone is not
+        # an execution owner and can never create a terminal trajectory.
+        return None
+
     for manifest, path in store.manifests_for_task(task.id):
         provider = str(manifest.get("provider") or "")
         base_sha = str(manifest.get("base_sha") or "")
-        if provider != task.target_agent:
+        if provider != task.target_agent or manifest.get("attempt_id") != attempt_id:
             continue
         try:
             raw_workflow_id = manifest.get("workflow_id")
@@ -260,6 +361,7 @@ def _adopt_orphan_remote_entry(
             request = remote_request_from_task(
                 task,
                 provider,
+                attempt_id=attempt_id,
                 base_sha=base_sha,
                 control_repo=str(manifest.get("control_repo") or ""),
                 control_ref=str(manifest.get("control_ref") or ""),
@@ -270,7 +372,7 @@ def _adopt_orphan_remote_entry(
                 verification_context=verification_context,
                 instruction=f"Verify completed implementation for task {task.id}; do not modify code: {task.title}",
                 repo=str(task.repo or ""),
-                execution_profile=execution_profile_for(task).as_dict(),
+                execution_profile=dict(launch.execution_profile or {}),
             )
             receipt = load_receipt(path, request)
         except (RemoteExecutionError, ValueError):
@@ -280,26 +382,28 @@ def _adopt_orphan_remote_entry(
             board_path = str(path.relative_to(tasks_path.parent))
         except ValueError:
             board_path = str(path)
-        return DispatchLogEntry(
-            timestamp=datetime.fromisoformat(receipt.run.observed_at),
-            agent=provider,
-            session_id=receipt.run.provider_run_id,
-            status="dispatched",
-            provider_run_id=receipt.run.provider_run_id,
-            provider_url=receipt.run.url,
-            base_sha=receipt.run.base_sha,
-            control_repo=receipt.run.control_repo,
-            control_ref=receipt.run.control_ref,
-            control_ref_kind=receipt.run.control_ref_kind,
-            control_sha=receipt.run.control_sha,
-            workflow_id=receipt.run.workflow_id,
-            workflow_path=receipt.run.workflow_path,
-            workflow_event=receipt.run.workflow_event,
-            verification_context_digest=receipt.run.verification_context_digest,
-            remote_state=receipt.run.state.value,
-            remote_request_id=receipt.run.request_id,
-            remote_receipt=board_path,
-            output="adopted content-addressed attempt after crash-before-board-write",
+        return launch.model_copy(
+            update={
+                "timestamp": datetime.fromisoformat(receipt.run.observed_at),
+                "agent": provider,
+                "session_id": receipt.run.provider_run_id,
+                "status": task.status,
+                "provider_run_id": receipt.run.provider_run_id,
+                "provider_url": receipt.run.url,
+                "base_sha": receipt.run.base_sha,
+                "control_repo": receipt.run.control_repo,
+                "control_ref": receipt.run.control_ref,
+                "control_ref_kind": receipt.run.control_ref_kind,
+                "control_sha": receipt.run.control_sha,
+                "workflow_id": receipt.run.workflow_id,
+                "workflow_path": receipt.run.workflow_path,
+                "workflow_event": receipt.run.workflow_event,
+                "verification_context_digest": receipt.run.verification_context_digest,
+                "remote_state": receipt.run.state.value,
+                "remote_request_id": receipt.run.request_id,
+                "remote_receipt": board_path,
+                "output": "adopted content-addressed receipt into exact registered attempt",
+            }
         )
     return None
 
@@ -307,13 +411,47 @@ def _adopt_orphan_remote_entry(
 def _record_remote_observation(
     task: Task,
     *,
+    attempt_entry: DispatchLogEntry | None,
     provider: str,
     status: str,
     run: RemoteRun,
     remote_state: str,
     receipt_path: str | None,
     output: str,
+    trajectory_evidence: dict[str, object] | None = None,
 ) -> bool:
+    launch = (
+        attempt_launch_for(task, attempt_entry.attempt_id)
+        if attempt_entry is not None and attempt_entry.attempt_id
+        else None
+    )
+    if launch is not None and not attempt_contract_is_current(task, launch):
+        remote_submission = {
+            "provider_run_id": run.provider_run_id,
+            "provider_url": run.url,
+            "base_sha": run.base_sha,
+            "control_repo": run.control_repo,
+            "control_ref": run.control_ref,
+            "control_ref_kind": run.control_ref_kind,
+            "control_sha": run.control_sha,
+            "workflow_id": run.workflow_id,
+            "workflow_path": run.workflow_path,
+            "workflow_event": run.workflow_event,
+            "verification_context_digest": run.verification_context_digest,
+            "remote_state": remote_state,
+            "remote_request_id": run.request_id,
+            "remote_receipt": receipt_path,
+        }
+        return close_changed_contract_attempt(
+            task,
+            launch,
+            now=datetime.now(timezone.utc),
+            agent=provider,
+            phase="remote-harvest",
+            stale_result=output,
+            remote_submission=remote_submission,
+            reconciliation=trajectory_evidence,
+        )
     latest = (getattr(task, "dispatch_log", None) or [None])[-1]
     if (
         getattr(task, "status", None) == status
@@ -334,35 +472,99 @@ def _record_remote_observation(
         and latest.remote_request_id == run.request_id
         and latest.remote_receipt == receipt_path
         and latest.output == output
+        and latest.attempt_id == getattr(attempt_entry, "attempt_id", None)
+        and all(getattr(latest, key, None) == value for key, value in (trajectory_evidence or {}).items())
     ):
         return False
     now = datetime.now(timezone.utc)
     task.status = status
     task.updated = now
-    task.dispatch_log.append(
-        DispatchLogEntry(
-            timestamp=now,
-            agent=provider,
-            session_id=run.provider_run_id,
-            status=status,
-            provider_run_id=run.provider_run_id,
-            provider_url=run.url,
-            base_sha=run.base_sha,
-            control_repo=run.control_repo,
-            control_ref=run.control_ref,
-            control_ref_kind=run.control_ref_kind,
-            control_sha=run.control_sha,
-            workflow_id=run.workflow_id,
-            workflow_path=run.workflow_path,
-            workflow_event=run.workflow_event,
-            verification_context_digest=run.verification_context_digest,
-            remote_state=remote_state,
-            remote_request_id=run.request_id,
-            remote_receipt=receipt_path,
-            output=output,
-        )
-    )
+    values: dict[str, object] = {
+        "timestamp": now,
+        "agent": provider,
+        "session_id": run.provider_run_id,
+        "status": status,
+        "provider_run_id": run.provider_run_id,
+        "provider_url": run.url,
+        "base_sha": run.base_sha,
+        "control_repo": run.control_repo,
+        "control_ref": run.control_ref,
+        "control_ref_kind": run.control_ref_kind,
+        "control_sha": run.control_sha,
+        "workflow_id": run.workflow_id,
+        "workflow_path": run.workflow_path,
+        "workflow_event": run.workflow_event,
+        "verification_context_digest": run.verification_context_digest,
+        "remote_state": remote_state,
+        "remote_request_id": run.request_id,
+        "remote_receipt": receipt_path,
+        "trajectory_outcome": {
+            "done": "succeeded",
+            "failed": "failed",
+            "failed_blocked": "blocked",
+            "needs_human": "blocked",
+        }.get(status),
+        "output": output,
+    }
+    values.update(trajectory_evidence or {})
+    if attempt_entry is not None and attempt_entry.attempt_id:
+        task.dispatch_log.append(attempt_entry.model_copy(update=values))
+    else:
+        task.dispatch_log.append(DispatchLogEntry.model_validate(values))
     return True
+
+
+def _remote_trajectory_evidence(
+    task: Task,
+    entry: DispatchLogEntry,
+    receipt: RemoteReceipt,
+) -> dict[str, object]:
+    """Translate verified remote facts without granting authority from prose."""
+
+    predicate = receipt.predicate
+    bounded_outputs = [
+        {
+            "kind": item.kind,
+            "reference": item.uri,
+            "digest": item.digest,
+        }
+        for item in receipt.outputs[:64]
+        if item.digest is not None
+    ]
+    evidence: dict[str, object] = {
+        "trajectory_outputs": bounded_outputs,
+        "trajectory_outputs_reconciled": (len(receipt.outputs) <= 64 and len(bounded_outputs) == len(receipt.outputs)),
+        # The remote receipt does not presently attest external effects. Keep
+        # that reconciliation visibly unknown instead of inferring zero.
+        "trajectory_side_effects": [],
+        "trajectory_side_effects_reconciled": False,
+    }
+    if predicate is not None:
+        evidence["trajectory_predicate"] = {
+            "command_digest": predicate.command_digest,
+            "passed": predicate.passed,
+            "checked_at": receipt.observed_at,
+            "head_sha": receipt.observed_sha,
+        }
+    if not receipt.done or not entry.attempt_id or not task.repo or not receipt.observed_sha:
+        return evidence
+    evidence["trajectory_exact_commit"] = receipt.observed_sha
+    durable = next((item for item in receipt.outputs if item.digest), None)
+    if durable is not None and predicate is not None:
+        evidence["trajectory_owner_receipt"] = {
+            "owner": receipt.request.control_repo,
+            "reference": durable.uri,
+            "digest": durable.digest,
+            "head_sha": receipt.observed_sha,
+            "attempt_id": entry.attempt_id,
+            "task_id": task.id,
+            "repository": task.repo,
+            "predicate_digest": predicate.command_digest,
+        }
+    pull_request = next((item.uri for item in receipt.outputs if item.kind == "pull_request"), None)
+    if pull_request:
+        evidence["trajectory_pull_request"] = pull_request
+    return evidence
 
 
 def check_remote_harvest(
@@ -433,6 +635,7 @@ def check_remote_harvest(
             )
             if _record_remote_observation(
                 task,
+                attempt_entry=entry,
                 provider=provider,
                 status="failed_blocked",
                 run=run,
@@ -447,6 +650,7 @@ def check_remote_harvest(
             request = remote_request_from_task(
                 task,
                 provider,
+                attempt_id=str(entry.attempt_id),
                 base_sha=str(entry.base_sha),
                 control_repo=str(entry.control_repo),
                 control_ref=str(entry.control_ref),
@@ -457,7 +661,11 @@ def check_remote_harvest(
                 verification_context=verification_context,
                 instruction=f"Verify completed implementation for task {task.id}; do not modify code: {task.title}",
                 repo=str(task.repo or ""),
-                execution_profile=execution_profile_for(task).as_dict(),
+                execution_profile=(
+                    dict(entry.execution_profile)
+                    if entry.execution_profile is not None
+                    else execution_profile_for(task).as_dict()
+                ),
             )
             stored = _remote_receipt_path(tasks_path, store, task.id, entry.remote_receipt)
             stored_receipt = None
@@ -569,6 +777,7 @@ def check_remote_harvest(
             )
             if _record_remote_observation(
                 task,
+                attempt_entry=entry,
                 provider=provider,
                 status="failed_blocked",
                 run=blocked,
@@ -601,12 +810,14 @@ def check_remote_harvest(
         )
         if _record_remote_observation(
             task,
+            attempt_entry=entry,
             provider=provider,
             status=status,
             run=receipt.run,
             remote_state=receipt.state.value,
             receipt_path=board_receipt,
             output=output,
+            trajectory_evidence=_remote_trajectory_evidence(task, entry, receipt),
         ):
             updated.append(task.id)
     return updated
@@ -628,6 +839,75 @@ def harvest_results(
 
     if updated:
         save_limen_file(tasks_path, limen)
-        print(f"Harvested {len(updated)} task(s): {', '.join(updated)}")
+        unique = list(dict.fromkeys(updated))
+        print(f"Harvested {len(unique)} task(s): {', '.join(unique)}")
     else:
         print("No completed tasks to harvest")
+
+    # Owner publication performs network I/O outside the board lock. Commit only
+    # its three transport annotations onto a fresh board afterward so a slow
+    # GitHub round trip can never overwrite a concurrent keeper/dispatch write.
+    publication_snapshot = load_limen_file(tasks_path)
+    annotation_updates: list[tuple[str, str, datetime, str | None, str | None, str | None]] = []
+    for task in publication_snapshot.tasks:
+        candidate = task.model_copy(deep=True)
+        if not publish_task_trajectories(candidate):
+            continue
+        for entry in candidate.dispatch_log:
+            if not entry.attempt_id:
+                continue
+            original = next(
+                (
+                    row
+                    for row in task.dispatch_log
+                    if row.attempt_id == entry.attempt_id
+                    and row.timestamp == entry.timestamp
+                    and row.status == entry.status
+                ),
+                None,
+            )
+            if original is None:
+                continue
+            annotation = (
+                entry.trajectory_publication_reference,
+                entry.trajectory_publication_digest,
+                entry.trajectory_publication_error,
+            )
+            if annotation != (
+                original.trajectory_publication_reference,
+                original.trajectory_publication_digest,
+                original.trajectory_publication_error,
+            ):
+                annotation_updates.append((task.id, entry.attempt_id, entry.timestamp, *annotation))
+
+    published_tasks: list[str] = []
+    if annotation_updates:
+        with queue_lock(tasks_path) as acquired:
+            if acquired:
+                fresh = load_limen_file(tasks_path)
+                by_id = {task.id: task for task in fresh.tasks}
+                for task_id, attempt_id, timestamp, reference, digest, error in annotation_updates:
+                    task = by_id.get(task_id)
+                    if task is None:
+                        continue
+                    target = next(
+                        (
+                            entry
+                            for entry in task.dispatch_log
+                            if entry.attempt_id == attempt_id
+                            and entry.timestamp == timestamp
+                            and (entry.trajectory_outcome or entry.status in {"done", "failed", "failed_blocked"})
+                        ),
+                        None,
+                    )
+                    if target is None:
+                        continue
+                    target.trajectory_publication_reference = reference
+                    target.trajectory_publication_digest = digest
+                    target.trajectory_publication_error = error
+                    published_tasks.append(task_id)
+                if published_tasks:
+                    save_limen_file(tasks_path, fresh)
+    if published_tasks:
+        unique_published = list(dict.fromkeys(published_tasks))
+        print(f"Published trajectory receipts for {len(unique_published)} task(s): {', '.join(unique_published)}")

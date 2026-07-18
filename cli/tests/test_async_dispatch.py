@@ -26,6 +26,7 @@ sys.path.insert(0, str(CLI_SRC))
 
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
 from limen.execution_contract import execution_contract_hash  # noqa: E402
+from limen.execution_trajectory import trajectory_from_log_entries, verified_value_credit  # noqa: E402
 from limen.models import Budget, BudgetTrack, DispatchLogEntry, LimenFile, Portal, Task  # noqa: E402
 from limen.provider_selection import execution_profile_for  # noqa: E402
 from limen.remote_execution import verification_context_for_task  # noqa: E402
@@ -84,16 +85,17 @@ def _remote_harvest_fixture(tmp_path):
     task.depends_on = ["PARENT"]
     task.predicate = "python3 scripts/verify.py"
     task.receipt_target = f"artifact:organvm/limen:task:{task.id}"
-    task.status = "dispatched"
     reservation_id = f"async-reserve:{'a' * 32}"
-    task.dispatch_log.append(
-        DispatchLogEntry(
-            timestamp=datetime.datetime.now(datetime.timezone.utc),
-            agent="github_actions",
-            session_id=reservation_id,
-            status="dispatched",
-        )
+    started_at = datetime.datetime.now(datetime.timezone.utc)
+    launch = dispatch_module._attempt_launch_entry(
+        task,
+        "github_actions",
+        reservation_session=reservation_id,
+        started_at=started_at,
+        output="fixture registered before remote provider execution",
     )
+    task.status = "in_progress"
+    task.dispatch_log.extend([launch, launch.model_copy(update={"status": "in_progress"})])
     lf.tasks.append(
         Task(
             id="PARENT",
@@ -127,6 +129,7 @@ def _remote_harvest_fixture(tmp_path):
     computed_packet_digest = compute_packet_digest(
         provider="github_actions",
         task_id=task.id,
+        attempt_id=str(launch.attempt_id),
         repo=str(task.repo),
         base_sha="a" * 40,
         control_repo="organvm/limen",
@@ -148,6 +151,7 @@ def _remote_harvest_fixture(tmp_path):
     metadata: dict[str, object] = {
         "provider": "github_actions",
         "task_id": task.id,
+        "attempt_id": launch.attempt_id,
         "repo": task.repo,
         "provider_run_id": "42",
         "provider_url": "https://github.com/organvm/limen/actions/runs/42",
@@ -167,6 +171,7 @@ def _remote_harvest_fixture(tmp_path):
     request = {
         "provider": metadata["provider"],
         "task_id": metadata["task_id"],
+        "attempt_id": metadata["attempt_id"],
         "repo": metadata["repo"],
         "base_sha": metadata["base_sha"],
         "control_repo": metadata["control_repo"],
@@ -231,6 +236,8 @@ def _remote_harvest_fixture(tmp_path):
         "execution_contract_hash": execution_contract_hash(task),
         "actual_execution_contract_hash": execution_contract_hash(task),
         "execution_started": True,
+        "attempt_id": launch.attempt_id,
+        "model_selection": {},
         "remote_submission": metadata,
     }
     return da, result, receipt
@@ -259,11 +266,20 @@ def _assert_remote_harvest_blocked(tmp_path, da, result, *, marker_cleared: bool
         os.getpid(),
         0.0,
         str(result["reservation_id"]),
+        str(result["attempt_id"]),
     )
     result_path = _write_async_result(da, result)
+    result_digest = f"sha256:{hashlib.sha256(json.dumps(result).encode()).hexdigest()}"
 
     assert da.harvest() == 0
-    assert (tmp_path / "tasks.yaml").read_bytes() == before
+    if marker_cleared:
+        owner = _board(tmp_path)[str(result["task_id"])]
+        fences = [entry for entry in owner.dispatch_log if entry.result_receipt_digest == result_digest]
+        assert len(fences) == 1
+        assert fences[0].status == "in_progress"
+        assert "metadata fenced" in str(fences[0].output)
+    else:
+        assert (tmp_path / "tasks.yaml").read_bytes() == before
     assert not result_path.exists()
     markers = list(da.RUNS.glob("*.running"))
     assert (not markers) if marker_cleared else bool(markers)
@@ -816,16 +832,16 @@ def test_harvest_applies_pr_result_and_cleans(tmp_path):
     lf = load_limen_file(tmp_path / "tasks.yaml")
     lf.portal.budget.track.spent = 1
     lf.portal.budget.track.per_agent["codex"] = 1
-    lf.tasks[0].status = "dispatched"
-    lf.tasks[0].dispatch_log.append(
-        DispatchLogEntry(
-            timestamp=datetime.datetime.now(datetime.timezone.utc),
-            agent="codex",
-            session_id="async-reserve",
-            status="dispatched",
-            output="dispatch-async: reserved before detached worker launch",
-        )
+    started_at = datetime.datetime.now(datetime.timezone.utc)
+    launch = dispatch_module._attempt_launch_entry(
+        lf.tasks[0],
+        "codex",
+        reservation_session="async-reserve",
+        started_at=started_at,
+        output="fixture registered before detached worker launch",
     )
+    lf.tasks[0].status = "in_progress"
+    lf.tasks[0].dispatch_log.extend([launch, launch.model_copy(update={"status": "in_progress"})])
     save_limen_file(tmp_path / "tasks.yaml", lf)
     contract_hash = execution_contract_hash(lf.tasks[0])
     (da.RUNS / "T0__codex.running").write_text(datetime.datetime.now(datetime.timezone.utc).isoformat())
@@ -839,6 +855,8 @@ def test_harvest_applies_pr_result_and_cleans(tmp_path):
                 "err": None,
                 "execution_contract_hash": contract_hash,
                 "execution_started": True,
+                "attempt_id": launch.attempt_id,
+                "model_selection": {},
             }
         )
     )
@@ -901,7 +919,7 @@ def test_forged_remote_preflight_blocker_cannot_cross_execution_contract(tmp_pat
     result["remote_submission"] = {}
 
     _assert_remote_harvest_blocked(tmp_path, da, result, marker_cleared=False)
-    assert _board(tmp_path)["T0"].status == "dispatched"
+    assert _board(tmp_path)["T0"].status == "in_progress"
 
 
 def test_remote_harvest_rejects_result_run_id_that_differs_from_submission(tmp_path):
@@ -944,6 +962,7 @@ def test_malformed_remote_task_id_does_not_starve_later_valid_result(tmp_path):
     [
         "provider",
         "task_id",
+        "attempt_id",
         "repo",
         "provider_run_id",
         "provider_url",
@@ -976,6 +995,7 @@ def test_remote_harvest_rejects_each_incomplete_identity_without_board_mutation(
     [
         ("provider", "renamed-actions"),
         ("task_id", "OTHER"),
+        ("attempt_id", "attempt-" + "3" * 64),
         ("repo", "other/repo"),
         ("provider_run_id", "43"),
         ("provider_url", "https://github.com/organvm/limen/actions/runs/43"),
@@ -1011,6 +1031,7 @@ def test_remote_harvest_rejects_each_contradictory_identity_without_board_mutati
     ("section", "field", "contradiction"),
     [
         ("request", "control_ref", "other"),
+        ("request", "attempt_id", "attempt-" + "4" * 64),
         ("request", "verification_context_digest", f"sha256:{'4' * 64}"),
         ("run", "provider_run_id", "43"),
         ("run", "control_ref_kind", "tag"),
@@ -1362,6 +1383,53 @@ def test_async_normalizes_only_selected_legacy_task(tmp_path):
     assert picked == [("codex", "SELECTED")]
     assert lf.tasks[0].predicate and lf.tasks[0].receipt_target
     assert lf.tasks[1].predicate is None and lf.tasks[1].receipt_target is None
+
+
+def test_async_retry_derives_profile_from_current_contract_not_prior_attempt(tmp_path):
+    da = _load(tmp_path, n_open=1)
+    lf = load_limen_file(tmp_path / "tasks.yaml")
+    task = lf.tasks[0]
+    task.predicate = "python3 -m pytest -q"
+    task.receipt_target = "github:x/y:pull-request"
+    old_started = datetime.datetime(2026, 7, 17, 12, 0, tzinfo=datetime.timezone.utc)
+    retry_started = datetime.datetime(2026, 7, 17, 12, 1, tzinfo=datetime.timezone.utc)
+    prior = dispatch_module._attempt_launch_entry(
+        task,
+        "codex",
+        reservation_session="prior-attempt",
+        started_at=old_started,
+        output="prior reservation",
+    )
+    task.dispatch_log.extend(
+        [
+            prior,
+            prior.model_copy(
+                update={
+                    "status": "failed",
+                    "trajectory_outcome": "failed",
+                    "output": "prior attempt failed",
+                }
+            ),
+        ]
+    )
+    task.labels.append("profile:min_context:65536")
+
+    picked, _reset_changed = da._pick_reservations(
+        lf,
+        ["codex"],
+        per_agent=1,
+        cap=1,
+        dry=False,
+        now=retry_started,
+        usage_remaining={},
+        weak_proxy_agents=set(),
+    )
+
+    assert picked == [("codex", "T0")]
+    retry = task.dispatch_log[-1]
+    assert prior.execution_profile["min_context"] == 8192
+    assert retry.execution_profile["min_context"] == 65536
+    assert retry.attempt_id != prior.attempt_id
 
 
 def test_async_skips_unowned_legacy_candidate_and_continues(tmp_path, capsys):
@@ -1889,7 +1957,10 @@ def test_reaper_frees_dead_workers_not_live(tmp_path):
     assert (da.RUNS / "LIVE__codex.running").exists()
     board = _board(tmp_path)
     assert board["DEAD"].status == "open" and board["LIVE"].status == "dispatched"
-    assert board["DEAD"].dispatch_log[-1].session_id == "async-reap-stale"
+    assert board["DEAD"].dispatch_log[-1].status == board["DEAD"].status
+    assert board["DEAD"].dispatch_log[-1].session_id == "async-reap-stale-requeue"
+    assert board["DEAD"].dispatch_log[-2].status == "failed"
+    assert board["DEAD"].dispatch_log[-2].session_id == "async-reap-stale"
 
 
 def test_nonce_scoped_result_prevents_matching_dead_marker_reap(tmp_path):
@@ -2102,15 +2173,57 @@ def test_reaper_reopens_markerless_async_reservation(tmp_path):
             ],
         )
     )
+    lf.portal.budget.track.spent = 1
+    lf.portal.budget.track.per_agent["agy"] = 1
     save_limen_file(tmp_path / "tasks.yaml", lf)
 
     reaped = da.reap_stale(1200)
 
     assert reaped == ["MARKERLESS"]
     task = _board(tmp_path)["MARKERLESS"]
-    assert task.status == "open"
-    assert task.dispatch_log[-1].session_id == "async-reap-stale"
-    assert "markerless async reservation" in task.dispatch_log[-1].output
+    assert task.dispatch_log[-1].status == task.status == "open"
+    assert task.dispatch_log[-1].session_id == "async-reap-stale-requeue"
+    assert task.dispatch_log[-2].status == "failed"
+    assert task.dispatch_log[-2].session_id == "async-reap-stale"
+    assert "markerless async reservation" in task.dispatch_log[-2].output
+    track = load_limen_file(tmp_path / "tasks.yaml").portal.budget.track
+    assert track.spent == 0
+    assert track.per_agent["agy"] == 0
+
+
+def test_reaper_does_not_refund_an_attempt_that_started_execution(tmp_path):
+    da = _load(tmp_path, n_open=0)
+    lf = load_limen_file(tmp_path / "tasks.yaml")
+    reserved_at = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=3000)
+    lf.tasks.append(
+        Task(
+            id="STARTED-MARKERLESS",
+            title="t",
+            repo="x/y",
+            target_agent="agy",
+            status="in_progress",
+            created=datetime.date.today(),
+            updated=reserved_at,
+            dispatch_log=[
+                DispatchLogEntry(
+                    timestamp=reserved_at,
+                    agent="agy",
+                    session_id="async-reserve",
+                    status="in_progress",
+                    output="worker claimed exact attempt",
+                )
+            ],
+        )
+    )
+    lf.portal.budget.track.spent = 1
+    lf.portal.budget.track.per_agent["agy"] = 1
+    save_limen_file(tmp_path / "tasks.yaml", lf)
+
+    assert da.reap_stale(1200) == ["STARTED-MARKERLESS"]
+
+    track = load_limen_file(tmp_path / "tasks.yaml").portal.budget.track
+    assert track.spent == 1
+    assert track.per_agent["agy"] == 1
 
 
 def test_reaper_restores_markerless_prior_pr_open_instead_of_reopening(tmp_path):
@@ -2739,11 +2852,11 @@ def _mark_async_dispatched(tmp_path, *, age_seconds=0, reservation_id="async-res
     task.status = "dispatched"
     task.updated = stamp
     task.dispatch_log.append(
-        DispatchLogEntry(
-            timestamp=stamp,
-            agent="codex",
-            session_id=reservation_id,
-            status="dispatched",
+        dispatch_module._attempt_launch_entry(
+            task,
+            "codex",
+            reservation_session=reservation_id,
+            started_at=stamp,
             output="reserved for exact recovery test",
         )
     )
@@ -2873,6 +2986,16 @@ def test_async_worker_revalidates_contract_before_provider_side_effects(tmp_path
     task, expected_hash, _stamp = _mark_async_dispatched(tmp_path)
     board = load_limen_file(tmp_path / "tasks.yaml")
     board.tasks[0].context = "changed after reservation"
+    board.tasks[0].dispatch_log[-1].actual_spend = {
+        "amount": 99,
+        "unit": "forged-preflight",
+        "reconciled": True,
+    }
+    board.tasks[0].dispatch_log[-1].provider_run_id = "must-not-survive-no-execution"
+    board.tasks[0].dispatch_log[-1].selected_model = "must-not-survive-no-execution"
+    board.tasks[0].dispatch_log[-1].effect_receipt = {"must_not_survive": True}
+    board.portal.budget.track.spent = board.tasks[0].budget_cost
+    board.portal.budget.track.per_agent["codex"] = board.tasks[0].budget_cost
     save_limen_file(tmp_path / "tasks.yaml", board)
     worker = _load_worker(tmp_path)
     monkeypatch.setattr(
@@ -2897,11 +3020,60 @@ def test_async_worker_revalidates_contract_before_provider_side_effects(tmp_path
     assert worker.main() == 10
     receipt = json.loads(worker._result_path(task.id).read_text(encoding="utf-8"))
     assert receipt["execution_started"] is False
-    assert receipt["result"] == "__notask__"
+    assert receipt["result"] == "__contract_drift_closed__"
+    assert receipt["contract_drift_closed"] is True
     assert receipt["validation_failure"]["id"] == "async-execution-contract-mismatch"
-    assert receipt["publication_failure"]["id"] == "async-result-publication-fenced"
+    assert receipt["publication_failure"]["id"] == "async-result-contract-drift-closed"
     assert receipt["execution_contract_hash"] == expected_hash
-    assert receipt["actual_execution_contract_hash"] == execution_contract_hash(_board(tmp_path)[task.id])
+    reopened = _board(tmp_path)[task.id]
+    assert receipt["actual_execution_contract_hash"] == execution_contract_hash(reopened)
+    assert reopened.status == "open"
+    terminal, requeue = reopened.dispatch_log[-2:]
+    assert terminal.status == "failed"
+    assert terminal.attempt_id == receipt["attempt_id"]
+    assert terminal.actual_spend is None
+    assert terminal.provider_run_id is None
+    assert terminal.selected_model is None
+    assert getattr(terminal, "effect_receipt", None) is None
+    assert requeue.status == "open"
+    assert requeue.attempt_id is None
+    refreshed = load_limen_file(tmp_path / "tasks.yaml")
+    assert refreshed.portal.budget.track.spent == 0
+    assert refreshed.portal.budget.track.per_agent["codex"] == 0
+
+
+def test_async_result_survives_publication_lock_contention(tmp_path, monkeypatch):
+    import contextlib
+
+    _load(tmp_path, n_open=0)
+    worker = _load_worker(tmp_path)
+    reservation_id = "async-reserve:" + "d" * 32
+    out = {
+        "task_id": "CUSTODY",
+        "agent": "codex",
+        "reservation_id": reservation_id,
+        "attempt_id": "attempt-custody",
+        "result": "https://github.com/x/y/pull/1",
+        "execution_started": True,
+    }
+
+    @contextlib.contextmanager
+    def busy_lock(_path):
+        yield False
+
+    monkeypatch.setattr(worker, "_queue_lock", busy_lock)
+
+    assert not worker._publish_result(
+        out,
+        task_id="CUSTODY",
+        agent="codex",
+        reservation_id=reservation_id,
+        expected_hash="a" * 64,
+        execution_started=True,
+    )
+    receipt = json.loads(worker._result_path("CUSTODY", reservation_id).read_text(encoding="utf-8"))
+    assert receipt["attempt_id"] == "attempt-custody"
+    assert receipt["result"] == "https://github.com/x/y/pull/1"
 
 
 @pytest.mark.parametrize(
@@ -2976,18 +3148,30 @@ def test_all_worker_validation_failures_are_publication_and_harvest_fenced(tmp_p
     assert worker.main() == 10
     receipt = json.loads(worker._result_path(task.id).read_text(encoding="utf-8"))
     assert receipt["execution_started"] is False
-    assert receipt["result"] == "__notask__"
+    closure_case = case in {"contract_invalid", "contract_mismatch"}
+    expected_result = "__contract_drift_closed__" if closure_case else "__notask__"
+    assert receipt["result"] == expected_result
     assert receipt["validation_failure"]["id"] == failure_id
-    assert receipt["publication_failure"]["id"] in {
-        "async-result-publication-fenced",
-        "async-result-board-unreadable",
-    }
+    if closure_case:
+        assert receipt["publication_failure"]["id"] == "async-result-contract-drift-closed"
+    else:
+        assert receipt["publication_failure"]["id"] in {
+            "async-result-publication-fenced",
+            "async-result-board-unreadable",
+        }
 
     assert da.harvest() == 0
-    assert (tmp_path / "tasks.yaml").read_bytes() == before
+    if closure_case:
+        reopened = _board(tmp_path)[task.id]
+        assert reopened.status == "open"
+        assert reopened.dispatch_log[-2].status == "failed"
+        assert reopened.dispatch_log[-1].attempt_id is None
+    else:
+        assert (tmp_path / "tasks.yaml").read_bytes() == before
     archives = list(da.RECEIPT_ARCHIVE.glob("*/*.result.json"))
     assert len(archives) == 1
-    assert json.loads(archives[0].read_text(encoding="utf-8"))["reason"] == "harvest-fenced"
+    expected_archive = "contract-drift-closed" if closure_case else "harvest-fenced"
+    assert json.loads(archives[0].read_text(encoding="utf-8"))["reason"] == expected_archive
 
 
 @pytest.mark.parametrize("case", ["task_missing", "status_reopened", "contract_changed", "owner_changed"])
@@ -3067,6 +3251,189 @@ def test_async_worker_fences_result_when_recovery_wins_publication_race(tmp_path
     assert _board(tmp_path)[task.id].status == "open"
 
 
+def test_async_contract_drift_after_execution_preserves_old_attempt_custody_once(tmp_path, monkeypatch):
+    da = _load(tmp_path, n_open=1)
+    reservation_id = f"async-reserve:{'e' * 32}"
+    task, expected_hash, stamp = _mark_async_dispatched(
+        tmp_path,
+        reservation_id=reservation_id,
+    )
+    board = load_limen_file(tmp_path / "tasks.yaml")
+    board.portal.budget.track.spent = task.budget_cost
+    board.portal.budget.track.per_agent["codex"] = task.budget_cost
+    save_limen_file(tmp_path / "tasks.yaml", board)
+    da._write_running_marker(
+        task.id,
+        "codex",
+        stamp,
+        999999,
+        0.0,
+        reservation_id,
+        task.dispatch_log[-1].attempt_id,
+    )
+    worker = _load_worker(tmp_path)
+    spend = {"amount": 4.0, "unit": "token-k", "reconciled": True}
+    outputs = [
+        {
+            "kind": "pull_request",
+            "reference": "https://github.com/x/y/pull/99",
+            "digest": "sha256:" + "1" * 64,
+        }
+    ]
+    effects = [
+        {
+            "kind": "filesystem",
+            "target": "isolated-worktree",
+            "mode": "applied",
+            "receipt_digest": "sha256:" + "2" * 64,
+        }
+    ]
+
+    def execute(agent, task_snapshot, dry_run=False):
+        assert agent == "codex"
+        assert dry_run is False
+        task_snapshot.dispatch_log[-1].actual_spend = spend
+        task_snapshot.dispatch_log[-1].trajectory_outputs = outputs
+        task_snapshot.dispatch_log[-1].trajectory_outputs_reconciled = True
+        task_snapshot.dispatch_log[-1].trajectory_side_effects = effects
+        task_snapshot.dispatch_log[-1].trajectory_side_effects_reconciled = True
+        monkeypatch.setitem(
+            dispatch_module._MODEL_SELECTION_RECEIPTS,
+            task.id,
+            {
+                "attempt_id": task_snapshot.dispatch_log[-1].attempt_id,
+                "execution_profile": dict(task_snapshot.dispatch_log[-1].execution_profile or {}),
+                "selected_model": "opaque/runtime-id",
+                "selection_source": "provider_live_catalog",
+                "catalog_hash": "3" * 64,
+            },
+        )
+        monkeypatch.setitem(
+            dispatch_module._REMOTE_SUBMISSION_RECEIPTS,
+            task.id,
+            {
+                "provider_run_id": "remote-99",
+                "provider_url": "https://github.com/organvm/limen/actions/runs/99",
+                "remote_receipt": "logs/remote-execution/receipt-99.json",
+            },
+        )
+        changed = load_limen_file(tmp_path / "tasks.yaml")
+        changed.tasks[0].context = "changed while provider executed"
+        save_limen_file(tmp_path / "tasks.yaml", changed)
+        return "https://github.com/x/y/pull/99"
+
+    monkeypatch.setattr(worker, "call_agent_dispatch", execute)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "async-run-one.py",
+            "--agent",
+            "codex",
+            "--task-id",
+            task.id,
+            "--reservation-id",
+            reservation_id,
+            "--execution-contract-hash",
+            expected_hash,
+        ],
+    )
+
+    assert worker.main() == 0
+    result_path = worker._result_path(task.id, reservation_id)
+    receipt = json.loads(result_path.read_text(encoding="utf-8"))
+    assert receipt["result"] == "__contract_drift_closed__"
+    reopened = _board(tmp_path)[task.id]
+    terminal, requeue = reopened.dispatch_log[-2:]
+    assert reopened.status == requeue.status == "open"
+    assert terminal.status == "failed"
+    assert terminal.actual_spend == spend
+    assert terminal.trajectory_outputs == outputs
+    assert terminal.trajectory_side_effects == effects
+    assert terminal.selected_model == "opaque/runtime-id"
+    assert terminal.provider_run_id == "remote-99"
+    assert requeue.attempt_id is None
+    budget = load_limen_file(tmp_path / "tasks.yaml").portal.budget.track
+    assert budget.spent == task.budget_cost
+    assert budget.per_agent["codex"] == task.budget_cost
+
+    event_count = len(reopened.dispatch_log)
+    assert da.harvest() == 0
+    assert not result_path.exists()
+    archive = list(da.RECEIPT_ARCHIVE.glob("*/*.result.json"))
+    assert len(archive) == 1
+    assert json.loads(archive[0].read_text(encoding="utf-8"))["reason"] == "contract-drift-closed"
+    assert da.harvest() == 0
+    assert len(_board(tmp_path)[task.id].dispatch_log) == event_count
+
+
+def test_duplicate_worker_executes_registered_attempt_once_without_second_spend_or_value(
+    tmp_path,
+    monkeypatch,
+):
+    da = _load(tmp_path, n_open=1)
+
+    class Process:
+        pid = 424242
+
+    monkeypatch.setattr(da.subprocess, "Popen", lambda *_args, **_kwargs: Process())
+    assert da.reserve_and_launch(["codex"], per_agent=1, cap=1, dry=False) == [("codex", "T0")]
+
+    reserved = _board(tmp_path)["T0"]
+    reservation_id = reserved.dispatch_log[-1].session_id
+    attempt_id = reserved.dispatch_log[-1].attempt_id
+    contract_hash = execution_contract_hash(reserved)
+    assert attempt_id
+    assert load_limen_file(tmp_path / "tasks.yaml").portal.budget.track.per_agent["codex"] == 1
+
+    worker = _load_worker(tmp_path)
+    provider_calls = 0
+
+    def provider(*_args, **_kwargs):
+        nonlocal provider_calls
+        provider_calls += 1
+        return False
+
+    monkeypatch.setattr(worker, "call_agent_dispatch", provider)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "async-run-one.py",
+            "--agent",
+            "codex",
+            "--task-id",
+            "T0",
+            "--reservation-id",
+            reservation_id,
+            "--execution-contract-hash",
+            contract_hash,
+        ],
+    )
+
+    assert worker.main() == 0
+    result_path = worker._result_path("T0", reservation_id)
+    first_receipt = result_path.read_bytes()
+    assert worker.main() == 10
+    assert result_path.read_bytes() == first_receipt
+    assert provider_calls == 1
+
+    claimed = _board(tmp_path)["T0"]
+    assert [entry.attempt_id for entry in claimed.dispatch_log if entry.attempt_id] == [attempt_id, attempt_id]
+    assert da.harvest() == 1
+
+    reconciled = _board(tmp_path)["T0"]
+    assert load_limen_file(tmp_path / "tasks.yaml").portal.budget.track.per_agent["codex"] == 1
+    launch = next(entry for entry in reconciled.dispatch_log if entry.attempt_id == attempt_id)
+    terminal = next(
+        entry
+        for entry in reversed(reconciled.dispatch_log)
+        if entry.attempt_id == attempt_id and entry.trajectory_outcome
+    )
+    trajectory = trajectory_from_log_entries(task_id=reconciled.id, launch=launch, terminal=terminal)
+    assert verified_value_credit(trajectory) == 0
+
+
 def test_exact_orphan_recovery_command_reopens_once_and_is_idempotent(tmp_path, monkeypatch, capsys):
     da = _load(tmp_path, n_open=2)
     board = load_limen_file(tmp_path / "tasks.yaml")
@@ -3083,6 +3450,8 @@ def test_exact_orphan_recovery_command_reopens_once_and_is_idempotent(tmp_path, 
             output="reserved for exact recovery test",
         )
     )
+    board.portal.budget.track.spent = task.budget_cost
+    board.portal.budget.track.per_agent["codex"] = task.budget_cost
     save_limen_file(tmp_path / "tasks.yaml", board)
     contract_hash = execution_contract_hash(task)
     da._write_running_marker(task.id, "codex", old, 999999, 0.0)
@@ -3112,7 +3481,13 @@ def test_exact_orphan_recovery_command_reopens_once_and_is_idempotent(tmp_path, 
     assert second["recovered_count"] == 0
     assert current[task.id].status == "open"
     assert current["T1"].status == "open"
-    assert current[task.id].dispatch_log[-1].session_id == "async-recover-exact"
+    assert current[task.id].dispatch_log[-1].status == current[task.id].status
+    assert current[task.id].dispatch_log[-1].session_id == "async-recover-exact-requeue"
+    assert current[task.id].dispatch_log[-2].status == "failed"
+    assert current[task.id].dispatch_log[-2].session_id == "async-recover-exact"
+    track = load_limen_file(tmp_path / "tasks.yaml").portal.budget.track
+    assert track.spent == 0
+    assert track.per_agent["codex"] == 0
 
 
 def test_reaper_rechecks_nonce_result_under_lock_before_reopening(tmp_path, monkeypatch):

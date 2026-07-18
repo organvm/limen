@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import os
 import subprocess
@@ -15,12 +16,15 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import limen.dispatch as D
+import limen.trajectory_publication as trajectory_publication
 from limen.capacity import PAID_AGENT_ORDER, agent_status, capacity_census, format_capacity_census, select_lanes
 from limen.dispatch import dispatch_parallel, dispatch_tasks, release_stale_tasks
 from limen.doctor import qa_report, readiness_report, stale_tasks
-from limen.io import load_limen_file
+from limen.execution_trajectory import trajectory_from_log_entries, verified_value_credit
+from limen.io import load_limen_file, save_limen_file
 from limen.jules_remote import JulesRemoteSnapshot
 from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task
+from limen.provider_selection import ModelCapability
 from limen.status import print_status
 
 
@@ -41,7 +45,17 @@ def _hermetic_dispatch_env(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("LIMEN_ROOT", str(tmp_path / "hermetic-root"))
     monkeypatch.setenv("LIMEN_DISPATCH_ADMISSION", "0")
     monkeypatch.setenv("LIMEN_WORKTREE_DEBT_GATE", "0")
-    for var in ("LIMEN_VALUE_REPOS", "LIMEN_VALUE_REPOS_FILE", "LIMEN_VALUE_GATE_STRICT"):
+    D._MODEL_SELECTION_RECEIPTS.clear()
+    D._REMOTE_SUBMISSION_RECEIPTS.clear()
+    for var in (
+        "LIMEN_VALUE_REPOS",
+        "LIMEN_VALUE_REPOS_FILE",
+        "LIMEN_VALUE_GATE_STRICT",
+        "LIMEN_CLAUDE_MODEL",
+        "LIMEN_CODEX_MODEL",
+        "LIMEN_GEMINI_MODEL",
+        "LIMEN_OPENCODE_MODEL",
+    ):
         monkeypatch.delenv(var, raising=False)
 
 
@@ -693,6 +707,63 @@ def test_parallel_selection_normalizes_only_selected_legacy_task(monkeypatch) ->
     assert unselected.status == "open"
 
 
+def test_parallel_retry_derives_profile_from_current_contract_not_prior_attempt(monkeypatch) -> None:
+    monkeypatch.setenv("LIMEN_VALUE_GATE", "0")
+    old_started = datetime(2026, 7, 17, 12, 0, tzinfo=timezone.utc)
+    retry_started = datetime(2026, 7, 17, 12, 1, tzinfo=timezone.utc)
+    task = Task(
+        id="PROFILE-RETRY",
+        title="retry under a stronger current contract",
+        repo="someorg/dispatch-lab",
+        target_agent="codex",
+        status="open",
+        predicate="python3 -m pytest -q",
+        receipt_target="github:someorg/dispatch-lab:pull-request",
+        created=date(2026, 7, 17),
+    )
+    prior = D._attempt_launch_entry(
+        task,
+        "codex",
+        reservation_session="prior-attempt",
+        started_at=old_started,
+        output="prior reservation",
+    )
+    task.dispatch_log.extend(
+        [
+            prior,
+            prior.model_copy(
+                update={
+                    "status": "failed",
+                    "trajectory_outcome": "failed",
+                    "output": "prior attempt failed",
+                }
+            ),
+        ]
+    )
+    task.labels.append("profile:min_context:65536")
+    board = LimenFile.model_validate(
+        {
+            "portal": {"budget": {"daily": 10, "per_agent": {"codex": 10}, "track": {"date": ""}}},
+            "tasks": [task],
+        }
+    )
+
+    picked = D._select_parallel_reservations(
+        board,
+        ["codex"],
+        1,
+        retry_started,
+        dry_run=False,
+        admission_snapshot=None,
+    )
+
+    assert picked == [("codex", "PROFILE-RETRY")]
+    retry = board.tasks[0].dispatch_log[-1]
+    assert prior.execution_profile["min_context"] == 8192
+    assert retry.execution_profile["min_context"] == 65536
+    assert retry.attempt_id != prior.attempt_id
+
+
 def test_parallel_selection_fails_closed_when_legacy_owner_cannot_be_derived(monkeypatch, capsys) -> None:
     monkeypatch.setenv("LIMEN_VALUE_GATE", "0")
     board = LimenFile.model_validate(
@@ -1070,12 +1141,68 @@ def test_dispatch_serial_commit_survives_concurrent_board_write(
 
     dispatch_tasks(stale, tasks_path, agent="codex", dry_run=False)
 
-    tasks = {task["id"]: task for task in read_board(tasks_path)["tasks"]}
+    board_after = read_board(tasks_path)
+    tasks = {task["id"]: task for task in board_after["tasks"]}
     assert set(tasks) == {"DISPATCH-ME", "CONCURRENT-FOLD"}
-    assert tasks["DISPATCH-ME"]["status"] == "dispatched"
+    assert tasks["DISPATCH-ME"]["status"] == "open"
     assert tasks["DISPATCH-ME"]["predicate"] == "pytest -q concurrent-owner-check"
     assert tasks["DISPATCH-ME"]["receipt_target"].endswith("concurrent-owner.json")
+    terminal, requeue = tasks["DISPATCH-ME"]["dispatch_log"][-2:]
+    assert terminal["status"] == "failed"
+    assert terminal["trajectory_outcome"] == "failed"
+    assert terminal["attempt_id"]
+    assert requeue["status"] == "open"
+    assert requeue.get("attempt_id") is None
+    assert requeue["current_contract_hash"] == D.execution_contract_hash(load_limen_file(tasks_path).tasks[0])
+    assert board_after["portal"]["budget"]["track"]["spent"] == 0
     assert tasks["CONCURRENT-FOLD"]["status"] == "open"
+
+
+def test_serial_crash_after_registration_cannot_launch_same_attempt_twice(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "CRASH-FENCED",
+                "title": "Persist identity before provider",
+                "repo": "someorg/dispatch-lab",
+                "target_agent": "codex",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-07-17",
+                "dispatch_log": [],
+            }
+        ],
+    )
+    stale = load_limen_file(tasks_path)
+    calls = 0
+
+    def crash_after_registration(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("fixture crash before provider result")
+
+    monkeypatch.setattr(D, "_down_lanes", lambda: set())
+    monkeypatch.setattr(D, "call_agent_dispatch", crash_after_registration)
+
+    with pytest.raises(RuntimeError, match="fixture crash"):
+        dispatch_tasks(stale, tasks_path, agent="codex", dry_run=False, limit=1)
+
+    crashed = load_limen_file(tasks_path).tasks[0]
+    assert crashed.status == "in_progress"
+    attempt_ids = [entry.attempt_id for entry in crashed.dispatch_log if entry.attempt_id]
+    assert len(attempt_ids) == 2
+    assert len(set(attempt_ids)) == 1
+
+    dispatch_tasks(stale, tasks_path, agent="codex", dry_run=False, limit=1)
+    retried = load_limen_file(tasks_path).tasks[0]
+    assert calls == 1
+    assert [entry.attempt_id for entry in retried.dispatch_log if entry.attempt_id] == attempt_ids
 
 
 def test_dispatch_budget_reset_persist_survives_concurrent_board_write(
@@ -1630,8 +1757,11 @@ def test_rate_limit_and_timeout_events_are_canonical_routes(monkeypatch) -> None
     )
     D._apply_result(rate_limited, "codex", D._RATELIMIT, now, BudgetTrack(date="2026-07-10"))
     assert rate_limited.status == "open"
-    assert rate_limited.dispatch_log[-1].status == "open"
-    assert rate_limited.dispatch_log[-1].route_to == "opencode"
+    assert rate_limited.dispatch_log[-1].status == rate_limited.status
+    assert rate_limited.dispatch_log[-1].attempt_id is None
+    assert rate_limited.dispatch_log[-2].status == "failed_blocked"
+    assert rate_limited.dispatch_log[-2].trajectory_outcome == "blocked"
+    assert rate_limited.dispatch_log[-2].route_to == "opencode"
 
     timed_out = Task(
         id="TIME",
@@ -1642,9 +1772,675 @@ def test_rate_limit_and_timeout_events_are_canonical_routes(monkeypatch) -> None
     )
     D._apply_result(timed_out, "codex", D._TIMEOUT, now, BudgetTrack(date="2026-07-10"))
     assert timed_out.status == "open"
-    assert timed_out.dispatch_log[-1].status == "open"
-    assert timed_out.dispatch_log[-1].route_to == "jules"
+    assert timed_out.dispatch_log[-1].status == timed_out.status
+    assert timed_out.dispatch_log[-1].attempt_id is None
+    assert timed_out.dispatch_log[-2].status == "failed"
+    assert timed_out.dispatch_log[-2].trajectory_outcome == "failed"
+    assert timed_out.dispatch_log[-2].route_to == "jules"
     assert D.agent_can_run_task("codex", timed_out) is False
+
+
+def _register_model_selection_attempt(task: Task, *, agent: str | None = None) -> DispatchLogEntry:
+    launch = D._attempt_launch_entry(
+        task,
+        agent or task.target_agent,
+        reservation_session=f"model-selection-{task.id}",
+        started_at=datetime.now(timezone.utc),
+        output="fixture model-selection attempt",
+    )
+    task.status = "in_progress"
+    task.dispatch_log.extend([launch, launch.model_copy(update={"status": "in_progress"})])
+    return launch
+
+
+def _reserved_contract_attempt() -> tuple[Task, DispatchLogEntry]:
+    task = Task(
+        id="CONTRACT-CUSTODY",
+        title="execute the frozen contract",
+        repo="example/repository",
+        target_agent="codex",
+        status="open",
+        predicate="python3 -m pytest -q",
+        receipt_target="github:example/repository:pull-request",
+        created=date(2026, 7, 17),
+    )
+    launch = D._attempt_launch_entry(
+        task,
+        "codex",
+        reservation_session="contract-custody",
+        started_at=datetime.now(timezone.utc),
+        output="fixture registered attempt",
+    )
+    task.status = "dispatched"
+    task.dispatch_log.append(launch)
+    return task, launch
+
+
+def test_claim_registered_attempt_closes_changed_contract_before_provider_run(tmp_path: Path) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.context = "contract changed after reservation"
+    current_hash = D.execution_contract_hash(task)
+    assert current_hash != launch.attempt_contract_hash
+    save_limen_file(tasks_path, LimenFile(tasks=[task]))
+
+    assert (
+        D._claim_registered_attempt(
+            tasks_path,
+            task_id=task.id,
+            agent="codex",
+            expected_attempt_id=str(launch.attempt_id),
+        )
+        is None
+    )
+
+    reopened = load_limen_file(tasks_path).tasks[0]
+    terminal, requeue = reopened.dispatch_log[-2:]
+    assert reopened.status == requeue.status == "open"
+    assert terminal.status == "failed"
+    assert terminal.trajectory_outcome == "failed"
+    assert terminal.attempt_id == launch.attempt_id
+    assert requeue.attempt_id is None
+    assert requeue.attempt_contract_hash is None
+    assert requeue.current_contract_hash == current_hash
+    assert D._current_attempt_id(reopened) == launch.attempt_id
+
+    reserved = D._reserve_serial_attempt(
+        tasks_path,
+        task_id=task.id,
+        agent="codex",
+        expected_contract_hash=current_hash,
+    )
+    assert reserved is not None
+    retry, retry_attempt_id = reserved
+    retry_launch = D._attempt_launch_for(retry, retry_attempt_id)
+    assert retry_launch is not None
+    assert retry_attempt_id != launch.attempt_id
+    assert retry_launch.attempt_contract_hash == current_hash
+    assert retry.status == retry.dispatch_log[-1].status == "in_progress"
+
+
+def test_claim_and_apply_current_registered_contract_happy_path(tmp_path: Path) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    save_limen_file(tasks_path, LimenFile(tasks=[task]))
+
+    claimed = D._claim_registered_attempt(
+        tasks_path,
+        task_id=task.id,
+        agent="codex",
+        expected_attempt_id=str(launch.attempt_id),
+    )
+
+    assert claimed is not None
+    assert claimed.status == claimed.dispatch_log[-1].status == "in_progress"
+    assert claimed.dispatch_log[-1].attempt_id == launch.attempt_id
+    track = BudgetTrack(date="2026-07-17")
+    result = "https://github.com/example/repository/pull/17"
+    assert D._apply_result(
+        claimed,
+        "codex",
+        result,
+        datetime.now(timezone.utc),
+        track,
+        expected_attempt_id=launch.attempt_id,
+    )
+    assert claimed.status == claimed.dispatch_log[-1].status == "dispatched"
+    assert claimed.dispatch_log[-1].attempt_id == launch.attempt_id
+    assert claimed.dispatch_log[-1].session_id == result
+    assert track.spent == 1
+    assert track.per_agent["codex"] == 1
+
+
+def test_mid_provider_contract_change_preserves_old_spend_without_current_credit() -> None:
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    spend = {"amount": 2.5, "unit": "token-k"}
+    effects = {"filesystem_writes": 1, "bounded": True}
+    task.dispatch_log.append(
+        launch.model_copy(
+            update={
+                "status": "in_progress",
+                "actual_spend": spend,
+                "provider_run_id": "provider-run-old-contract",
+                "effect_receipt": effects,
+            }
+        )
+    )
+    D._record_model_selection(
+        task,
+        profile=dict(launch.execution_profile or {}),
+        selected_model="fixture/runtime-output",
+        source="provider_live_catalog",
+        fingerprint="a" * 64,
+    )
+    task.context = "changed while the provider was running"
+    current_hash = D.execution_contract_hash(task)
+    stale_result = "https://github.com/example/repository/pull/99"
+    track = BudgetTrack(date="2026-07-17")
+
+    assert not D._apply_result(
+        task,
+        "codex",
+        stale_result,
+        datetime.now(timezone.utc),
+        track,
+        expected_attempt_id=launch.attempt_id,
+    )
+
+    terminal, requeue = task.dispatch_log[-2:]
+    assert task.status == requeue.status == "open"
+    assert terminal.status == "failed"
+    assert terminal.attempt_id == launch.attempt_id
+    assert terminal.actual_spend == spend
+    assert terminal.provider_run_id == "provider-run-old-contract"
+    assert terminal.effect_receipt == effects
+    assert terminal.selected_model == "fixture/runtime-output"
+    assert stale_result in str(terminal.output)
+    assert terminal.session_id != stale_result
+    assert requeue.attempt_id is None
+    assert requeue.actual_spend is None
+    assert requeue.selected_model is None
+    assert getattr(requeue, "effect_receipt", None) is None
+    assert requeue.current_contract_hash == current_hash
+    assert stale_result not in str(requeue.output)
+    assert track.spent == 0
+    assert track.per_agent == {}
+    record = trajectory_from_log_entries(task_id=task.id, launch=launch, terminal=terminal)
+    assert record.spend.amount == 2.5
+    assert record.spend.unit == "token-k"
+    assert verified_value_credit(record) == 0
+
+    event_count = len(task.dispatch_log)
+    assert not D._apply_result(
+        task,
+        "codex",
+        stale_result,
+        datetime.now(timezone.utc),
+        track,
+        expected_attempt_id=launch.attempt_id,
+    )
+    assert len(task.dispatch_log) == event_count
+    stale_terminals = trajectory_publication._terminal_events(task)
+    assert stale_terminals == [terminal]
+    assert stale_terminals[0].actual_spend == spend
+    assert track.spent == 0
+
+
+def test_serial_fresh_commit_persists_model_and_remote_receipts_on_exact_attempt(tmp_path: Path) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    task.dispatch_log.append(launch.model_copy(update={"status": "in_progress"}))
+    board = LimenFile(tasks=[task])
+    board.portal.budget.track = BudgetTrack(date="2026-07-17")
+    save_limen_file(tasks_path, board)
+    selection = {
+        "attempt_id": launch.attempt_id,
+        "execution_profile": dict(launch.execution_profile or {}),
+        "selected_model": "opaque/runtime-selection",
+        "selection_source": "provider_live_catalog",
+        "catalog_hash": "4" * 64,
+    }
+    remote = {
+        "provider_run_id": "remote-run-17",
+        "provider_url": "https://github.com/example/repository/actions/runs/17",
+        "remote_receipt": "logs/remote-execution/receipt-17.json",
+    }
+    reconciliation = {
+        "actual_spend": {"amount": 1.5, "unit": "token-k", "reconciled": True},
+        "trajectory_outputs": [
+            {
+                "kind": "pull_request",
+                "reference": "https://github.com/example/repository/pull/17",
+                "digest": "sha256:" + "6" * 64,
+            }
+        ],
+        "trajectory_outputs_reconciled": True,
+        "trajectory_side_effects": [],
+        "trajectory_side_effects_reconciled": True,
+    }
+
+    D._commit_dispatch_results(
+        tasks_path,
+        board,
+        [("codex", task.id, "https://github.com/example/repository/pull/17")],
+        datetime(2026, 7, 17, 12, tzinfo=timezone.utc),
+        attempt_ids={task.id: str(launch.attempt_id)},
+        model_selection_receipts={task.id: selection},
+        remote_submission_receipts={task.id: remote},
+        reconciliation_receipts={task.id: reconciliation},
+    )
+
+    committed = load_limen_file(tasks_path)
+    terminal = committed.tasks[0].dispatch_log[-1]
+    assert terminal.attempt_id == launch.attempt_id
+    assert terminal.selected_model == "opaque/runtime-selection"
+    assert terminal.provider_run_id == "remote-run-17"
+    assert terminal.remote_receipt == "logs/remote-execution/receipt-17.json"
+    assert terminal.actual_spend == reconciliation["actual_spend"]
+    assert terminal.trajectory_outputs == reconciliation["trajectory_outputs"]
+    assert terminal.trajectory_outputs_reconciled is True
+    assert terminal.trajectory_side_effects == []
+    assert terminal.trajectory_side_effects_reconciled is True
+    assert committed.portal.budget.track.spent == task.budget_cost
+
+
+def test_pending_result_preserves_owner_bound_authority_receipts_on_exact_attempt(tmp_path: Path) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    task.dispatch_log.append(launch.model_copy(update={"status": "in_progress"}))
+    board = LimenFile(tasks=[task])
+    board.portal.budget.track = BudgetTrack(date="2026-07-17")
+    save_limen_file(tasks_path, board)
+    selection_receipt = {
+        "schema": "fixture.owner_selection.v1",
+        "task_id": task.id,
+        "attempt_id": launch.attempt_id,
+        "execution_profile": dict(launch.execution_profile or {}),
+        "selected_model": "opaque/runtime-selection",
+        "selection_source": "provider_live_catalog",
+        "catalog_hash": "4" * 64,
+    }
+    selection = {
+        "attempt_id": launch.attempt_id,
+        "execution_profile": dict(launch.execution_profile or {}),
+        "selected_model": "opaque/runtime-selection",
+        "selection_source": "provider_live_catalog",
+        "catalog_hash": "4" * 64,
+        "receipt": selection_receipt,
+    }
+    authority = {
+        "fable_packet_receipt": {
+            "schema": "fixture.fable_packet.v1",
+            "task_id": task.id,
+            "attempt_id": launch.attempt_id,
+        },
+        "builder_handoff_receipt": {
+            "schema": "fixture.builder_handoff.v1",
+            "task_id": task.id,
+            "parent_attempt_id": launch.attempt_id,
+        },
+        "implementation_receipt": {
+            "schema": "fixture.implementation.v1",
+            "task_id": task.id,
+            "attempt_id": launch.attempt_id,
+        },
+    }
+    pending = D._persist_pending_dispatch_result(
+        tasks_path,
+        task_id=task.id,
+        agent="codex",
+        attempt_id=str(launch.attempt_id),
+        attempt_contract_hash=str(launch.attempt_contract_hash),
+        result="https://github.com/example/repository/pull/18",
+        model_selection=selection,
+        authority_receipts=authority,
+    )
+
+    assert D._commit_dispatch_results(
+        tasks_path,
+        board,
+        [],
+        datetime(2026, 7, 17, 12, tzinfo=timezone.utc),
+    )
+
+    terminal = load_limen_file(tasks_path).tasks[0].dispatch_log[-1]
+    assert terminal.model_selection_receipt == selection_receipt
+    assert terminal.fable_packet_receipt == authority["fable_packet_receipt"]
+    assert terminal.builder_handoff_receipt == authority["builder_handoff_receipt"]
+    assert terminal.implementation_receipt == authority["implementation_receipt"]
+    assert not pending.exists()
+
+
+def test_pending_result_rejects_authority_receipt_from_another_attempt(tmp_path: Path) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    task.dispatch_log.append(launch.model_copy(update={"status": "in_progress"}))
+    board = LimenFile(tasks=[task])
+    save_limen_file(tasks_path, board)
+    D._persist_pending_dispatch_result(
+        tasks_path,
+        task_id=task.id,
+        agent="codex",
+        attempt_id=str(launch.attempt_id),
+        attempt_contract_hash=str(launch.attempt_contract_hash),
+        result=True,
+        authority_receipts={
+            "fable_packet_receipt": {
+                "schema": "fixture.fable_packet.v1",
+                "task_id": task.id,
+                "attempt_id": "another-attempt",
+            }
+        },
+    )
+
+    D._commit_dispatch_results(
+        tasks_path,
+        board,
+        [],
+        datetime(2026, 7, 17, 12, tzinfo=timezone.utc),
+    )
+
+    owner = load_limen_file(tasks_path).tasks[0]
+    terminal = owner.dispatch_log[-1]
+    assert owner.status == "failed_blocked"
+    assert terminal.fable_packet_receipt is None
+    assert "failed exact-attempt validation" in str(terminal.output)
+
+
+def test_pending_writer_fsync_failure_publishes_no_partial_receipt(tmp_path: Path, monkeypatch) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+
+    def fail_fsync(_fd: int) -> None:
+        raise OSError("adversarial pending fsync failure")
+
+    monkeypatch.setattr(D.os, "fsync", fail_fsync)
+    with pytest.raises(OSError, match="pending fsync failure"):
+        D._persist_pending_dispatch_result(
+            tasks_path,
+            task_id=task.id,
+            agent="codex",
+            attempt_id=str(launch.attempt_id),
+            attempt_contract_hash=str(launch.attempt_contract_hash),
+            result=True,
+        )
+
+    pending_root = D._pending_dispatch_result_root(tasks_path)
+    assert not list(pending_root.glob("*.json"))
+    assert not list(pending_root.glob("*.tmp"))
+
+
+def test_board_fsync_failure_keeps_pending_and_transient_evidence(tmp_path: Path, monkeypatch) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    task.dispatch_log.append(launch.model_copy(update={"status": "in_progress"}))
+    board = LimenFile(tasks=[task])
+    save_limen_file(tasks_path, board)
+    selection = {
+        "attempt_id": launch.attempt_id,
+        "execution_profile": dict(launch.execution_profile or {}),
+        "selected_model": "opaque/runtime-selection",
+        "selection_source": "provider_live_catalog",
+        "catalog_hash": "4" * 64,
+    }
+    D._MODEL_SELECTION_RECEIPTS[task.id] = dict(selection)
+    pending = D._persist_pending_dispatch_result(
+        tasks_path,
+        task_id=task.id,
+        agent="codex",
+        attempt_id=str(launch.attempt_id),
+        attempt_contract_hash=str(launch.attempt_contract_hash),
+        result=True,
+        model_selection=selection,
+    )
+
+    def fail_board_fsync(_path: Path) -> None:
+        raise OSError("adversarial board fsync failure")
+
+    monkeypatch.setattr(D, "_fsync_file_and_parent", fail_board_fsync)
+    with pytest.raises(OSError, match="board fsync failure"):
+        D._commit_dispatch_results(
+            tasks_path,
+            board,
+            [],
+            datetime(2026, 7, 17, 12, tzinfo=timezone.utc),
+        )
+
+    assert pending.exists()
+    assert task.id in D._MODEL_SELECTION_RECEIPTS
+
+
+def test_busy_commit_keeps_exact_result_pending_then_reconciles_without_reexecution(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import contextlib
+
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    task.updated = datetime(2026, 7, 15, tzinfo=timezone.utc)
+    task.dispatch_log.append(launch.model_copy(update={"status": "in_progress"}))
+    board = LimenFile(tasks=[task])
+    save_limen_file(tasks_path, board)
+    result = "https://github.com/example/repository/pull/81"
+    pending = D._persist_pending_dispatch_result(
+        tasks_path,
+        task_id=task.id,
+        agent="codex",
+        attempt_id=str(launch.attempt_id),
+        attempt_contract_hash=str(launch.attempt_contract_hash),
+        result=result,
+    )
+    real_queue_lock = D._queue_lock
+
+    @contextlib.contextmanager
+    def busy_lock(_path):
+        yield False
+
+    monkeypatch.setattr(D, "_queue_lock", busy_lock)
+    D._commit_dispatch_results(tasks_path, board, [], datetime.now(timezone.utc))
+
+    contended = load_limen_file(tasks_path).tasks[0]
+    assert contended.status == "in_progress"
+    assert pending.exists()
+
+    monkeypatch.setattr(D, "_queue_lock", real_queue_lock)
+    D._commit_dispatch_results(
+        tasks_path,
+        load_limen_file(tasks_path),
+        [],
+        datetime.now(timezone.utc),
+    )
+
+    reconciled = load_limen_file(tasks_path).tasks[0]
+    assert reconciled.status == "dispatched"
+    assert reconciled.dispatch_log[-1].attempt_id == launch.attempt_id
+    assert reconciled.dispatch_log[-1].session_id == result
+    assert not pending.exists()
+    assert list((tmp_path / "logs" / "dispatch-results" / "archive" / "reconciled").glob("*.json"))
+
+
+def test_pending_result_archive_failure_is_idempotent_for_spend_and_result(tmp_path: Path, monkeypatch) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    task.dispatch_log.append(launch.model_copy(update={"status": "in_progress"}))
+    board = LimenFile(tasks=[task])
+    board.portal.budget.track = BudgetTrack(date="2026-07-17")
+    save_limen_file(tasks_path, board)
+    result = "https://github.com/example/repository/pull/82"
+    pending = D._persist_pending_dispatch_result(
+        tasks_path,
+        task_id=task.id,
+        agent="codex",
+        attempt_id=str(launch.attempt_id),
+        attempt_contract_hash=str(launch.attempt_contract_hash),
+        result=result,
+    )
+
+    def fail_archive(_path: Path, _reason: str) -> None:
+        raise OSError("adversarial archive failure")
+
+    monkeypatch.setattr(D, "_archive_pending_dispatch_result", fail_archive)
+    for _ in range(2):
+        D._commit_dispatch_results(
+            tasks_path,
+            load_limen_file(tasks_path),
+            [],
+            datetime.now(timezone.utc),
+        )
+
+    committed = load_limen_file(tasks_path)
+    result_rows = [entry for entry in committed.tasks[0].dispatch_log if entry.result_receipt_digest is not None]
+    assert pending.exists()
+    assert committed.portal.budget.track.spent == 1
+    assert committed.portal.budget.track.per_agent == {"codex": 1}
+    assert len(result_rows) == 1
+    assert result_rows[0].session_id == result
+
+
+def test_malformed_pending_result_is_terminally_owner_routed_and_replay_safe(tmp_path: Path, monkeypatch) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    task.dispatch_log.append(launch.model_copy(update={"status": "in_progress"}))
+    board = LimenFile(tasks=[task])
+    board.portal.budget.track = BudgetTrack(date="2026-07-17")
+    save_limen_file(tasks_path, board)
+    pending = D._pending_dispatch_result_path(tasks_path, task.id, str(launch.attempt_id))
+    pending.parent.mkdir(parents=True)
+    malformed = b'{"schema":"limen.pending_dispatch_result.v1","truncated":'
+    pending.write_bytes(malformed)
+    real_quarantine = D._quarantine_pending_dispatch_result
+
+    def fail_quarantine(_path: Path, _reason: str) -> None:
+        raise OSError("adversarial quarantine failure")
+
+    monkeypatch.setattr(D, "_quarantine_pending_dispatch_result", fail_quarantine)
+    for _ in range(2):
+        D._commit_dispatch_results(
+            tasks_path,
+            load_limen_file(tasks_path),
+            [],
+            datetime.now(timezone.utc),
+        )
+
+    committed = load_limen_file(tasks_path)
+    owner = committed.tasks[0]
+    result_rows = [entry for entry in owner.dispatch_log if entry.result_receipt_digest is not None]
+    assert pending.exists()
+    assert owner.status == "failed_blocked"
+    assert committed.portal.budget.track.spent == 0
+    assert len(result_rows) == 1
+    assert result_rows[0].result_receipt_digest == f"sha256:{hashlib.sha256(malformed).hexdigest()}"
+    assert "malformed pending provider custody owner-routed" in str(result_rows[0].output)
+
+    monkeypatch.setattr(D, "_quarantine_pending_dispatch_result", real_quarantine)
+    D._commit_dispatch_results(
+        tasks_path,
+        load_limen_file(tasks_path),
+        [],
+        datetime.now(timezone.utc),
+    )
+    assert not pending.exists()
+    assert list((tmp_path / "logs" / "dispatch-results" / "quarantine" / "malformed-owner-routed").glob("*.json"))
+
+
+def test_release_stale_routes_pending_result_to_harvest_instead_of_reexecution(
+    tmp_path: Path,
+) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    task.updated = datetime(2026, 7, 1, tzinfo=timezone.utc)
+    task.dispatch_log.append(
+        launch.model_copy(
+            update={
+                "timestamp": datetime(2026, 7, 1, tzinfo=timezone.utc),
+                "status": "in_progress",
+            }
+        )
+    )
+    board = LimenFile(tasks=[task])
+    save_limen_file(tasks_path, board)
+    D._persist_pending_dispatch_result(
+        tasks_path,
+        task_id=task.id,
+        agent="codex",
+        attempt_id=str(launch.attempt_id),
+        attempt_contract_hash=str(launch.attempt_contract_hash),
+        result=False,
+    )
+
+    report = release_stale_tasks(board, tasks_path, hours=0, dry_run=False)
+
+    assert report["released"] == []
+    assert report["harvest_ready"] == [task.id]
+    assert load_limen_file(tasks_path).tasks[0].status == "in_progress"
+
+
+def test_serial_fresh_commit_binds_receipts_to_old_attempt_on_contract_drift(tmp_path: Path) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    task, launch = _reserved_contract_attempt()
+    task.status = "in_progress"
+    task.dispatch_log.append(launch.model_copy(update={"status": "in_progress"}))
+    snapshot = LimenFile(tasks=[task.model_copy(deep=True)])
+    task.context = "changed before the serial commit lock"
+    board = LimenFile(tasks=[task])
+    board.portal.budget.track = BudgetTrack(date="2026-07-17")
+    save_limen_file(tasks_path, board)
+    selection = {
+        "attempt_id": launch.attempt_id,
+        "execution_profile": dict(launch.execution_profile or {}),
+        "selected_model": "opaque/stale-selection",
+        "selection_source": "provider_live_catalog",
+        "catalog_hash": "5" * 64,
+    }
+    remote = {
+        "provider_run_id": "remote-stale-18",
+        "provider_url": "https://github.com/example/repository/actions/runs/18",
+        "remote_receipt": "logs/remote-execution/receipt-18.json",
+    }
+
+    D._commit_dispatch_results(
+        tasks_path,
+        snapshot,
+        [("codex", task.id, "https://github.com/example/repository/pull/18")],
+        datetime(2026, 7, 17, 13, tzinfo=timezone.utc),
+        attempt_ids={task.id: str(launch.attempt_id)},
+        model_selection_receipts={task.id: selection},
+        remote_submission_receipts={task.id: remote},
+    )
+
+    committed = load_limen_file(tasks_path)
+    reopened = committed.tasks[0]
+    terminal, requeue = reopened.dispatch_log[-2:]
+    assert reopened.status == requeue.status == "open"
+    assert terminal.status == "failed"
+    assert terminal.attempt_id == launch.attempt_id
+    assert terminal.selected_model == "opaque/stale-selection"
+    assert terminal.provider_run_id == "remote-stale-18"
+    assert terminal.remote_receipt == "logs/remote-execution/receipt-18.json"
+    assert requeue.attempt_id is None
+    assert committed.portal.budget.track.spent == 0
+
+
+def test_requeue_preserves_terminal_attempt_before_attempt_free_open_transition(monkeypatch) -> None:
+    monkeypatch.setattr(D, "_next_lane", lambda _agent: "jules")
+    task = Task(
+        id="ATTEMPT-REQUEUE",
+        title="preserve failed attempt before retry",
+        repo="example/repository",
+        target_agent="codex",
+        status="open",
+        created=date(2026, 7, 17),
+    )
+    launch = _register_model_selection_attempt(task)
+
+    assert D._apply_result(
+        task,
+        "codex",
+        False,
+        datetime.now(timezone.utc),
+        BudgetTrack(date="2026-07-17"),
+        expected_attempt_id=launch.attempt_id,
+    )
+
+    terminal, requeue = task.dispatch_log[-2:]
+    assert task.status == requeue.status == "open"
+    assert terminal.status == "failed"
+    assert terminal.trajectory_outcome == "failed"
+    assert terminal.attempt_id == launch.attempt_id
+    assert requeue.attempt_id is None
+    assert D._current_attempt_id(task) == launch.attempt_id
+    assert trajectory_publication._terminal_events(task) == [terminal]
+    record = trajectory_from_log_entries(task_id=task.id, launch=launch, terminal=terminal)
+    assert record.outcome == "failed"
 
 
 def test_warp_auto_dispatch_sends_dynamic_profile_without_model_override(monkeypatch) -> None:
@@ -1665,6 +2461,7 @@ def test_warp_auto_dispatch_sends_dynamic_profile_without_model_override(monkeyp
         status="open",
         created=date(2026, 7, 10),
     )
+    launch = _register_model_selection_attempt(task)
 
     result = D._call_warp_oz("warp", task, False)
 
@@ -1672,6 +2469,7 @@ def test_warp_auto_dispatch_sends_dynamic_profile_without_model_override(monkeyp
     assert any(arg.startswith("execution_profile={") for arg in captured)
     assert not any(arg.startswith("model=") for arg in captured)
     receipt = D._MODEL_SELECTION_RECEIPTS.pop(task.id)
+    assert receipt["attempt_id"] == launch.attempt_id
     assert receipt["selection_source"] == "warp_auto"
     assert receipt["selected_model"] is None
 
@@ -1696,163 +2494,147 @@ def test_agent_argv_threads_task_into_dynamic_opencode_selector(monkeypatch) -> 
     assert argv == ["run", "-m", "fixture/runtime-output"]
 
 
-def test_codex_tier_derived_from_task_classes(monkeypatch) -> None:
-    """opus-class task -> o3; haiku (plain) task -> o4-mini."""
-    monkeypatch.delenv("LIMEN_CODEX_MODEL", raising=False)
-    monkeypatch.setenv("LIMEN_CODEX_TIER_SELECT", "1")
-    monkeypatch.delenv("LIMEN_CODEX_MODEL_OPUS", raising=False)
-    monkeypatch.delenv("LIMEN_CODEX_MODEL_HAIKU", raising=False)
-    # Patch fable acceptance so opus class -> "opus" not "fable fallback"
-    monkeypatch.setattr(D, "_claude_fable_acceptance_present", lambda: False)
-
-    opus_task = Task(
-        id="CODEX-OPUS",
-        title="synthesis task",
-        labels=["synthesis"],
-        target_agent="codex",
-        created=date(2026, 7, 15),
-    )
-    haiku_task = Task(
-        id="CODEX-HAIKU",
-        title="simple coding task",
-        target_agent="codex",
-        created=date(2026, 7, 15),
-    )
-
-    assert D._codex_model(opus_task) == "o3"
-    assert D._codex_model(haiku_task) == "o4-mini"
-
-
-def test_codex_model_env_override_wins(monkeypatch) -> None:
-    monkeypatch.setenv("LIMEN_CODEX_MODEL", "custom-override")
-    task = Task(id="CODEX-OVERRIDE", title="any task", target_agent="codex", created=date(2026, 7, 15))
-    assert D._codex_model(task) == "custom-override"
-
-
-def test_codex_model_per_tier_env_override(monkeypatch) -> None:
-    monkeypatch.delenv("LIMEN_CODEX_MODEL", raising=False)
-    monkeypatch.setenv("LIMEN_CODEX_TIER_SELECT", "1")
-    monkeypatch.setenv("LIMEN_CODEX_MODEL_OPUS", "my-opus-model")
-    monkeypatch.setattr(D, "_claude_fable_acceptance_present", lambda: False)
-
-    opus_task = Task(
-        id="CODEX-PER-TIER",
-        title="synthesis override",
-        labels=["synthesis"],
-        target_agent="codex",
-        created=date(2026, 7, 15),
-    )
-    assert D._codex_model(opus_task) == "my-opus-model"
-
-
-def test_codex_tier_disabled_returns_none(monkeypatch) -> None:
-    monkeypatch.delenv("LIMEN_CODEX_MODEL", raising=False)
-    monkeypatch.setenv("LIMEN_CODEX_TIER_SELECT", "0")
-    task = Task(id="CODEX-DISABLED", title="any task", target_agent="codex", created=date(2026, 7, 15))
-    assert D._codex_model(task) is None
-
-
-def test_codex_tier_fail_open_on_exception(monkeypatch) -> None:
-    monkeypatch.delenv("LIMEN_CODEX_MODEL", raising=False)
-    monkeypatch.setenv("LIMEN_CODEX_TIER_SELECT", "1")
-
-    def boom(task):
-        raise RuntimeError("simulated failure")
-
-    monkeypatch.setattr(D, "_claude_tier_for", boom)
-    task = Task(id="CODEX-FAIL", title="any task", target_agent="codex", created=date(2026, 7, 15))
-    assert D._codex_model(task) is None
-
-
-def test_gemini_tier_derived_from_task_classes(monkeypatch) -> None:
-    monkeypatch.delenv("LIMEN_GEMINI_MODEL", raising=False)
-    monkeypatch.setenv("LIMEN_GEMINI_TIER_SELECT", "1")
-    monkeypatch.delenv("LIMEN_GEMINI_MODEL_OPUS", raising=False)
-    monkeypatch.delenv("LIMEN_GEMINI_MODEL_HAIKU", raising=False)
-    monkeypatch.setattr(D, "_claude_fable_acceptance_present", lambda: False)
-
-    opus_task = Task(
-        id="GEMINI-OPUS",
-        title="synthesis task",
-        labels=["synthesis"],
-        target_agent="gemini",
-        created=date(2026, 7, 15),
-    )
-    haiku_task = Task(
-        id="GEMINI-HAIKU",
-        title="simple coding task",
-        target_agent="gemini",
-        created=date(2026, 7, 15),
-    )
-
-    assert D._gemini_model(opus_task) == "gemini-2.5-pro"
-    assert D._gemini_model(haiku_task) == "gemini-2.5-flash"
-
-
-def test_gemini_model_env_override_wins(monkeypatch) -> None:
-    monkeypatch.setenv("LIMEN_GEMINI_MODEL", "custom-gemini")
-    task = Task(id="GEMINI-OVERRIDE", title="any task", target_agent="gemini", created=date(2026, 7, 15))
-    assert D._gemini_model(task) == "custom-gemini"
-
-
-def test_gemini_tier_disabled_returns_none(monkeypatch) -> None:
-    monkeypatch.delenv("LIMEN_GEMINI_MODEL", raising=False)
-    monkeypatch.setenv("LIMEN_GEMINI_TIER_SELECT", "0")
-    task = Task(id="GEMINI-DISABLED", title="any task", target_agent="gemini", created=date(2026, 7, 15))
-    assert D._gemini_model(task) is None
-
-
-def test_agent_argv_codex_threads_task_into_tier_selector(monkeypatch) -> None:
-    observed: list[Task | None] = []
+def test_opencode_unknown_price_defers_to_auto_and_records_reason(monkeypatch) -> None:
     task = Task(
-        id="CODEX-ARGV",
-        title="task evidence reaches codex selector",
-        target_agent="codex",
-        created=date(2026, 7, 15),
+        id="OPENCODE-UNKNOWN-PRICE",
+        title="provider owns pricing uncertainty",
+        target_agent="opencode",
+        created=date(2026, 7, 17),
     )
+    launch = _register_model_selection_attempt(task)
+    unknown = ModelCapability(
+        model_id="provider/runtime-shape",
+        active=True,
+        text_input=True,
+        text_output=True,
+        toolcall=True,
+        reasoning=True,
+        attachment=False,
+        context_limit=131072,
+        output_limit=32768,
+        input_cost=None,
+        output_cost=None,
+        variant_count=1,
+        release_ordinal=700000,
+    )
+    monkeypatch.setattr(D, "discover_opencode_models", lambda *_args, **_kwargs: [unknown])
 
-    def select(current: Task | None = None) -> str:
-        observed.append(current)
-        return "o3"
-
-    monkeypatch.setattr(D, "_codex_model", select)
-    argv = D._agent_argv("codex", task)
-
-    assert observed == [task]
-    assert "-m" in argv
-    assert argv[argv.index("-m") + 1] == "o3"
+    assert D._opencode_model(task) is None
+    receipt = D._MODEL_SELECTION_RECEIPTS.pop(task.id)
+    assert receipt["attempt_id"] == launch.attempt_id
+    assert receipt["selected_model"] is None
+    assert receipt["selection_source"] == "opencode_auto_unknown_price"
 
 
-def test_agent_argv_gemini_injects_model_before_prompt(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    ("agent", "selector"), [("claude", "_claude_model"), ("codex", "_codex_model"), ("gemini", "_gemini_model")]
+)
+def test_identifier_only_providers_default_to_auto_without_catalog_lookup(
+    monkeypatch, agent: str, selector: str
+) -> None:
+    monkeypatch.delenv(f"LIMEN_{agent.upper()}_MODEL", raising=False)
     task = Task(
-        id="GEMINI-ARGV",
-        title="model injected before -p",
-        target_agent="gemini",
+        id=f"{agent.upper()}-AUTO",
+        title="provider owns default selection",
+        target_agent=agent,
         created=date(2026, 7, 15),
     )
+    launch = _register_model_selection_attempt(task)
 
-    monkeypatch.setattr(D, "_gemini_model", lambda t=None: "gemini-2.5-pro")
-    argv = D._agent_argv("gemini", task)
-
-    assert "-m" in argv
-    assert "-p" in argv
-    m_idx = argv.index("-m")
-    p_idx = argv.index("-p")
-    assert m_idx < p_idx, f"-m ({m_idx}) must appear before -p ({p_idx}) in {argv}"
-    assert argv[m_idx + 1] == "gemini-2.5-pro"
-
-
-def test_agent_argv_gemini_no_model_when_tier_select_off(monkeypatch) -> None:
-    monkeypatch.delenv("LIMEN_GEMINI_MODEL", raising=False)
-    monkeypatch.setenv("LIMEN_GEMINI_TIER_SELECT", "0")
-    task = Task(
-        id="GEMINI-ARGV-OFF",
-        title="no model injected when tier off",
-        target_agent="gemini",
-        created=date(2026, 7, 15),
-    )
-    argv = D._agent_argv("gemini", task)
+    assert getattr(D, selector)(task) is None
+    receipt = D._MODEL_SELECTION_RECEIPTS.pop(task.id)
+    assert receipt["attempt_id"] == launch.attempt_id
+    assert receipt["selected_model"] is None
+    assert receipt["selection_source"] == f"{agent}_auto"
+    argv = D._agent_argv(agent, task)
+    assert "--model" not in argv
     assert "-m" not in argv
+    D._MODEL_SELECTION_RECEIPTS.pop(task.id, None)
+
+
+@pytest.mark.parametrize(
+    ("agent", "selector", "discoverer"),
+    [
+        ("codex", "_codex_model", "discover_codex_models"),
+        ("gemini", "_gemini_model", "discover_gemini_models"),
+    ],
+)
+def test_provider_override_tracks_renamed_add_remove_and_reorder(
+    monkeypatch, agent: str, selector: str, discoverer: str
+) -> None:
+    live = ["shape-z", "shape-a"]
+    monkeypatch.setenv(f"LIMEN_{agent.upper()}_MODEL", "shape-z")
+    monkeypatch.setattr(D, discoverer, lambda *_args, **_kwargs: list(live))
+    task = Task(
+        id=f"{agent.upper()}-LIVE",
+        title="validate exact provider output",
+        target_agent=agent,
+        created=date(2026, 7, 15),
+    )
+    _register_model_selection_attempt(task)
+
+    assert getattr(D, selector)(task) == "shape-z"
+    first_hash = D._MODEL_SELECTION_RECEIPTS[task.id]["catalog_hash"]
+    live.reverse()
+    assert getattr(D, selector)(task) == "shape-z"
+    assert D._MODEL_SELECTION_RECEIPTS[task.id]["catalog_hash"] == first_hash
+    live.append("shape-m")
+    assert getattr(D, selector)(task) == "shape-z"
+    assert D._MODEL_SELECTION_RECEIPTS[task.id]["catalog_hash"] != first_hash
+    live.remove("shape-z")
+    with pytest.raises(D.ProviderModelSelectionBlocked, match="absent from the live provider catalog"):
+        getattr(D, selector)(task)
+
+
+def test_claude_override_never_executes_cli_catalog_probe(monkeypatch) -> None:
+    monkeypatch.setenv("LIMEN_CLAUDE_MODEL", "shape-z")
+    monkeypatch.setattr(D, "_resolve_agent_binary", lambda *_args: pytest.fail("must not resolve Claude for metadata"))
+    monkeypatch.setattr(D, "_run_capture", lambda *_args, **_kwargs: pytest.fail("must not execute Claude metadata"))
+    task = Task(
+        id="CLAUDE-OVERRIDE-BLOCK",
+        title="unsafe metadata command is forbidden",
+        target_agent="claude",
+        created=date(2026, 7, 17),
+    )
+    launch = _register_model_selection_attempt(task)
+
+    with pytest.raises(D.ProviderModelSelectionBlocked, match="no safe metadata catalog"):
+        D._claude_model(task)
+
+    receipt = D._MODEL_SELECTION_RECEIPTS.pop(task.id)
+    assert receipt["attempt_id"] == launch.attempt_id
+    assert receipt["selected_model"] is None
+    assert receipt["selection_source"] == "claude_override_unvalidated"
+
+
+def test_unverifiable_override_blocks_before_isolated_worktree_side_effect(monkeypatch) -> None:
+    monkeypatch.setenv("LIMEN_CODEX_MODEL", "shape-unreachable")
+    monkeypatch.setattr(D, "discover_codex_models", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(D, "agent_can_run_task", lambda *_args: True)
+    monkeypatch.setattr(D, "_isolated_local_run", lambda *_args, **_kwargs: pytest.fail("must not isolate"))
+    task = Task(
+        id="CODEX-BLOCKED-OVERRIDE",
+        title="unverifiable override",
+        repo="example/repository",
+        target_agent="codex",
+        created=date(2026, 7, 15),
+    )
+
+    result = D._call_local_agent("codex", task, dry_run=False)
+
+    assert D._is_blocked_result(result)
+    assert "live provider catalog is unavailable" in D._blocked_reason(result)
+
+
+def test_agent_argv_injects_only_live_validated_model(monkeypatch) -> None:
+    task = Task(id="GEMINI-ARGV", title="model before prompt", target_agent="gemini", created=date(2026, 7, 15))
+    monkeypatch.setenv("LIMEN_GEMINI_MODEL", "shape-live")
+    monkeypatch.setattr(D, "discover_gemini_models", lambda **_kwargs: ["shape-live"])
+
+    argv = D._agent_argv("gemini", task)
+
+    assert argv[argv.index("-m") + 1] == "shape-live"
+    assert argv.index("-m") < argv.index("-p")
 
 
 def test_dispatch_event_records_dynamic_selection_receipt() -> None:
@@ -1865,11 +2647,13 @@ def test_dispatch_event_records_dynamic_selection_receipt() -> None:
         status="open",
         created=date(2026, 7, 10),
     )
+    launch = _register_model_selection_attempt(task)
     D._MODEL_SELECTION_RECEIPTS[task.id] = {
-        "execution_profile": {"reasoning_depth": 0.7},
+        "attempt_id": launch.attempt_id,
+        "execution_profile": launch.execution_profile,
         "selected_model": "fixture/runtime-output",
         "selection_source": "opencode_live_catalog",
-        "catalog_hash": "abc123",
+        "catalog_hash": "a" * 64,
     }
 
     D._apply_result(
@@ -1878,13 +2662,118 @@ def test_dispatch_event_records_dynamic_selection_receipt() -> None:
         True,
         datetime.datetime.now(datetime.timezone.utc),
         BudgetTrack(date="2026-07-10"),
+        expected_attempt_id=launch.attempt_id,
     )
 
     event = task.dispatch_log[-1]
     assert event.status == "dispatched"
     assert event.selected_model == "fixture/runtime-output"
     assert event.selection_source == "opencode_live_catalog"
-    assert event.catalog_hash == "abc123"
+    assert event.catalog_hash == "a" * 64
+
+
+def test_model_selection_receipt_from_prior_identical_profile_cannot_cross_retry() -> None:
+    task = Task(
+        id="SELECTED-RETRY",
+        title="same profile, distinct attempts",
+        target_agent="opencode",
+        status="open",
+        created=date(2026, 7, 17),
+    )
+    first = _register_model_selection_attempt(task)
+    D._record_model_selection(
+        task,
+        profile=dict(first.execution_profile or {}),
+        selected_model="fixture/runtime-output",
+        source="opencode_live_catalog",
+        fingerprint="a" * 64,
+    )
+    stale_receipt = dict(D._MODEL_SELECTION_RECEIPTS[task.id])
+
+    task.status = "open"
+    D._record_model_selection(
+        task,
+        profile=dict(first.execution_profile or {}),
+        selected_model="fixture/runtime-output",
+        source="opencode_live_catalog",
+        fingerprint="a" * 64,
+    )
+    assert task.id not in D._MODEL_SELECTION_RECEIPTS
+    second = D._attempt_launch_entry(
+        task,
+        "opencode",
+        reservation_session="model-selection-retry",
+        started_at=datetime.now(timezone.utc),
+        output="fixture retry attempt",
+    )
+    task.status = "in_progress"
+    task.dispatch_log.extend([second, second.model_copy(update={"status": "in_progress"})])
+    assert second.execution_profile == first.execution_profile
+    assert second.attempt_id != first.attempt_id
+    D._MODEL_SELECTION_RECEIPTS[task.id] = stale_receipt
+
+    with pytest.raises(ValueError, match="registered attempt identity"):
+        D._apply_result(
+            task,
+            "opencode",
+            True,
+            datetime.now(timezone.utc),
+            BudgetTrack(date="2026-07-17"),
+            expected_attempt_id=second.attempt_id,
+        )
+
+    assert task.status == "in_progress"
+    assert not any(entry.selected_model for entry in task.dispatch_log if entry.attempt_id == second.attempt_id)
+
+
+def test_attempt_launch_freezes_classification_before_provider_motion() -> None:
+    import datetime
+
+    task = Task(
+        id="FROZEN-ATTEMPT",
+        title="freeze launch facts",
+        repo="example/repository",
+        target_agent="codex",
+        status="open",
+        labels=["launch-label"],
+        created=date(2026, 7, 10),
+    )
+    started_at = datetime.datetime.now(datetime.timezone.utc)
+    launch = D._attempt_launch_entry(
+        task,
+        "codex",
+        reservation_session="fixture-session",
+        started_at=started_at,
+        output="fixture registered before provider",
+    )
+    task.status = "in_progress"
+    task.dispatch_log.extend(
+        [
+            launch,
+            launch.model_copy(update={"status": "in_progress"}),
+        ]
+    )
+    task.labels.append("mutated-after-launch")
+    D._apply_result(
+        task,
+        "codex",
+        D._NOOP,
+        datetime.datetime.now(datetime.timezone.utc),
+        BudgetTrack(date="2026-07-10"),
+        expected_attempt_id=launch.attempt_id,
+    )
+
+    event, requeue = task.dispatch_log[-2:]
+    assert event.attempt_id and event.attempt_id.startswith("attempt-")
+    assert event.attempt_classification == {
+        "task_type": "code",
+        "labels": ["launch-label"],
+        "workstream": None,
+    }
+    assert event.trajectory_outcome == "failed"
+    assert task.status == requeue.status == "open"
+    assert requeue.attempt_id is None
+    assert requeue.current_contract_hash == D.execution_contract_hash(task)
 
 
 def test_pr_open_receipt_blocks_duplicate_dispatch_and_noop_demotion() -> None:
@@ -1980,6 +2869,81 @@ def test_dispatch_parallel_records_blocked_without_counting_failure(tmp_path: Pa
     assert "0 failed" in output
 
 
+def test_dispatch_parallel_result_replay_does_not_double_charge_after_archive_failure(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    tasks_path = tmp_path / "tasks.yaml"
+    write_board(
+        tasks_path,
+        [
+            {
+                "id": "PARALLEL-REPLAY",
+                "title": "parallel exact result replay",
+                "repo": "someorg/dispatch-lab",
+                "target_agent": "codex",
+                "priority": "critical",
+                "budget_cost": 1,
+                "status": "open",
+                "created": "2026-07-17",
+                "dispatch_log": [],
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        D,
+        "call_agent_dispatch",
+        lambda _agent, _task, dry_run=False: "https://github.com/organvm/limen/pull/82",
+    )
+    monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))
+    snapshot = D.WorktreeAdmissionSnapshot(
+        active=False,
+        block_new_local=False,
+        reason="",
+        resource_blocked=False,
+        vitals_shed=False,
+        reaper_blocked=False,
+        free_gib=None,
+        floor_gib=None,
+        reserved_gib=0.0,
+        room_gib=None,
+        targets_present=None,
+        debt=None,
+        vitals_action="ok",
+    )
+    monkeypatch.setattr(D, "_worktree_admission_snapshot", lambda: snapshot.copy())
+    monkeypatch.setattr(
+        D,
+        "_snapshot_with_machine_reservations",
+        lambda _snapshot=None: (snapshot.copy(), 0),
+    )
+
+    def fail_archive(_path: Path, _reason: str) -> None:
+        raise OSError("adversarial archive failure")
+
+    monkeypatch.setattr(D, "_archive_pending_dispatch_result", fail_archive)
+
+    dispatch_parallel(
+        load_limen_file(tasks_path),
+        tasks_path,
+        agents=["codex"],
+        per_agent_limit=1,
+        max_workers=1,
+    )
+    D._commit_dispatch_results(
+        tasks_path,
+        load_limen_file(tasks_path),
+        [],
+        datetime.now(timezone.utc),
+    )
+
+    committed = load_limen_file(tasks_path)
+    result_rows = [entry for entry in committed.tasks[0].dispatch_log if entry.result_receipt_digest is not None]
+    assert committed.portal.budget.track.spent == 1
+    assert committed.portal.budget.track.per_agent["codex"] == 1
+    assert len(result_rows) == 1
+
+
 def test_failed_result_skips_down_lane_in_default_cascade(tmp_path: Path, monkeypatch) -> None:
     import datetime
 
@@ -2019,8 +2983,9 @@ def test_failed_result_skips_down_lane_in_default_cascade(tmp_path: Path, monkey
 
     assert task.status == "open"
     assert task.target_agent == "jules"
-    assert task.dispatch_log[-1].status == "open"
-    assert task.dispatch_log[-1].route_to == "jules"
+    assert task.dispatch_log[-1].status == task.status
+    assert task.dispatch_log[-2].status == "failed"
+    assert task.dispatch_log[-2].route_to == "jules"
     assert "tried:claude" in task.labels
 
 
@@ -2046,9 +3011,10 @@ def test_remote_service_failure_skips_unarmed_ollama_floor(monkeypatch) -> None:
 
     assert task.status == "open"
     assert task.target_agent == "opencode"
-    assert task.dispatch_log[-1].status == "open"
-    assert task.dispatch_log[-1].route_to == "opencode"
-    assert task.dispatch_log[-1].output == "remote/service lane failed; reopened to healthy fleet cascade"
+    assert task.dispatch_log[-1].status == task.status
+    assert task.dispatch_log[-2].status == "failed"
+    assert task.dispatch_log[-2].route_to == "opencode"
+    assert task.dispatch_log[-2].output == "remote/service lane failed; reopened to healthy fleet cascade"
     assert "tried:jules" in task.labels
 
 
@@ -2076,8 +3042,9 @@ def test_remote_service_failure_can_use_armed_matching_ollama_floor(monkeypatch)
 
     assert task.status == "open"
     assert task.target_agent == "ollama"
-    assert task.dispatch_log[-1].status == "open"
-    assert task.dispatch_log[-1].route_to == "ollama"
+    assert task.dispatch_log[-1].status == task.status
+    assert task.dispatch_log[-2].status == "failed"
+    assert task.dispatch_log[-2].route_to == "ollama"
     assert "tried:jules" in task.labels
 
 
@@ -3584,7 +4551,7 @@ def test_isolated_safe_task_denied_when_isolation_off(monkeypatch) -> None:
 
 def test_local_runtime_uses_same_worktree_isolation_authority(tmp_path: Path, monkeypatch) -> None:
     task = _wtask(repo="example/repo")
-    monkeypatch.setattr(D, "_isolated_local_run", lambda *_args: "isolated")
+    monkeypatch.setattr(D, "_isolated_local_run", lambda *_args, **_kwargs: "isolated")
     monkeypatch.setattr(D, "_resolve_repo_dir", lambda _task: tmp_path)
     monkeypatch.setattr(D, "_run_cmd", lambda *_args, **_kwargs: "in-place")
 

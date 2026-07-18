@@ -8,6 +8,7 @@ for harvest.
 """
 
 import importlib.util
+import hashlib
 import json
 import sys
 from datetime import date, datetime, timezone
@@ -70,6 +71,36 @@ def _old_marker(runs: Path, tid: str, agent: str) -> Path:
     return marker
 
 
+def _write_valid_attempt_result(tasks_path: Path, runs: Path) -> tuple[Path, str]:
+    board_state = load_limen_file(tasks_path)
+    task = board_state.tasks[0]
+    launch = dispatch_async._attempt_launch_entry(
+        task,
+        "jules",
+        reservation_session="async-reserve",
+        started_at=datetime.now(timezone.utc),
+        output="fixture registered before detached worker execution",
+    )
+    task.status = "in_progress"
+    task.dispatch_log = [launch, launch.model_copy(update={"status": "in_progress"})]
+    save_limen_file(tasks_path, board_state)
+    result = {
+        "task_id": task.id,
+        "agent": "jules",
+        "result": False,
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "err": None,
+        "execution_contract_hash": execution_contract_hash(task),
+        "execution_started": True,
+        "attempt_id": launch.attempt_id,
+        "model_selection": {},
+    }
+    raw = json.dumps(result).encode()
+    receipt = runs / "T1.result.json"
+    receipt.write_bytes(raw)
+    return receipt, f"sha256:{hashlib.sha256(raw).hexdigest()}"
+
+
 def test_reap_stale_reopens_and_removes_marker(board):
     tasks_path, runs = board
     marker = _old_marker(runs, "T1", "jules")
@@ -80,6 +111,9 @@ def test_reap_stale_reopens_and_removes_marker(board):
     assert not marker.exists()  # marker removed — but only AFTER the reopen committed
     got = {t.id: t for t in load_limen_file(tasks_path).tasks}
     assert got["T1"].status == "open"  # dead worker's task reopened for retry
+    assert got["T1"].dispatch_log[-1].status == got["T1"].status
+    assert got["T1"].dispatch_log[-1].attempt_id is None
+    assert got["T1"].dispatch_log[-2].status == "failed"
 
 
 def test_reap_stale_leaves_marker_when_result_present(board):
@@ -119,6 +153,8 @@ def test_reap_dead_pid_marker_without_waiting_for_age(board, monkeypatch):
     assert not marker.exists()
     got = {t.id: t for t in load_limen_file(tasks_path).tasks}
     assert got["T1"].status == "open"
+    assert got["T1"].dispatch_log[-1].status == got["T1"].status
+    assert got["T1"].dispatch_log[-2].status == "failed"
 
 
 def test_reap_zombie_child_marker_after_grace(board, monkeypatch):
@@ -177,7 +213,19 @@ def test_reap_leaves_live_pid_marker_before_grace(board, monkeypatch):
 
 def test_harvest_archives_result_receipt_before_unlink(board):
     tasks_path, runs = board
-    task = load_limen_file(tasks_path).tasks[0]
+    board_state = load_limen_file(tasks_path)
+    task = board_state.tasks[0]
+    started_at = datetime.now(timezone.utc)
+    launch = dispatch_async._attempt_launch_entry(
+        task,
+        "jules",
+        reservation_session="async-reserve",
+        started_at=started_at,
+        output="fixture registered before detached worker execution",
+    )
+    task.status = "in_progress"
+    task.dispatch_log = [launch, launch.model_copy(update={"status": "in_progress"})]
+    save_limen_file(tasks_path, board_state)
     result = {
         "task_id": "T1",
         "agent": "jules",
@@ -186,6 +234,8 @@ def test_harvest_archives_result_receipt_before_unlink(board):
         "err": "token sk-secretsecretsecret and contact test@example.com",
         "execution_contract_hash": execution_contract_hash(task),
         "execution_started": True,
+        "attempt_id": launch.attempt_id,
+        "model_selection": {},
     }
     receipt = runs / "T1.result.json"
     receipt.write_text(json.dumps(result))
@@ -202,6 +252,109 @@ def test_harvest_archives_result_receipt_before_unlink(board):
     assert archived["receipt"]["err"] == "token [REDACTED_TOKEN] and contact [REDACTED_EMAIL]"
     got = {t.id: t for t in load_limen_file(tasks_path).tasks}
     assert got["T1"].dispatch_log[-1].agent == "jules"
+    digest = "sha256:" + hashlib.sha256(json.dumps(result).encode()).hexdigest()
+    assert [entry.result_receipt_digest for entry in got["T1"].dispatch_log if entry.result_receipt_digest] == [digest]
+
+
+def test_harvest_board_save_failure_leaves_result_and_archive_untouched(board, monkeypatch):
+    tasks_path, runs = board
+    receipt, _digest = _write_valid_attempt_result(tasks_path, runs)
+    before = tasks_path.read_bytes()
+
+    def fail_save(_path, _board):
+        raise OSError("adversarial board save failure")
+
+    monkeypatch.setattr(dispatch_async, "save_limen_file", fail_save)
+    with pytest.raises(OSError, match="board save failure"):
+        dispatch_async.harvest()
+
+    assert tasks_path.read_bytes() == before
+    assert receipt.exists()
+    assert not list(dispatch_async.RECEIPT_ARCHIVE.rglob("*.result.json"))
+
+
+def test_harvest_crash_after_board_save_retries_without_double_credit(board, monkeypatch):
+    tasks_path, runs = board
+    receipt, digest = _write_valid_attempt_result(tasks_path, runs)
+    real_finalize = dispatch_async._finalize_result_receipt
+
+    def crash_before_archive(*_args, **_kwargs):
+        raise OSError("adversarial crash after board save")
+
+    monkeypatch.setattr(dispatch_async, "_finalize_result_receipt", crash_before_archive)
+    assert dispatch_async.harvest() == 1
+    assert receipt.exists()
+    first = load_limen_file(tasks_path)
+    first_rows = [entry for entry in first.tasks[0].dispatch_log if entry.result_receipt_digest == digest]
+    assert len(first_rows) == 1
+
+    monkeypatch.setattr(dispatch_async, "_finalize_result_receipt", real_finalize)
+    assert dispatch_async.harvest() == 0
+    assert not receipt.exists()
+    second = load_limen_file(tasks_path)
+    second_rows = [entry for entry in second.tasks[0].dispatch_log if entry.result_receipt_digest == digest]
+    assert len(second_rows) == 1
+    assert second.portal.budget.track.spent == first.portal.budget.track.spent
+    archives = list(dispatch_async.RECEIPT_ARCHIVE.rglob("*.result.json"))
+    assert len(archives) == 1
+    assert json.loads(archives[0].read_text())["reason"] == "duplicate-consumed"
+
+
+def test_harvest_rejects_stale_model_selection_from_identical_profile_retry(board):
+    tasks_path, runs = board
+    board_state = load_limen_file(tasks_path)
+    task = board_state.tasks[0]
+    first = dispatch_async._attempt_launch_entry(
+        task,
+        "jules",
+        reservation_session="prior-attempt",
+        started_at=datetime(2026, 7, 17, 12, 0, tzinfo=timezone.utc),
+        output="prior reservation",
+    )
+    task.dispatch_log = [first]
+    second = dispatch_async._attempt_launch_entry(
+        task,
+        "jules",
+        reservation_session="async-reserve",
+        started_at=datetime(2026, 7, 17, 12, 1, tzinfo=timezone.utc),
+        output="current retry reservation",
+    )
+    task.status = "in_progress"
+    task.dispatch_log.extend([second, second.model_copy(update={"status": "in_progress"})])
+    assert second.execution_profile == first.execution_profile
+    assert second.attempt_id != first.attempt_id
+    save_limen_file(tasks_path, board_state)
+    result = {
+        "task_id": task.id,
+        "agent": "jules",
+        "result": False,
+        "ts": "2026-07-17T12:02:00+00:00",
+        "err": None,
+        "execution_contract_hash": execution_contract_hash(task),
+        "execution_started": True,
+        "attempt_id": second.attempt_id,
+        "model_selection": {
+            "attempt_id": first.attempt_id,
+            "execution_profile": second.execution_profile,
+            "selected_model": "fixture/runtime-output",
+            "selection_source": "provider_live_catalog",
+            "catalog_hash": "a" * 64,
+        },
+    }
+    receipt = runs / "T1.result.json"
+    receipt.write_text(json.dumps(result))
+
+    assert dispatch_async.harvest() == 0
+    assert not receipt.exists()
+    current = load_limen_file(tasks_path).tasks[0]
+    assert current.status == "in_progress"
+    assert current.dispatch_log[-1].attempt_id == second.attempt_id
+    assert current.dispatch_log[-1].selected_model is None
+    archived = list(dispatch_async.RECEIPT_ARCHIVE.glob("*/*.result.json"))
+    assert len(archived) == 1
+    payload = json.loads(archived[0].read_text())
+    assert payload["reason"] == "harvest-fenced"
+    assert "registered attempt identity" in payload["blocker"]
 
 
 def test_harvest_archives_malformed_result_receipt_before_unlink(board):

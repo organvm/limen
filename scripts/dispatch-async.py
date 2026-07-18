@@ -44,9 +44,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.capacity import LOCAL_CHECKOUT_AGENTS, _weak_proxy_exhaustion, select_lanes  # noqa: E402
 from limen.execution_contract import execution_contract_hash  # noqa: E402
 from limen.intake import IntakeContractError, normalize_selected_legacy_task  # noqa: E402
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import atomic_write_text, load_limen_file, save_limen_file  # noqa: E402
 from limen.models import DispatchLogEntry  # noqa: E402
-from limen.provider_selection import execution_profile_for  # noqa: E402
 from limen.remote_execution import (  # noqa: E402
     RemoteExecutionError,
     validate_remote_submission_harvest,
@@ -56,6 +55,9 @@ from limen.remote_predicate import canonical_json, digest_bytes, digest_text  # 
 from limen.dispatch import (  # noqa: E402
     _apply_result,
     _REMOTE_SUBMISSION_RECEIPTS,
+    _attempt_launch_entry,
+    _consumed_result_receipt_digest,
+    _validated_model_selection_receipt,
     _deps_met,
     _dispatchable,
     _down_lanes,
@@ -187,6 +189,7 @@ def _write_running_marker(
     pid: int,
     reserved_gib: float,
     reservation_id: str | None = None,
+    attempt_id: str | None = None,
 ) -> None:
     """Publish the marker atomically so slot readers never observe a partial JSON document."""
     marker = _running_marker_path(task_id, agent, reservation_id)
@@ -200,6 +203,7 @@ def _write_running_marker(
                 "pid": pid,
                 "reserved_gib": reserved_gib,
                 "reservation_id": reservation_id,
+                "attempt_id": attempt_id,
             }
         )
     )
@@ -241,6 +245,19 @@ def _rollback_unlaunched_reservation(
         track.per_agent[agent] = max(0, track.per_agent.get(agent, 0) - cost)
         save_limen_file(TASKS, lf)
         return True
+
+
+def _refund_unexecuted_reservation(lf, task, entry: DispatchLogEntry) -> bool:
+    """Refund the precharge only while the exact async attempt is still unclaimed."""
+
+    if entry.status != "dispatched":
+        return False
+    cost = max(0, int(task.budget_cost or 0))
+    agent = entry.agent or task.target_agent
+    track = lf.portal.budget.track
+    track.spent = max(0, track.spent - cost)
+    track.per_agent[agent] = max(0, track.per_agent.get(agent, 0) - cost)
+    return True
 
 
 def _marker_task_agent(marker: Path) -> tuple[str, str]:
@@ -448,8 +465,84 @@ def _archive_result_receipt(
         archive["raw_preview"] = _redact_receipt_value(raw.decode("utf-8", errors="replace"))
     if blocker:
         archive["blocker"] = _redact_receipt_value(blocker)
-    out.write_text(json.dumps(archive, indent=2, sort_keys=True) + "\n")
+    atomic_write_text(out, json.dumps(archive, indent=2, sort_keys=True) + "\n")
+    _fsync_directory(day_dir)
     return out
+
+
+def _fsync_directory(path: Path) -> None:
+    """Persist directory entries when the platform supports directory fsync."""
+
+    try:
+        descriptor = os.open(path, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(descriptor)
+    except OSError:
+        # APFS and some test filesystems may reject directory fsync. The file
+        # itself is still fsynced by atomic_write_text.
+        pass
+    finally:
+        os.close(descriptor)
+
+
+def _fsync_board(path: Path) -> None:
+    """Confirm the replaced board bytes before any result custody is released."""
+
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    _fsync_directory(path.parent)
+
+
+def _receipt_identity(path: Path) -> tuple[int, int, int, int] | None:
+    try:
+        metadata = path.stat(follow_symlinks=False)
+    except OSError:
+        return None
+    return (metadata.st_dev, metadata.st_ino, metadata.st_size, metadata.st_mtime_ns)
+
+
+def _finalize_result_receipt(
+    receipt_path: Path,
+    raw: bytes,
+    identity: tuple[int, int, int, int] | None,
+    now: datetime.datetime,
+    *,
+    parsed: object | None,
+    reason: str,
+    parse_error: str | None = None,
+    blocker: str | None = None,
+    clear_task_id: str | None = None,
+    clear_reservation_id: str | None = None,
+) -> bool:
+    """Archive and unlink only the exact bytes already fenced by the board.
+
+    A replacement at the same pathname is never archived or deleted under the
+    earlier digest. Archive failure leaves both the result and marker retryable.
+    """
+
+    if identity is None or _receipt_identity(receipt_path) != identity:
+        return False
+    _archive_result_receipt(
+        receipt_path,
+        raw,
+        now,
+        parsed=parsed,
+        reason=reason,
+        parse_error=parse_error,
+        blocker=blocker,
+    )
+    if _receipt_identity(receipt_path) != identity:
+        return False
+    receipt_path.unlink()
+    _fsync_directory(receipt_path.parent)
+    if clear_task_id is not None:
+        _clear_running_markers(clear_task_id, clear_reservation_id)
+    return True
 
 
 def harvest() -> int:
@@ -460,6 +553,35 @@ def harvest() -> int:
         return 0
     now = _now()
     applied = 0
+    board_dirty = False
+    finalizations: list[dict[str, object]] = []
+
+    def schedule_finalization(
+        receipt_path: Path,
+        raw: bytes,
+        identity: tuple[int, int, int, int] | None,
+        *,
+        parsed: object | None,
+        reason: str,
+        parse_error: str | None = None,
+        blocker: str | None = None,
+        clear_task_id: str | None = None,
+        clear_reservation_id: str | None = None,
+    ) -> None:
+        finalizations.append(
+            {
+                "receipt_path": receipt_path,
+                "raw": raw,
+                "identity": identity,
+                "parsed": parsed,
+                "reason": reason,
+                "parse_error": parse_error,
+                "blocker": blocker,
+                "clear_task_id": clear_task_id,
+                "clear_reservation_id": clear_reservation_id,
+            }
+        )
+
     with _queue_lock(TASKS) as got:
         if not got:
             # Lock timed out — skip this pass (honor the contract). The .result.json files are only
@@ -470,30 +592,33 @@ def harvest() -> int:
         track = lf.portal.budget.track
         for rf in files:
             raw = b""
+            identity = _receipt_identity(rf)
             try:
                 raw = rf.read_bytes()
+                if identity is None or _receipt_identity(rf) != identity:
+                    continue
                 data = json.loads(raw.decode("utf-8"))
             except Exception as exc:
-                _archive_result_receipt(
+                if not raw or identity is None or _receipt_identity(rf) != identity:
+                    continue
+                schedule_finalization(
                     rf,
                     raw,
-                    now,
+                    identity,
                     parsed=None,
                     reason="malformed-result",
                     parse_error=str(exc),
                 )
-                rf.unlink(missing_ok=True)
                 continue
             if not isinstance(data, dict):
-                _archive_result_receipt(
+                schedule_finalization(
                     rf,
                     raw,
-                    now,
+                    identity,
                     parsed=data,
                     reason="malformed-result",
                     parse_error="result receipt JSON root is not an object",
                 )
-                rf.unlink(missing_ok=True)
                 continue
             task_id = data.get("task_id")
             remote_submission = data.get("remote_submission")
@@ -501,18 +626,18 @@ def harvest() -> int:
                 remote_submission is not None and remote_submission != {}
             )
             if not isinstance(task_id, str) or not task_id:
-                _archive_result_receipt(
+                schedule_finalization(
                     rf,
                     raw,
-                    now,
+                    identity,
                     parsed=data,
                     reason="remote-metadata-blocked" if remote_hint else "harvest-fenced",
                     blocker="async result task ID is missing or non-string" if remote_hint else None,
                 )
-                rf.unlink(missing_ok=True)
                 continue
             t = byid.get(task_id) if isinstance(task_id, str) else None
             expected_hash = data.get("execution_contract_hash")
+            attempt_id = data.get("attempt_id")
             agent = data.get("agent")
             reservation_id = data.get("reservation_id")
             reservation_id_valid = reservation_id is None or (
@@ -526,6 +651,88 @@ def harvest() -> int:
                     else rf == _result_path(task_id)
                 )
             )
+            result_receipt_digest = f"sha256:{hashlib.sha256(raw).hexdigest()}"
+            consumed_digest = (
+                _consumed_result_receipt_digest(t, attempt_id)
+                if t is not None and isinstance(attempt_id, str)
+                else None
+            )
+            if consumed_digest is not None:
+                same_receipt = consumed_digest == result_receipt_digest
+                schedule_finalization(
+                    rf,
+                    raw,
+                    identity,
+                    parsed=data,
+                    reason="duplicate-consumed" if same_receipt else "conflicting-consumed",
+                    blocker=None if same_receipt else "different result bytes claimed an already-consumed attempt",
+                    clear_task_id=task_id if same_receipt else None,
+                    clear_reservation_id=reservation_id if same_receipt and isinstance(reservation_id, str) else None,
+                )
+                continue
+            contract_drift_closed = False
+            if (
+                data.get("result") == "__contract_drift_closed__"
+                and data.get("contract_drift_closed") is True
+                and isinstance(task_id, str)
+                and isinstance(agent, str)
+                and isinstance(expected_hash, str)
+                and isinstance(attempt_id, str)
+                and isinstance(reservation_id, str)
+                and _is_async_reservation_id(reservation_id)
+                and result_path_matches
+                and t is not None
+                and t.status == "open"
+                and t.dispatch_log
+            ):
+                launch = next(
+                    (
+                        entry
+                        for entry in t.dispatch_log
+                        if entry.attempt_id == attempt_id
+                        and entry.attempt_classification is not None
+                        and entry.execution_profile is not None
+                    ),
+                    None,
+                )
+                terminal = next(
+                    (
+                        entry
+                        for entry in reversed(t.dispatch_log)
+                        if entry.attempt_id == attempt_id and entry.status == "failed"
+                    ),
+                    None,
+                )
+                head = t.dispatch_log[-1]
+                try:
+                    current_hash = execution_contract_hash(t)
+                except Exception:
+                    current_hash = None
+                contract_drift_closed = bool(
+                    launch is not None
+                    and launch.session_id == reservation_id
+                    and launch.agent == agent
+                    and launch.attempt_contract_hash == expected_hash
+                    and terminal is not None
+                    and terminal.session_id.startswith("contract-mismatch-")
+                    and head.status == "open"
+                    and head.attempt_id is None
+                    and head.current_contract_hash == current_hash
+                    and current_hash != expected_hash
+                )
+            if contract_drift_closed:
+                terminal.result_receipt_digest = result_receipt_digest
+                board_dirty = True
+                schedule_finalization(
+                    rf,
+                    raw,
+                    identity,
+                    parsed=data,
+                    reason="contract-drift-closed",
+                    clear_task_id=task_id,
+                    clear_reservation_id=reservation_id,
+                )
+                continue
             custody_ok = (
                 isinstance(task_id, str)
                 and bool(task_id)
@@ -533,12 +740,14 @@ def harvest() -> int:
                 and bool(agent)
                 and isinstance(expected_hash, str)
                 and re.fullmatch(r"[0-9a-f]{64}", expected_hash) is not None
+                and isinstance(attempt_id, str)
+                and bool(attempt_id)
                 and data.get("execution_started") is True
                 and "result" in data
                 and reservation_id_valid
                 and result_path_matches
                 and t is not None
-                and t.status == "dispatched"
+                and t.status == "in_progress"
             )
             if custody_ok:
                 try:
@@ -558,14 +767,26 @@ def harvest() -> int:
                     custody_ok
                     and reservation_matches
                     and last is not None
-                    and last.status == "dispatched"
+                    and last.status == "in_progress"
                     and last.agent == agent
+                    and last.attempt_id == attempt_id
                 )
 
             authoritative_worker_receipt = custody_ok
             remote_blocker: str | None = None
             validated_remote: dict[str, object] | None = None
+            validated_model_selection: dict[str, object] | None = None
             last = t.dispatch_log[-1] if t is not None and t.dispatch_log else None
+            if custody_ok:
+                try:
+                    validated_model_selection = _validated_model_selection_receipt(
+                        t,
+                        expected_attempt_id=attempt_id,
+                        value=data.get("model_selection"),
+                    )
+                except ValueError as exc:
+                    custody_ok = False
+                    remote_blocker = str(exc)
             requires_remote_identity = remote_hint or "github_actions" in {
                 str(t.target_agent if t is not None else ""),
                 str(last.agent if last is not None else ""),
@@ -593,8 +814,11 @@ def harvest() -> int:
                     if t is None or not t.predicate or not t.receipt_target:
                         raise RemoteExecutionError("current remote task contract is incomplete")
                     current_context = verification_context_for_task(t, byid)
-                    execution_profile = execution_profile_for(t).as_dict()
+                    execution_profile = dict(last.execution_profile or {})
+                    if not execution_profile:
+                        raise RemoteExecutionError("registered attempt lacks a frozen execution profile")
                     expected_request_contract = {
+                        "attempt_id": attempt_id,
                         "predicate_digest": digest_text(t.predicate.strip()),
                         "instruction_digest": digest_text(
                             f"Verify completed implementation for task {t.id}; do not modify code: {t.title}"
@@ -612,6 +836,7 @@ def harvest() -> int:
                         agent=agent,
                         expected_agent=last.agent,
                         expected_request_contract=expected_request_contract,
+                        expected_attempt_id=attempt_id,
                         task_id=t.id,
                         task_repo=t.repo,
                         root=ROOT,
@@ -622,41 +847,89 @@ def harvest() -> int:
                     remote_blocker = str(exc)
 
             if custody_ok:
-                if data["result"] != "__notask__":
-                    if validated_remote is not None:
-                        _REMOTE_SUBMISSION_RECEIPTS[task_id] = validated_remote
-                    try:
-                        _apply_result(t, agent, data["result"], now, track, charge_budget=False)
-                    finally:
-                        _REMOTE_SUBMISSION_RECEIPTS.pop(task_id, None)
+                landed_result = False if data["result"] == "__notask__" else data["result"]
+                if validated_remote is not None:
+                    _REMOTE_SUBMISSION_RECEIPTS[task_id] = validated_remote
+                try:
+                    result_applied = _apply_result(
+                        t,
+                        agent,
+                        landed_result,
+                        now,
+                        track,
+                        charge_budget=False,
+                        expected_attempt_id=attempt_id,
+                        model_selection_receipt=validated_model_selection,
+                        reconciliation_receipt={
+                            key: data[key]
+                            for key in (
+                                "actual_spend",
+                                "trajectory_outputs",
+                                "trajectory_outputs_reconciled",
+                                "trajectory_side_effects",
+                                "trajectory_side_effects_reconciled",
+                            )
+                            if data.get(key) is not None
+                        },
+                        result_receipt_digest=result_receipt_digest,
+                    )
+                finally:
+                    _REMOTE_SUBMISSION_RECEIPTS.pop(task_id, None)
+                board_dirty = board_dirty or _consumed_result_receipt_digest(t, attempt_id) == result_receipt_digest
+                if result_applied:
                     applied += 1
-                _clear_running_markers(
-                    task_id,
-                    (reservation_id if isinstance(reservation_id, str) and reservation_id != "async-reserve" else None),
-                )
                 archive_reason = "harvested"
+                clear_result_marker = True
             else:
                 _REMOTE_SUBMISSION_RECEIPTS.pop(task_id, None)
-                # A receipt is untrusted input.  Task id alone is never custody: a stale worker or
-                # forged/legacy receipt must not mutate (or clear the marker of) a changed claim.
-                if requires_remote_identity:
-                    if authoritative_worker_receipt and isinstance(reservation_id, str):
-                        _clear_running_markers(task_id, reservation_id)
+                if authoritative_worker_receipt and remote_blocker and t is not None:
+                    # The exact worker/artifact identity is authoritative even
+                    # though its subordinate metadata is not. Bind the digest
+                    # and owner-route the failure before releasing custody.
+                    fence = last.model_copy(
+                        update={
+                            "timestamp": now,
+                            "output": f"async result metadata fenced: {remote_blocker[:400]}",
+                            "result_receipt_digest": result_receipt_digest,
+                        }
+                    )
+                    t.dispatch_log.append(fence)
+                    t.updated = now
+                    board_dirty = True
+                    archive_reason = "remote-metadata-blocked" if requires_remote_identity else "harvest-fenced"
+                    clear_result_marker = True
+                elif requires_remote_identity:
                     archive_reason = "remote-metadata-blocked"
                     remote_blocker = remote_blocker or "remote async result failed authoritative execution custody"
+                    clear_result_marker = False
                 else:
                     archive_reason = "harvest-fenced"
-            _archive_result_receipt(
+                    clear_result_marker = False
+            normalized_reservation = (
+                reservation_id
+                if isinstance(reservation_id, str) and reservation_id != "async-reserve"
+                else None
+            )
+            schedule_finalization(
                 rf,
                 raw,
-                now,
+                identity,
                 parsed=data,
                 reason=archive_reason,
                 blocker=remote_blocker,
+                clear_task_id=task_id if clear_result_marker else None,
+                clear_reservation_id=normalized_reservation,
             )
-            rf.unlink(missing_ok=True)
-        if applied:
+        if board_dirty:
             save_limen_file(TASKS, lf)
+            _fsync_board(TASKS)
+        for finalization in finalizations:
+            try:
+                _finalize_result_receipt(now=now, **finalization)
+            except OSError:
+                # Board-bound results remain inert and retryable by digest.
+                # Unbound/malformed receipts remain at their source path.
+                pass
     return applied
 
 
@@ -705,12 +978,12 @@ def reap_stale(max_age_s: int):
     try:
         lf_preview = load_limen_file(TASKS)
         for t in lf_preview.tasks:
-            if t.status != "dispatched":
+            if t.status not in {"dispatched", "in_progress"}:
                 continue
             if not t.dispatch_log:
                 continue
             last = t.dispatch_log[-1]
-            if not _is_async_reservation_id(last.session_id) or last.status != "dispatched":
+            if not _is_async_reservation_id(last.session_id) or last.status not in {"dispatched", "in_progress"}:
                 continue
             reservation_id = last.session_id if _ASYNC_RESERVATION_RE.fullmatch(last.session_id) else None
             if (t.id, reservation_id) in marker_claims or _result_exists(t.id, reservation_id):
@@ -743,16 +1016,17 @@ def reap_stale(max_age_s: int):
                 last = t.dispatch_log[-1] if t is not None and t.dispatch_log else None
                 reservation_matches = bool(
                     last is not None
-                    and last.status == "dispatched"
+                    and last.status in {"dispatched", "in_progress"}
                     and last.agent == agent
                     and (
                         (marker_reservation_id is None and last.session_id == "async-reserve")
                         or last.session_id == marker_reservation_id
                     )
                 )
-                if t is not None and t.status == "dispatched" and reservation_matches:
+                if t is not None and t.status in {"dispatched", "in_progress"} and reservation_matches:
                     if _result_exists(tid, marker_reservation_id):
                         continue
+                    _refund_unexecuted_reservation(lf, t, last)
                     pids_to_kill.append(_pid)
                     markers_to_remove.append(marker)
                     applied_reaped.append(tid)
@@ -778,14 +1052,29 @@ def reap_stale(max_age_s: int):
                     else:
                         t.status = "open"  # dead worker left no result → retry on a later beat
                         t.updated = now
-                        t.dispatch_log.append(
-                            DispatchLogEntry(
-                                timestamp=now,
-                                agent=agent,
-                                session_id="async-reap-stale",
-                                status="open",
-                                output=f"dispatch-async: stale worker marker older than {max_age_s}s reaped; task reopened",
-                            )
+                        t.dispatch_log.extend(
+                            [
+                                last.model_copy(
+                                    update={
+                                        "timestamp": now,
+                                        "agent": agent,
+                                        "session_id": "async-reap-stale",
+                                        "status": "failed",
+                                        "trajectory_outcome": "failed",
+                                        "output": (
+                                            f"dispatch-async: stale worker marker older than {max_age_s}s "
+                                            "reaped; attempt closed before retry"
+                                        ),
+                                    }
+                                ),
+                                DispatchLogEntry(
+                                    timestamp=now,
+                                    agent=agent,
+                                    session_id="async-reap-stale-requeue",
+                                    status="open",
+                                    output="dispatch-async: stale attempt reopened for a later beat",
+                                ),
+                            ]
                         )
                         changed = True
                 else:
@@ -811,7 +1100,7 @@ def reap_stale(max_age_s: int):
                     t = byid.get(tid)
                     if (
                         t is None
-                        or t.status != "dispatched"
+                        or t.status not in {"dispatched", "in_progress"}
                         or (tid, reservation_id) in fresh_marker_claims
                         or _result_exists(tid, reservation_id)
                         or not t.dispatch_log
@@ -823,11 +1112,12 @@ def reap_stale(max_age_s: int):
                         not _is_async_reservation_id(last.session_id)
                         or (reservation_id is not None and last.session_id != reservation_id)
                         or (reservation_id is None and last.session_id != "async-reserve")
-                        or last.status != "dispatched"
+                        or last.status not in {"dispatched", "in_progress"}
                         or not stamp
                         or (now - stamp).total_seconds() <= max_age_s
                     ):
                         continue
+                    _refund_unexecuted_reservation(lf, t, last)
                     if _has_done_transition(t):
                         _restore_done_status(
                             t,
@@ -850,17 +1140,29 @@ def reap_stale(max_age_s: int):
                     else:
                         t.status = "open"
                         t.updated = now
-                        t.dispatch_log.append(
-                            DispatchLogEntry(
-                                timestamp=now,
-                                agent=agent,
-                                session_id="async-reap-stale",
-                                status="open",
-                                output=(
-                                    f"dispatch-async: markerless async reservation older than {max_age_s}s "
-                                    "reaped; task reopened"
+                        t.dispatch_log.extend(
+                            [
+                                last.model_copy(
+                                    update={
+                                        "timestamp": now,
+                                        "agent": agent,
+                                        "session_id": "async-reap-stale",
+                                        "status": "failed",
+                                        "trajectory_outcome": "failed",
+                                        "output": (
+                                            f"dispatch-async: markerless async reservation older than {max_age_s}s "
+                                            "reaped; attempt closed before retry"
+                                        ),
+                                    }
                                 ),
-                            )
+                                DispatchLogEntry(
+                                    timestamp=now,
+                                    agent=agent,
+                                    session_id="async-reap-stale-requeue",
+                                    status="open",
+                                    output="dispatch-async: markerless stale attempt reopened for a later beat",
+                                ),
+                            ]
                         )
                         applied_markerless.append(tid)
                         changed = True
@@ -1206,18 +1508,22 @@ def recover_exact_task(
         task = next(candidate for candidate in lf.tasks if candidate.id == task_id)
         if task.status == "open":
             return {"status": "already_open", "recovered_count": 0}
-        if task.status != "dispatched":
+        if task.status not in {"dispatched", "in_progress"}:
             return {
                 "status": "blocked",
                 "recovered_count": 0,
                 "blocker": _targeted_recovery_blocker(
                     "targeted-recovery-status-unsafe",
                     task_id,
-                    f"exact task status is {task.status}; only an async dispatched claim can be recovered",
+                    f"exact task status is {task.status}; only an active async claim can be recovered",
                 ),
             }
         last = task.dispatch_log[-1] if task.dispatch_log else None
-        if last is None or not _is_async_reservation_id(last.session_id) or last.status != "dispatched":
+        if (
+            last is None
+            or not _is_async_reservation_id(last.session_id)
+            or last.status not in {"dispatched", "in_progress"}
+        ):
             return {
                 "status": "blocked",
                 "recovered_count": 0,
@@ -1392,16 +1698,29 @@ def recover_exact_task(
 
         if dry_run:
             return {"status": "would_recover", "recovered_count": 0}
+        _refund_unexecuted_reservation(lf, task, last)
         task.status = "open"
         task.updated = now
-        task.dispatch_log.append(
-            DispatchLogEntry(
-                timestamp=now,
-                agent=task.target_agent,
-                session_id="async-recover-exact",
-                status="open",
-                output="dispatch-async: exact orphaned async claim reopened after custody proof",
-            )
+        task.dispatch_log.extend(
+            [
+                last.model_copy(
+                    update={
+                        "timestamp": now,
+                        "agent": task.target_agent,
+                        "session_id": "async-recover-exact",
+                        "status": "failed",
+                        "trajectory_outcome": "failed",
+                        "output": "dispatch-async: exact orphaned async attempt closed before retry",
+                    }
+                ),
+                DispatchLogEntry(
+                    timestamp=now,
+                    agent=task.target_agent,
+                    session_id="async-recover-exact-requeue",
+                    status="open",
+                    output="dispatch-async: exact orphaned attempt reopened for a later beat",
+                ),
+            ]
         )
         save_limen_file(TASKS, lf)
     for marker in markers_to_remove:
@@ -1546,11 +1865,11 @@ def _pick_reservations(
                 t.status = "dispatched"
                 t.updated = now
                 t.dispatch_log.append(
-                    DispatchLogEntry(
-                        timestamp=now,
-                        agent=agent,
-                        session_id=_new_async_reservation_id(),
-                        status="dispatched",
+                    _attempt_launch_entry(
+                        t,
+                        agent,
+                        reservation_session=_new_async_reservation_id(),
+                        started_at=now,
                         output="dispatch-async: reserved before detached worker launch",
                     )
                 )
@@ -1594,6 +1913,7 @@ def reserve_and_launch(
     weak_proxy_agents = _weak_proxy_agents(usage)
     reserved_contract_hashes: dict[str, str] = {}
     reserved_ids: dict[str, str] = {}
+    reserved_attempt_ids: dict[str, str] = {}
     if dry:
         lf = load_limen_file(TASKS)
         if task_id and expected_contract_hash:
@@ -1624,6 +1944,7 @@ def reserve_and_launch(
         # Load and fingerprint under the queue lock.  This is the last read before reservation;
         # a changed predicate/receipt/context/route can never spend budget under the old selection.
         lf = load_limen_file(TASKS)
+        now = _now()
         if task_id and expected_contract_hash:
             blocker = _execution_contract_blocker(lf, task_id, expected_contract_hash)
             if blocker:
@@ -1667,6 +1988,7 @@ def reserve_and_launch(
             by_id = {task.id: task for task in lf.tasks}
             reserved_contract_hashes = {tid: execution_contract_hash(by_id[tid]) for _agent, tid in picked}
             reserved_ids = {tid: by_id[tid].dispatch_log[-1].session_id for _agent, tid in picked}
+            reserved_attempt_ids = {tid: str(by_id[tid].dispatch_log[-1].attempt_id or "") for _agent, tid in picked}
             if not dry and (picked or reset_changed):
                 try:
                     save_limen_file(TASKS, lf)
@@ -1716,6 +2038,7 @@ def reserve_and_launch(
                 proc.pid,
                 _machine_admission_reserved_gib(tid),
                 reservation_id,
+                reserved_attempt_ids[tid],
             )
         except Exception as exc:
             # The child is live but invisible to marker accounting. Transfer the durable lease to

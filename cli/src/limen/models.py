@@ -30,10 +30,33 @@ class DispatchLogEntry(BaseModel):
     # those rows, while every new writer emits a canonical status plus route_to and
     # heal-board appends a corrective head without rewriting history.
     route_to: str | None = None
+    # Immutable attempt identity and launch facts. The board transports these to
+    # the owner-native trajectory adapter; it never grants value itself.
+    attempt_id: str | None = None
+    attempt_classification: dict[str, Any] | None = None
+    attempt_repository: str | None = None
+    attempt_contract_hash: str | None = None
+    current_contract_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    attempt_identity_digest: str | None = None
+    # Content identity of the durable provider-result artifact consumed by this
+    # event. Persisting it in the same board write as lifecycle/spend changes
+    # makes an archive failure safe to replay.
+    result_receipt_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
     execution_profile: dict[str, Any] | None = None
     selected_model: str | None = None
     selection_source: str | None = None
     catalog_hash: str | None = None
+    # Owner-bound authority evidence travels with the exact provider attempt.
+    # These are complete receipts, not status summaries reconstructed after the
+    # provider result has already been committed.
+    model_selection_receipt: dict[str, Any] | None = None
+    fable_packet_receipt: dict[str, Any] | None = None
+    builder_handoff_receipt: dict[str, Any] | None = None
+    implementation_receipt: dict[str, Any] | None = None
+    provider_route: str | None = None
+    route_selection_source: str | None = None
+    executing_keeper: str | None = None
+    executing_session: str | None = None
     # Provider-neutral remote lifecycle.  Submission is only ``dispatched``; these fields make the
     # exact off-box run recoverable without interpreting a provider-shaped session string.
     provider_run_id: str | None = None
@@ -50,6 +73,19 @@ class DispatchLogEntry(BaseModel):
     remote_state: str | None = None
     remote_request_id: str | None = None
     remote_receipt: str | None = None
+    actual_spend: dict[str, Any] | None = None
+    trajectory_outputs: list[dict[str, Any]] | None = None
+    trajectory_outputs_reconciled: bool | None = None
+    trajectory_side_effects: list[dict[str, Any]] | None = None
+    trajectory_side_effects_reconciled: bool | None = None
+    trajectory_exact_commit: str | None = None
+    trajectory_pull_request: str | None = None
+    trajectory_outcome: str | None = None
+    trajectory_predicate: dict[str, Any] | None = None
+    trajectory_owner_receipt: dict[str, Any] | None = None
+    trajectory_publication_reference: str | None = None
+    trajectory_publication_digest: str | None = None
+    trajectory_publication_error: str | None = None
     output: str | None = None
 
     @field_validator("status")
@@ -105,10 +141,8 @@ class Task(BaseModel):
     # Optional live prerequisites. Missing/empty keeps legacy tasks dispatchable; an explicit
     # requirement is evaluated dynamically by handoff and every dispatch selector.
     execution_requirements: list[ExecutionRequirement] | None = None
-    # Optional per-task Claude tier pin ("haiku"|"sonnet"|"opus"|"fable") — an escape hatch that
-    # overrides the earned-tier ladder's class-based derivation for THIS task (the env
-    # LIMEN_CLAUDE_MODEL still wins above it). Fable still requires LIMEN_FABLE_ACCEPTANCE.
-    # None → derive the tier. See dispatch._claude_model.
+    # Legacy opaque routing hint retained only so historical boards stay loadable.
+    # Dispatch never treats this value as a model name, tier, or capability claim.
     claude_tier: str | None = None
     # task ids that must have a MERGED PR before this task is eligible to dispatch. Lets a
     # dependent increment be seeded NOW and auto-build only once its predecessor lands in the
