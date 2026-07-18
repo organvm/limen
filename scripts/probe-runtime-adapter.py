@@ -4,12 +4,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, NoReturn
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_DIR = ROOT / "spec" / "contracts"
@@ -23,14 +24,75 @@ class Response:
     status: int
     payload: dict[str, Any]
     text: str
+    attempt_chain: tuple[str, ...] = ()
 
 
-def fail(message: str) -> None:
+TRANSIENT_HTTP_STATUSES = frozenset({502, 503, 504})
+UPSTREAM_STORAGE_502_DETAIL = "GitHub storage request failed (502)"
+DEFAULT_REQUEST_ATTEMPTS = 3
+DEFAULT_REQUEST_TIMEOUT_SECONDS = 20.0
+DEFAULT_RETRY_BACKOFF_SECONDS = 1.0
+DEFAULT_MAX_RETRY_BACKOFF_SECONDS = 2.0
+DEFAULT_REQUEST_BUDGET_SECONDS = 45.0
+
+
+def fail(message: str) -> NoReturn:
     print(f"runtime adapter probe failed: {message}", file=sys.stderr)
     raise SystemExit(1)
 
 
-def request(base_url: str, path: str, token: str | None = None, method: str = "GET", body: dict[str, Any] | None = None) -> Response:  # allow-secret
+def _response_attempt(response: Response, attempt: int, max_attempts: int) -> str:
+    return f"attempt {attempt}/{max_attempts}: HTTP {response.status}: {json.dumps(response.text[:300])}"
+
+
+def _transport_attempt(exc: BaseException, attempt: int, max_attempts: int) -> str:
+    reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+    return f"attempt {attempt}/{max_attempts}: transport {type(reason).__name__}: {reason}"
+
+
+def _is_explicit_upstream_storage_502(response: Response) -> bool:
+    if response.status != 500 or not isinstance(response.payload, dict):
+        return False
+    detail = response.payload.get("detail")
+    if not isinstance(detail, str):
+        return False
+    return detail == UPSTREAM_STORAGE_502_DETAIL or detail.startswith(f"{UPSTREAM_STORAGE_502_DETAIL}:")
+
+
+def _is_transient_response(response: Response) -> bool:
+    return response.status in TRANSIENT_HTTP_STATUSES or _is_explicit_upstream_storage_502(response)
+
+
+def _retry_delay(attempt: int, initial_seconds: float, max_seconds: float) -> float:
+    return min(initial_seconds * (2 ** (attempt - 1)), max_seconds)
+
+
+def request(  # allow-secret
+    base_url: str,
+    path: str,
+    token: str | None = None,
+    method: str = "GET",
+    body: dict[str, Any] | None = None,
+    *,
+    max_attempts: int = DEFAULT_REQUEST_ATTEMPTS,
+    timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT_SECONDS,
+    retry_backoff_seconds: float = DEFAULT_RETRY_BACKOFF_SECONDS,
+    max_retry_backoff_seconds: float = DEFAULT_MAX_RETRY_BACKOFF_SECONDS,
+    request_budget_seconds: float = DEFAULT_REQUEST_BUDGET_SECONDS,
+    retry_transient: bool = True,
+    sleep_fn: Callable[[float], None] | None = None,
+    monotonic_fn: Callable[[], float] | None = None,
+) -> Response:
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be at least 1")
+    if timeout_seconds <= 0 or request_budget_seconds <= 0:
+        raise ValueError("request timeouts must be positive")
+    if retry_backoff_seconds < 0 or max_retry_backoff_seconds < 0:
+        raise ValueError("retry backoff must not be negative")
+
+    sleep = sleep_fn or time.sleep
+    monotonic = monotonic_fn or time.monotonic
+    attempt_limit = max_attempts if retry_transient else 1
     url = urllib.parse.urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
     data = json.dumps(body).encode("utf-8") if body is not None else None
     headers = {
@@ -42,24 +104,53 @@ def request(base_url: str, path: str, token: str | None = None, method: str = "G
     if token:
         headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(url, data=data, method=method, headers=headers)
-    try:
-        with urllib.request.urlopen(req, timeout=20) as res:
-            text = res.read().decode("utf-8")
-            return Response(res.status, json.loads(text) if text else {}, text)
-    except urllib.error.HTTPError as exc:
-        text = exc.read().decode("utf-8", errors="replace")
+    started_at = monotonic()
+    attempt_chain: list[str] = []
+
+    for attempt in range(1, attempt_limit + 1):
+        remaining_seconds = request_budget_seconds - (monotonic() - started_at)
+        if remaining_seconds <= 0:
+            chain = " -> ".join(attempt_chain) or "no request attempt completed"
+            fail(f"{method} {url} exhausted its {request_budget_seconds:g}s request budget: {chain}")
         try:
-            payload = json.loads(text) if text else {}
-        except json.JSONDecodeError:
-            payload = {}
-        return Response(exc.code, payload, text)
-    except urllib.error.URLError as exc:
-        fail(f"{method} {url} could not connect: {exc.reason}")
+            with urllib.request.urlopen(req, timeout=min(timeout_seconds, remaining_seconds)) as res:
+                text = res.read().decode("utf-8")
+                return Response(res.status, json.loads(text) if text else {}, text, tuple(attempt_chain))
+        except urllib.error.HTTPError as exc:
+            text = exc.read().decode("utf-8", errors="replace")
+            try:
+                payload = json.loads(text) if text else {}
+            except json.JSONDecodeError:
+                payload = {}
+            response = Response(exc.code, payload, text)
+            if not retry_transient or not _is_transient_response(response):
+                if attempt_chain:
+                    attempt_chain.append(_response_attempt(response, attempt, attempt_limit))
+                return Response(response.status, response.payload, response.text, tuple(attempt_chain))
+            attempt_chain.append(_response_attempt(response, attempt, attempt_limit))
+            if attempt == attempt_limit:
+                return Response(response.status, response.payload, response.text, tuple(attempt_chain))
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+            attempt_chain.append(_transport_attempt(exc, attempt, attempt_limit))
+            if attempt == attempt_limit:
+                fail(f"{method} {url} could not connect: {' -> '.join(attempt_chain)}")
+
+        delay = _retry_delay(attempt, retry_backoff_seconds, max_retry_backoff_seconds)
+        remaining_seconds = request_budget_seconds - (monotonic() - started_at)
+        if delay >= remaining_seconds:
+            fail(
+                f"{method} {url} exhausted its {request_budget_seconds:g}s request budget: {' -> '.join(attempt_chain)}"
+            )
+        print(f"runtime adapter probe retrying: {attempt_chain[-1]}; backoff={delay:g}s", file=sys.stderr)
+        sleep(delay)
+
+    raise AssertionError("request retry loop exited unexpectedly")
 
 
 def assert_status(response: Response, expected: int, label: str) -> None:
     if response.status != expected:
-        fail(f"{label}: expected HTTP {expected}, got {response.status}: {response.text[:300]}")
+        chain = f"; retry chain: {' -> '.join(response.attempt_chain)}" if response.attempt_chain else ""
+        fail(f"{label}: expected HTTP {expected}, got {response.status}: {response.text[:300]}{chain}")
 
 
 def load_schema(name: str) -> dict[str, Any]:
@@ -341,6 +432,7 @@ def main() -> None:
             token=args.owner_token,  # allow-secret
             method="POST",
             body={"status": "done", "note": "Runtime probe verification", "session_id": "runtime-probe"},
+            retry_transient=False,
         )
         assert_status(response, 200, "owner verify mutation")
         if response.payload.get("status") != "verified" or response.payload.get("verified_status") != "done":
@@ -370,6 +462,7 @@ def main() -> None:
                 "note": "Runtime probe assignment",
                 "session_id": "runtime-probe",
             },
+            retry_transient=False,
         )
         assert_status(response, 200, "owner assign mutation")
         if response.payload.get("status") != "assigned":
@@ -385,6 +478,7 @@ def main() -> None:
             token=args.owner_token,  # allow-secret
             method="POST",
             body={"note": "Runtime probe archive", "session_id": "runtime-probe"},
+            retry_transient=False,
         )
         assert_status(response, 200, "owner archive mutation")
         if response.payload.get("status") != "archived":
