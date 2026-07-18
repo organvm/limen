@@ -84,7 +84,9 @@ def discover_sources(home: Path | None = None) -> dict[str, SessionSource | None
     claude = _latest_jsonl(home / ".claude" / "projects", exclude_parts=frozenset({"subagents"}))
     copilot = _latest_jsonl(home / ".copilot" / "session-state")
     return {
-        "codex": None if codex is None else SessionSource("codex", codex.locator, codex.session_id, codex.format, codex.updated_ns),
+        "codex": None
+        if codex is None
+        else SessionSource("codex", codex.locator, codex.session_id, codex.format, codex.updated_ns),
         "claude": (
             None
             if claude is None
@@ -141,7 +143,9 @@ def resolve_session(
                 if latest is None:
                     raise FileNotFoundError(f"no OpenCode session in {path}")
                 return latest
-            return SessionSource(agent, f"{path}#session:{session_id}", session_id, "opencode-sqlite", path.stat().st_mtime_ns)
+            return SessionSource(
+                agent, f"{path}#session:{session_id}", session_id, "opencode-sqlite", path.stat().st_mtime_ns
+            )
         if agent == "agy":
             session_id = fragment.removeprefix("conversation:") if separator else ""
             if not session_id:
@@ -149,7 +153,9 @@ def resolve_session(
                 if latest is None:
                     raise FileNotFoundError(f"no Agy conversation in {path}")
                 return latest
-            return SessionSource(agent, f"{path}#conversation:{session_id}", session_id, "agy-sqlite", path.stat().st_mtime_ns)
+            return SessionSource(
+                agent, f"{path}#conversation:{session_id}", session_id, "agy-sqlite", path.stat().st_mtime_ns
+            )
         return SessionSource(agent, str(path), path.stem, "jsonl", path.stat().st_mtime_ns)
     if source_agent != "auto":
         selected = sources[source_agent]
@@ -262,8 +268,7 @@ def _read_agy(source: SessionSource) -> list[dict[str, Any]]:
     try:
         with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as db:
             row = db.execute(
-                "SELECT title, preview, last_user_input_time FROM conversation_summaries "
-                "WHERE conversation_id = ?",
+                "SELECT title, preview, last_user_input_time FROM conversation_summaries WHERE conversation_id = ?",
                 (source.session_id,),
             ).fetchone()
     except sqlite3.Error:
@@ -311,9 +316,7 @@ def child_identity_environment(
     optional = {
         "LIMEN_TASK_ID": task_id,
         "LIMEN_LEASE_ID": lease_id,
-        "LIMEN_LEASE_GENERATION": (
-            str(lease_generation) if lease_generation is not None else None
-        ),
+        "LIMEN_LEASE_GENERATION": (str(lease_generation) if lease_generation is not None else None),
         "LIMEN_EXECUTION_HASH": execution_hash,
         "LIMEN_LEASE_TOKEN": capability_token,
     }

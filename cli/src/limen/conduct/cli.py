@@ -133,11 +133,7 @@ def register(
             human_protected=human_protected,
             concurrency=concurrency,
             transport=transport or defaults.get("transport", "native"),
-            native_fanout=(
-                native_fanout
-                if native_fanout is not None
-                else bool(defaults.get("native_fanout", False))
-            ),
+            native_fanout=(native_fanout if native_fanout is not None else bool(defaults.get("native_fanout", False))),
             harvest_method=harvest_method or defaults.get("harvest_method", "receipt"),
             meter=meter or defaults.get("meter"),
             accepting_work=accepting_work,

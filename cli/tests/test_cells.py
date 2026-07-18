@@ -61,9 +61,7 @@ def _wait_until(predicate, *, attempts: int = 100) -> bool:
 
 def _write_recording_limen(path: Path) -> None:
     path.write_text(
-        "#!/usr/bin/env bash\n"
-        "printf '%s\\n' \"$*\" >> \"$CELL_TEST_CALLS\"\n"
-        "printf '{\"status\":\"ok\"}\\n'\n",
+        '#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "$CELL_TEST_CALLS"\nprintf \'{"status":"ok"}\\n\'\n',
         encoding="utf-8",
     )
     path.chmod(0o755)
@@ -112,10 +110,10 @@ tasks:
     fake_limen = fake_bin / "limen"
     fake_limen.write_text(
         "#!/usr/bin/env bash\n"
-        "printf '%s\\n' \"$*\" > \"$LIMEN_LIVE_ROOT/register.args\"\n"
+        'printf \'%s\\n\' "$*" > "$LIMEN_LIVE_ROOT/register.args"\n'
         "printf 'agent=%s\\nroot=%s\\nlive=%s\\nworkstream=%s\\n' "
-        "\"$LIMEN_AGENT\" \"$LIMEN_ROOT\" \"$LIMEN_LIVE_ROOT\" \"${LIMEN_WORKSTREAM:-}\" "
-        "> \"$LIMEN_LIVE_ROOT/register.env\"\n",
+        '"$LIMEN_AGENT" "$LIMEN_ROOT" "$LIMEN_LIVE_ROOT" "${LIMEN_WORKSTREAM:-}" '
+        '> "$LIMEN_LIVE_ROOT/register.env"\n',
         encoding="utf-8",
     )
     fake_limen.chmod(0o755)
@@ -145,8 +143,10 @@ tasks:
     assert register_env.exists()
     assert not (cell / "tasks.cell.yaml").exists()
     assert "T1" in canonical_board.read_text(encoding="utf-8")
-    assert (root / "register.args").read_text(encoding="utf-8").startswith(
-        "conduct register --agent opencode --surface cell:financial --session-id cell-demo"
+    assert (
+        (root / "register.args")
+        .read_text(encoding="utf-8")
+        .startswith("conduct register --agent opencode --surface cell:financial --session-id cell-demo")
     )
     env_text = register_env.read_text(encoding="utf-8")
     assert f"root={cell}" in env_text
@@ -338,8 +338,7 @@ def test_cell_stop_requests_cooperative_broker_stop_for_owned_run_without_local_
     assert launched.returncode == 0, launched.stderr
     receipt_path = root / "logs" / "cells" / "demo.pid"
     assert _wait_until(
-        lambda: receipt_path.exists()
-        and _receipt(receipt_path).get("registration_status") == "accepted"
+        lambda: receipt_path.exists() and _receipt(receipt_path).get("registration_status") == "accepted"
     )
     cpid = int(_receipt(receipt_path)["pid"])
     try:
@@ -353,9 +352,7 @@ def test_cell_stop_requests_cooperative_broker_stop_for_owned_run_without_local_
 
         assert stopped.returncode == 0, stopped.stderr
         assert "cooperative stop requested" in stopped.stdout
-        assert "conduct request-stop run-child-7 --session-id conductor-session" in calls.read_text(
-            encoding="utf-8"
-        )
+        assert "conduct request-stop run-child-7 --session-id conductor-session" in calls.read_text(encoding="utf-8")
         assert _pid_alive(cpid)
         assert "kill -9" not in CELLS.read_text(encoding="utf-8")
     finally:
@@ -388,8 +385,7 @@ def test_cell_stop_gracefully_terms_only_exact_owned_registration_loop(tmp_path:
     assert launched.returncode == 0, launched.stderr
     receipt_path = root / "logs" / "cells" / "demo.pid"
     assert _wait_until(
-        lambda: receipt_path.exists()
-        and _receipt(receipt_path).get("registration_status") == "accepted"
+        lambda: receipt_path.exists() and _receipt(receipt_path).get("registration_status") == "accepted"
     )
     cpid = int(_receipt(receipt_path)["pid"])
 
@@ -435,8 +431,7 @@ def test_cell_stop_refuses_human_protected_registration(tmp_path: Path) -> None:
     assert launched.returncode == 0, launched.stderr
     receipt_path = root / "logs" / "cells" / "demo.pid"
     assert _wait_until(
-        lambda: receipt_path.exists()
-        and _receipt(receipt_path).get("registration_status") == "accepted"
+        lambda: receipt_path.exists() and _receipt(receipt_path).get("registration_status") == "accepted"
     )
     cpid = int(_receipt(receipt_path)["pid"])
     try:

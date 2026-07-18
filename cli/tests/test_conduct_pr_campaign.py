@@ -31,7 +31,10 @@ class FakeGraphQL:
                 "organization": {
                     "repositories": {
                         "totalCount": len(names),
-                        "pageInfo": {"hasNextPage": end < len(names), "endCursor": str(end) if end < len(names) else None},
+                        "pageInfo": {
+                            "hasNextPage": end < len(names),
+                            "endCursor": str(end) if end < len(names) else None,
+                        },
                         "nodes": [
                             {
                                 "nameWithOwner": name,

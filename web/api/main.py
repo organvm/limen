@@ -1681,9 +1681,7 @@ def release_stale(
         {
             **candidate,
             "action": (
-                "hold"
-                if candidate.get("agent") == "jules" or candidate.get("status") != "dispatched"
-                else "release"
+                "hold" if candidate.get("agent") == "jules" or candidate.get("status") != "dispatched" else "release"
             ),
             "remote_status": (
                 "cli_unavailable"

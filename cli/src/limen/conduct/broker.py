@@ -114,22 +114,15 @@ class ConductBroker:
                     }
                 )
             else:
-                session = session.model_copy(
-                    update={"registered_at": now, "heartbeat_at": now}
-                )
+                session = session.model_copy(update={"registered_at": now, "heartbeat_at": now})
             if session.worktree:
                 claimed = str(PurePath(session.worktree))
                 for raw in state["sessions"].values():
                     owner = ConductorSessionV1.model_validate(raw)
                     if owner.session_id == session.session_id or not owner.worktree:
                         continue
-                    if (
-                        str(PurePath(owner.worktree)) == claimed
-                        and now - owner.heartbeat_at <= self.session_ttl
-                    ):
-                        raise ConductConflict(
-                            f"worktree is already owned by healthy session {owner.session_id}"
-                        )
+                    if str(PurePath(owner.worktree)) == claimed and now - owner.heartbeat_at <= self.session_ttl:
+                        raise ConductConflict(f"worktree is already owned by healthy session {owner.session_id}")
             state["sessions"][session.session_id] = _dump(session)
             _event(state, "session.registered", session_id=session.session_id, agent=session.identity.agent)
             return _dump(session)
@@ -149,7 +142,11 @@ class ConductBroker:
                     }
                 )
             sessions.sort(key=lambda row: (row["identity"]["agent"], row["session_id"]))
-            return {"schema_version": "limen.conduct_capabilities.v1", "generated_at": now.isoformat(), "sessions": sessions}
+            return {
+                "schema_version": "limen.conduct_capabilities.v1",
+                "generated_at": now.isoformat(),
+                "sessions": sessions,
+            }
 
     def submit(self, packet: WorkPacketV1, *, now: datetime | None = None) -> dict[str, Any]:
         now = now or utc_now()
@@ -170,9 +167,7 @@ class ConductBroker:
             adapter = str(packet.execution.get("adapter") or "")
             needed_capability = "task-submit" if adapter == "tabularius" else "conduct"
             if needed_capability not in conductor.capabilities:
-                raise ConductConflict(
-                    f"packet conductor lacks required {needed_capability} capability"
-                )
+                raise ConductConflict(f"packet conductor lacks required {needed_capability} capability")
             parent = self._validate_lineage(state, packet)
             by_id = state["work_index"].get(packet.work_id)
             by_key = state["work_key_index"].get(packet.work_key)
@@ -208,14 +203,17 @@ class ConductBroker:
                 if pairs:
                     conflicts.append({"lease_id": lease.lease_id, "run_id": lease.run_id, "keys": pairs})
             if conflicts:
-                busy_id = "busy-" + canonical_hash(
-                    {
-                        "work_id": packet.work_id,
-                        "intent_hash": packet.intent_hash,
-                        "execution_hash": packet.execution_hash,
-                        "conflicts": conflicts,
-                    }
-                )[:24]
+                busy_id = (
+                    "busy-"
+                    + canonical_hash(
+                        {
+                            "work_id": packet.work_id,
+                            "intent_hash": packet.intent_hash,
+                            "execution_hash": packet.execution_hash,
+                            "conflicts": conflicts,
+                        }
+                    )[:24]
+                )
                 return {
                     "schema_version": "limen.conduct_submit_result.v1",
                     "status": "busy",
@@ -411,7 +409,9 @@ class ConductBroker:
                 run["status"] = terminal
                 released = lease.model_copy(update={"state": "released", "heartbeat_at": now})
                 state["leases"][lease_id] = _dump(released)
-                _event(state, "run.reported", run_id=lease.run_id, outcome=receipt.outcome, receipt_id=receipt.receipt_id)
+                _event(
+                    state, "run.reported", run_id=lease.run_id, outcome=receipt.outcome, receipt_id=receipt.receipt_id
+                )
             else:
                 _event(
                     state,
@@ -448,9 +448,7 @@ class ConductBroker:
             "receipt_count": receipts,
             "by_status": dict(sorted(by_status.items())),
             "unharvested": [
-                node["run_id"]
-                for node in graph["nodes"]
-                if node["status"] in {"reserved", "running", "stop_requested"}
+                node["run_id"] for node in graph["nodes"] if node["status"] in {"reserved", "running", "stop_requested"}
             ],
             "nodes": graph["nodes"],
         }
@@ -546,9 +544,7 @@ class ConductBroker:
             WorkPacketV1.model_validate(state["runs"][child_id]["packet"]).spend.limit
             for child_id in parent["children"]
         )
-        if child_reserved_spend + packet.spend.limit > (
-            parent_packet.spend.limit - parent_packet.spend.reserve
-        ):
+        if child_reserved_spend + packet.spend.limit > (parent_packet.spend.limit - parent_packet.spend.reserve):
             raise ConductConflict("aggregate child spend exceeds the parent envelope")
         if packet.spend.unit != parent_packet.spend.unit:
             raise ConductConflict("child spend unit does not match the parent")
@@ -576,9 +572,7 @@ class ConductBroker:
             raise ConductConflict("repeated ancestry work_key/cycle rejected")
         return parent
 
-    def _select_executor(
-        self, state: dict[str, Any], packet: WorkPacketV1, now: datetime
-    ) -> ConductorSessionV1:
+    def _select_executor(self, state: dict[str, Any], packet: WorkPacketV1, now: datetime) -> ConductorSessionV1:
         active_load = self._active_load(state, now)
         candidates: list[ConductorSessionV1] = []
         for raw in state["sessions"].values():
@@ -629,36 +623,30 @@ class ConductBroker:
                 frozenset({resource.repo}),
                 packet.authority.repositories,
             ):
-                raise ConductConflict(
-                    f"resource repository {resource.repo} exceeds packet authority"
+                raise ConductConflict(f"resource repository {resource.repo} exceeds packet authority")
+            if (
+                resource.kind == "path"
+                and resource.prefix
+                and not _covered_paths(
+                    frozenset({resource.prefix.lstrip("/")}),
+                    packet.authority.path_prefixes,
                 )
-            if resource.kind == "path" and resource.prefix and not _covered_paths(
-                frozenset({resource.prefix.lstrip("/")}),
-                packet.authority.path_prefixes,
             ):
                 raise ConductConflict("path resource exceeds packet path authority")
             if resource.kind == "external":
                 effect = resource.identity[0]
-                if (
-                    packet.effect != "external"
-                    or not _covered_atoms(
-                        frozenset({effect}),
-                        packet.authority.external_effects,
-                    )
+                if packet.effect != "external" or not _covered_atoms(
+                    frozenset({effect}),
+                    packet.authority.external_effects,
                 ):
-                    raise ConductConflict(
-                        "external resource requires matching external effect authority"
-                    )
+                    raise ConductConflict("external resource requires matching external effect authority")
         code_write_scope_kinds = {
             "branch",
             "path",
             "base-integrate",
             "repo-write",
         }
-        has_code_write_scope = any(
-            parse_resource(claim.key).kind in code_write_scope_kinds
-            for claim in claims
-        )
+        has_code_write_scope = any(parse_resource(claim.key).kind in code_write_scope_kinds for claim in claims)
         if packet.effect == "write" and not has_code_write_scope:
             repositories = sorted(packet.authority.repositories)
             if not repositories or "*" in repositories:

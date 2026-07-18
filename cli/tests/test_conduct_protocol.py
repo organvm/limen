@@ -239,10 +239,10 @@ def test_different_task_ids_cannot_race_one_pr_but_reviewers_coexist() -> None:
         packet(
             work_id="review-one",
             conductor=copilot.identity,
-                resource="pr/organvm/limen/77/review/copilot@abc",
-                preferred_agent="copilot",
-                effect="read",
-            ),
+            resource="pr/organvm/limen/77/review/copilot@abc",
+            preferred_agent="copilot",
+            effect="read",
+        ),
         now=NOW,
     )
     assert review["status"] == "reserved"
@@ -284,15 +284,11 @@ def test_complete_primary_initiator_target_matrix_preserves_native_identity() ->
                 packet(
                     work_id=f"matrix-{conductor.identity.agent}-to-{target}",
                     conductor=conductor.identity,
-                    resource=(
-                        f"path/organvm/matrix-{conductor.identity.agent}-{target}/main/src"
-                    ),
+                    resource=(f"path/organvm/matrix-{conductor.identity.agent}-{target}/main/src"),
                     preferred_agent=target,
                     authority=AuthorityEnvelopeV1(
                         actions=frozenset({"code"}),
-                        repositories=frozenset(
-                            {f"organvm/matrix-{conductor.identity.agent}-{target}"}
-                        ),
+                        repositories=frozenset({f"organvm/matrix-{conductor.identity.agent}-{target}"}),
                         path_prefixes=frozenset({"src"}),
                     ),
                 ),
@@ -301,10 +297,7 @@ def test_complete_primary_initiator_target_matrix_preserves_native_identity() ->
             results.append((conductor.identity.agent, target, result))
     assert len(results) == 25
     assert all(result["status"] == "reserved" for _, _, result in results)
-    assert all(
-        result["lease"]["executor"]["agent"] == target
-        for _, target, result in results
-    )
+    assert all(result["lease"]["executor"]["agent"] == target for _, target, result in results)
     snapshot = broker.store.snapshot()
     for conductor, target, result in results:
         run = snapshot["runs"][result["run_id"]]
@@ -489,14 +482,20 @@ def test_shared_write_claims_cannot_bypass_leases_and_external_claims_need_autho
     codex = session("codex", concurrency=4)
     broker = broker_with(codex)
     shared_task = (ResourceClaimV1(key="task/shared-bypass", mode="shared"),)
-    assert broker.submit(
-        packet(work_id="shared-one", conductor=codex.identity, claims=shared_task),
-        now=NOW,
-    )["status"] == "reserved"
-    assert broker.submit(
-        packet(work_id="shared-two", conductor=codex.identity, claims=shared_task),
-        now=NOW,
-    )["status"] == "busy"
+    assert (
+        broker.submit(
+            packet(work_id="shared-one", conductor=codex.identity, claims=shared_task),
+            now=NOW,
+        )["status"]
+        == "reserved"
+    )
+    assert (
+        broker.submit(
+            packet(work_id="shared-two", conductor=codex.identity, claims=shared_task),
+            now=NOW,
+        )["status"]
+        == "busy"
+    )
 
     with pytest.raises(ConductConflict, match="external resource"):
         broker.submit(

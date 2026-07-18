@@ -84,9 +84,7 @@ def test_all_primary_native_session_adapters_are_readable(tmp_path: Path) -> Non
     assert set(sources) == {"agy", "claude", "codex", "copilot", "opencode"}
     assert all(source is not None for source in sources.values())
     text_by_agent = {
-        agent: json.dumps(read_session_records(source))
-        for agent, source in sources.items()
-        if source is not None
+        agent: json.dumps(read_session_records(source)) for agent, source in sources.items() if source is not None
     }
     assert "Codex ask" in text_by_agent["codex"]
     assert "Claude ask" in text_by_agent["claude"]

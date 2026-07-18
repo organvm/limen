@@ -23,7 +23,7 @@ def test_broker_restart_reconstructs_graph_and_active_lease(tmp_path) -> None:
             session_id=identity.session_id,
             identity=identity,
             origin="dispatched",
-                capabilities=frozenset({"code", "conduct"}),
+            capabilities=frozenset({"code", "conduct"}),
             heartbeat_at=now,
         )
     )

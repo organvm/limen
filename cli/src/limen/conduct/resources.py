@@ -37,11 +37,7 @@ def normalize_key(key: str) -> str:
         return f"worktree/{posixpath.normpath(raw_path)}"
     pr_match = _PR_RE.fullmatch(key)
     if pr_match:
-        kind = (
-            f"review/{pr_match.group('provider')}"
-            if pr_match.group("provider")
-            else "write"
-        )
+        kind = f"review/{pr_match.group('provider')}" if pr_match.group("provider") else "write"
         return (
             f"pr/{pr_match.group('owner').lower()}/{pr_match.group('repo').lower()}/"
             f"{pr_match.group('number')}/{kind}@{pr_match.group('head')}"
@@ -51,16 +47,14 @@ def normalize_key(key: str) -> str:
         if match:
             prefix = posixpath.normpath("/" + match.group("prefix")).lstrip("/")
             return (
-                f"path/{match.group('owner').lower()}/{match.group('repo').lower()}/"
-                f"{match.group('base')}/{prefix}"
+                f"path/{match.group('owner').lower()}/{match.group('repo').lower()}/{match.group('base')}/{prefix}"
             ).rstrip("/")
     repo_match = _REPO_KIND_RE.fullmatch(key)
     if repo_match:
         rest = repo_match.group("rest")
         suffix = f"/{rest}" if rest else ""
         return (
-            f"{repo_match.group('kind')}/{repo_match.group('owner').lower()}/"
-            f"{repo_match.group('repo').lower()}{suffix}"
+            f"{repo_match.group('kind')}/{repo_match.group('owner').lower()}/{repo_match.group('repo').lower()}{suffix}"
         )
     return key
 

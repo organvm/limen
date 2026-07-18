@@ -20,10 +20,7 @@ def _documents() -> dict[str, str]:
         ROOT / ".agents" / "skills" / "agy_conductor" / "SKILL.md",
         ROOT / "integrations" / "copilot" / "limen-conductor.agent.md",
     ]
-    return {
-        str(path.relative_to(ROOT)): path.read_text(encoding="utf-8")
-        for path in paths
-    }
+    return {str(path.relative_to(ROOT)): path.read_text(encoding="utf-8") for path in paths}
 
 
 def test_live_instruction_surfaces_satisfy_peer_conductor_contract() -> None:

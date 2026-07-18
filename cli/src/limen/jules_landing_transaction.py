@@ -83,14 +83,10 @@ def _submit_landing_projection(
     )
     projected = result.projected_tasks.get(before_task.id)
     if result.applied != 1 or not isinstance(projected, dict):
-        raise RuntimeError(
-            f"conduct keeper omitted the canonical projected task receipt for {before_task.id}"
-        )
+        raise RuntimeError(f"conduct keeper omitted the canonical projected task receipt for {before_task.id}")
     acknowledged = Task.model_validate(projected)
     if acknowledged.id != before_task.id:
-        raise RuntimeError(
-            f"conduct keeper projected {acknowledged.id}, expected {before_task.id}"
-        )
+        raise RuntimeError(f"conduct keeper projected {acknowledged.id}, expected {before_task.id}")
     return acknowledged
 
 

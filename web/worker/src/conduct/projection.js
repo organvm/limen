@@ -103,9 +103,9 @@ function conductLog(event, log, fallbackStatus, fallbackOutput) {
   );
   return {
     timestamp: event.timestamp,
-    agent: String(log?.agent ?? event.agent),
-    session_id: String(log?.session_id ?? event.session_id),
-    status: String(log?.status ?? fallbackStatus),
+    agent: String(event.agent),
+    session_id: String(event.session_id),
+    status: String(fallbackStatus),
     output: String(log?.output ?? fallbackOutput ?? ""),
     ...clone(structured),
     conduct_event_id: event.event_id,

@@ -178,9 +178,7 @@ def test_product_ledger_keeps_global_work_active_when_one_product_blocks(tmp_pat
     assert all(not row["blocked"] for row in snap["next_unblocked"])
 
 
-def test_current_session_fanout_creates_capability_selected_planners_and_executors(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_current_session_fanout_creates_capability_selected_planners_and_executors(tmp_path: Path, monkeypatch) -> None:
     session = tmp_path / "session.jsonl"
     user_plan = "# Prior Product Plan\n\n## Summary\n- Build 1000 alpha omega products from every prompt.\n"
     assistant_plan = (
@@ -321,11 +319,7 @@ def test_current_session_fanout_keeps_explicit_executor_lane_list_without_invent
     mod = _load("current-session-fanout.py", "current_session_fanout_lanes_under_test")
 
     assert mod.lane_selection("opencode,agy,github-actions") == ["opencode", "agy", "github_actions"]
-    expected = [
-        agent
-        for agent in mod.paid_agent_order()
-        if "execute" in mod.execution_profiles()[agent].capabilities
-    ]
+    expected = [agent for agent in mod.paid_agent_order() if "execute" in mod.execution_profiles()[agent].capabilities]
     assert mod.lane_selection("all") == expected
 
 

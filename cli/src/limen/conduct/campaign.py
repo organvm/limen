@@ -256,9 +256,7 @@ def build_census(
         return organization["repositories"]
 
     try:
-        repositories, repository_total, _, repositories_complete = _connection_pages(
-            fetch_repos, max_pages=max_pages
-        )
+        repositories, repository_total, _, repositories_complete = _connection_pages(fetch_repos, max_pages=max_pages)
     except Exception as exc:
         raise RuntimeError(f"cannot enumerate {owner} repositories: {exc}") from exc
 
@@ -414,10 +412,7 @@ def campaign_packets(
         spend=SpendEnvelopeV1(limit=spend_limit),
         retry=RetryPolicyV1(max_attempts=2),
         fanout=FanoutBoundsV1(
-            max_children=max(
-                [len(eligible_by_repo), 3]
-                + [len(leaves) for leaves in eligible_by_repo.values()]
-            ),
+            max_children=max([len(eligible_by_repo), 3] + [len(leaves) for leaves in eligible_by_repo.values()]),
             max_depth=3,
         ),
         effect="read",
@@ -490,12 +485,10 @@ class CampaignPacketFactory:
         ):
             if not leaf.head_oid:
                 continue
-            leaf_digest = hashlib.sha256(
-                f"{self.root_work_id}:{leaf.work_key}:route".encode()
-            ).hexdigest()[:24]
+            leaf_digest = hashlib.sha256(f"{self.root_work_id}:{leaf.work_key}:route".encode()).hexdigest()[:24]
             predicate = (
-                f"test \"$(gh pr view {leaf.number} --repo {shlex.quote(repo)} "
-                f"--json headRefOid --jq .headRefOid)\" = {shlex.quote(leaf.head_oid)}"
+                f'test "$(gh pr view {leaf.number} --repo {shlex.quote(repo)} '
+                f'--json headRefOid --jq .headRefOid)" = {shlex.quote(leaf.head_oid)}'
             )
             yield WorkPacketV1(
                 root_run_id=cohort.root_run_id,
@@ -518,9 +511,7 @@ class CampaignPacketFactory:
                     },
                     "routing": {
                         "copilot_review": "active nontrivial exact head lacking Copilot receipt",
-                        "same_branch_repair": (
-                            "review findings, branch-attributable CI, conflict, or stale base"
-                        ),
+                        "same_branch_repair": ("review findings, branch-attributable CI, conflict, or stale base"),
                         "root_fix": "one packet for a shared-main failure",
                         "independent_peer": True,
                     },
