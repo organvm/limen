@@ -233,10 +233,10 @@ githubbed the same way: **`scripts/sync-censor-issues.py`** (beat-wired, dry-run
 `LIMEN_CENSOR_ISSUES_APPLY=1` arms it) mirrors live censor residuals to public `censor`-labelled
 issues and auto-closes them when the lineage clears — so insight→correction work arrives as an
 issue and leaves as a PR that cites it. Machine board writes (`tasks.yaml` via the keeper/worker)
-are the one sanctioned direct-push lane; blanket branch protection stays a lever (#257) for exactly
-that reason. The exception is cooperative, not dominant: Tabularius probes GitHub's
-`gh-readonly-queue/<base>/...` integration refs and coalesces its newer local projection while a
-merge group is active. It must never move `main` often enough to starve queued code.
+are not a side door: Tabularius keeps the local projection dirty, publishes only through the stable
+`tabularius/board-projection` branch, and opens an exact-head PR for the normal merge queue. The
+remote no-bypass `pull_request` rule rejects every direct `main` push, including automation and
+admins.
 
 **Merge authority (standing grant).** Claude merges its own PRs into `main` *without asking*, the moment they are green and mergeable. Do not defer routine merges to the human operator. The grant has exactly one guardrail.
 

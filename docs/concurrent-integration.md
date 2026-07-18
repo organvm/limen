@@ -21,9 +21,13 @@ to `main`; it does not serialize thought, editing, review, or exact-head verific
    removal.
 6. `scripts/merge-drain.py` applies the same predicate immediately before each effect. It does not
    pre-approve a batch and then mutate under stale assumptions.
-7. Tabularius remains the temporary data-only direct writer for `tasks.yaml`, but yields whenever
-   `refs/heads/gh-readonly-queue/<base>/...` exists. Board changes remain safely dirty and coalesce
-   until the integration group finishes.
+7. Tabularius never pushes `main`. It keeps the sealed board dirty locally, publishes only
+   `tasks.yaml` to the stable `tabularius/board-projection` branch with normal fast-forward commits,
+   and opens one exact-head PR. Newer local state coalesces while that PR is in flight. A stale
+   competing publisher loses at the remote ref without a force push.
+8. The default-branch ruleset combines `merge_queue` with a zero-approval `pull_request` rule and
+   no bypass actors. That remote predicate rejects every direct `main` write; automation workflows
+   use the same board PR publisher and cannot create a hidden side door.
 
 ## Verification split
 

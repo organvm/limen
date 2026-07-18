@@ -1,14 +1,20 @@
 # setup-rulesets.py — dry-run merge-gate contract
 
-**Updated:** 2026-07-18 · **Status:** DRY-RUN ONLY — no repository setting has been changed.
+**Updated:** 2026-07-18 · **Status:** TARGET CONTRACT — temporary classic protection is live;
+the queue ruleset is applied only after the `merge_group` workflow lands.
 
 ## Limen's concurrency rail
 
 `organvm/limen` has one targeted native merge-queue ruleset. It serializes only the final
-integration step; concurrent agents keep working and proving their own exact PR heads without
-repeatedly merging a moving `main`.
+integration step, and its zero-approval `pull_request` rule blocks every direct default-branch
+write with no bypass actors. Concurrent agents keep working and proving their own exact PR heads
+without repeatedly merging a moving `main`.
 
-The ruleset targets `~DEFAULT_BRANCH` and contains exactly one rule, `merge_queue`:
+The ruleset targets `~DEFAULT_BRANCH` and contains two rules:
+
+- `pull_request` with `squash` as the only allowed merge method, zero required approvals, no
+  code-owner/last-push/thread-resolution requirement, and no bypass actors;
+- `merge_queue` with the parameters below.
 
 | Setting | Value |
 |---|---:|
@@ -24,16 +30,16 @@ The ruleset targets `~DEFAULT_BRANCH` and contains exactly one rule, `merge_queu
 four groups may build concurrently, but GitHub merges them one at a time. This keeps the integration
 window serialized without turning the whole agent fleet into one serial lane.
 
-The ruleset deliberately does **not** add `pull_request`, `update`, required-workflow, or other
-direct-push restrictions. Classic default-branch protection remains the owner of the required check:
+Classic default-branch protection remains the owner of the required check:
 
 - context: `pr-gate`
 - `strict:false`
-- `enforce_admins:false`
+- `enforce_admins:true`
 - no human-review requirement
 
-That preserves the existing Tabularius admin data-only writer. The queue governs PR merges; it does
-not replace Tabularius's single-writer contract or prohibit its authorized direct projection push.
+The ruleset's `pull_request` edge is the remote enforcement surface. Tabularius publishes only to
+`tabularius/board-projection`, opens an exact-head PR, and leaves the local board dirty so later
+tickets coalesce while that PR is in flight. There is no direct-push exception.
 
 ## Queue CI contract
 
@@ -58,14 +64,18 @@ protection and repository settings. `--apply` is the only mutation switch.
 
 For `organvm/limen`, apply performs these idempotent operations:
 
-1. Enable auto-merge and preserve source branches (`delete_branch_on_merge=false`).
-2. Write classic protection once with required context `pr-gate`, `strict:false`,
-   `enforce_admins:false`, no required review, and no actor restriction.
-3. Create `limen-default-merge-queue`, or update the ruleset with the same name, with the exact
-   queue body above.
+1. Enable and read-back verify the repository switch that permits explicitly authorized Actions
+   workflows to create pull requests.
+2. Create or update `limen-default-merge-queue`, then read-back verify the exact active,
+   squash-only, no-bypass `pull_request` and `merge_queue` rules. A failure stops here before any
+   weaker setting is touched.
+3. Enable and read-back verify auto-merge while preserving source branches
+   (`delete_branch_on_merge=false`).
+4. Write and read-back verify classic protection with required context `pr-gate`, `strict:false`,
+   `enforce_admins:true`, no required review, and no actor restriction.
 
 The source branches remain after merge so removal stays with receipt-backed reaping. The queue ruleset
-does not add a blanket pull-request or direct-push prohibition.
+prohibits direct default-branch writes, including admin and automation writers.
 
 Other repositories retain the existing detected-check behavior and do not receive a merge-queue
 ruleset.
@@ -99,4 +109,6 @@ remote mutation without the exact `--apply` token.
 - Auto-merge:
   `gh api -X PATCH /repos/organvm/limen -F allow_auto_merge=false`
 
-No apply was run while producing this document.
+On 2026-07-18, temporary classic `pr-gate` protection with `enforce_admins:true` was applied before
+the code rollout to block the still-deployed legacy Contents writers. It must not be weakened before
+the target ruleset is installed and read-back verified.

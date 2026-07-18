@@ -121,3 +121,46 @@ def test_session_value_gate_blocks_continuation_lane_switch(tmp_path, monkeypatc
     assert result["lane_switch"] is True
     assert result["action"] == "switch_to_packetization"
     assert result["next_command"] == "python3 scripts/prompt-packet-ledger.py --write"
+
+
+def test_receipt_refresh_does_not_churn_timestamp_without_new_evidence(tmp_path, monkeypatch):
+    root = tmp_path / "limen"
+    photos = tmp_path / "photos"
+    portvs = tmp_path / "portvs"
+    (root / "docs").mkdir(parents=True)
+    photos.mkdir()
+    portvs.mkdir()
+    receipt_path = root / "docs" / "worktree-preservation-receipts.json"
+    receipt_path.write_text(json.dumps({"receipts": [{"root": "lane"}]}), encoding="utf-8")
+    module = _load(monkeypatch, root, photos, portvs)
+    monkeypatch.setattr(
+        module,
+        "pr_view",
+        lambda *args, **kwargs: {
+            "number": 7,
+            "state": "OPEN",
+            "isDraft": True,
+            "headRefName": "work/lane",
+            "headRefOid": "abc123",
+            "url": "https://example.test/pull/7",
+        },
+    )
+    times = iter(["2026-07-18T00:00:00Z", "2026-07-18T00:01:00Z"])
+    monkeypatch.setattr(module, "utc_now", lambda: next(times))
+    rows = [
+        {
+            "name": "lane",
+            "path": str(tmp_path / "missing-worktree"),
+            "repo": "organvm/example",
+            "branch": "work/lane",
+            "url": "https://example.test/pull/7",
+        }
+    ]
+
+    first = module.update_pr_receipts(rows, apply=True)
+    first_bytes = receipt_path.read_bytes()
+    second = module.update_pr_receipts(rows, apply=True)
+
+    assert first["updated"] == 1
+    assert second["updated"] == 0
+    assert receipt_path.read_bytes() == first_bytes

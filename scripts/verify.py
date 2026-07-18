@@ -129,6 +129,28 @@ def resolve_merge_base(base: str | None) -> str:
     return ""
 
 
+def resolve_commit(ref: str) -> str:
+    try:
+        return git("rev-parse", "--verify", f"{ref}^{{commit}}").strip()
+    except subprocess.CalledProcessError:
+        return ""
+
+
+def integration_base(base: str | None) -> str:
+    """Return the immutable queue base only when it is HEAD's exact merge-base."""
+    if not base:
+        return ""
+    supplied = resolve_commit(base)
+    merge_base = resolve_merge_base(base)
+    if not supplied or not merge_base or supplied != merge_base:
+        return ""
+    try:
+        git("merge-base", "--is-ancestor", supplied, "HEAD")
+    except subprocess.CalledProcessError:
+        return ""
+    return supplied
+
+
 def changed_set(base: str | None) -> list[str]:
     """Branch diff vs merge-base + staged + unstaged + untracked, existing-or-tracked only."""
     paths: set[str] = set()
@@ -225,6 +247,26 @@ def cmd_changed(
     skip_ci_covered: str | None = None,
     integration: bool = False,
 ) -> int:
+    if integration:
+        exact_base = integration_base(base)
+        if not exact_base:
+            supplied = resolve_commit(base) if base else ""
+            merge_base = resolve_merge_base(base)
+            detail = (
+                f"supplied={supplied or 'unresolved'}, merge-base={merge_base or 'unresolved'}"
+                if base
+                else "no --base was supplied"
+            )
+            print(
+                "integration-base: --integration requires the supplied --base commit to be "
+                f"an ancestor of HEAD and its exact merge-base ({detail}); refusing to "
+                "verify against a substituted common ancestor.",
+                file=sys.stderr,
+            )
+            return 1
+        # Pin the validated object ID so a movable ref cannot change between the
+        # exactness check and changed-set construction.
+        base = exact_base
     if require_base and not resolve_merge_base(base):
         print(
             f"require-base: no merge-base resolves against {base or 'origin/main'} — "
@@ -355,8 +397,9 @@ def main() -> int:
     parser.add_argument(
         "--integration",
         action="store_true",
-        help="merge-queue composition mode: imply --require-base, run every implicated scoped "
-        "gate, and do not repeat the whole PR-head matrix for deploy-trigger paths",
+        help="merge-queue composition mode: require --base to resolve to an ancestor of HEAD "
+        "that is its exact merge-base, run every implicated scoped gate, and do not repeat "
+        "the whole PR-head matrix for deploy-trigger paths",
     )
     args = parser.parse_args()
 

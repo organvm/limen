@@ -125,8 +125,10 @@ the repository's merge queue: GitHub composes that immutable head with the lates
 predecessors, then `pr-gate` verifies the synthetic `merge_group`. `BEHIND` is queueable only when
 the live queue rail is proven active; without that proof it remains fail-closed. Use
 `scripts/await-pr.sh --merge`, never `--admin`, force-push, or repeated branch rewrites. Direct
-`main` writers must yield while a merge-group ref exists so the queue gets a finite integration
-window. The full executable contract is [`docs/concurrent-integration.md`](docs/concurrent-integration.md).
+`main` writes are forbidden, including board snapshots: Tabularius coalesces the local projection
+and publishes it through its stable, fast-forward-only PR branch. The repository's no-bypass
+`pull_request` rule makes that boundary remote-enforced. The full executable contract is
+[`docs/concurrent-integration.md`](docs/concurrent-integration.md).
 
 ### Standing Corrections (from insights reports 2026-06-23 → 2026-07-17)
 

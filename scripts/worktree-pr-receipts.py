@@ -272,6 +272,14 @@ def process_item(item: dict[str, Any], apply: bool) -> dict[str, Any]:
         return out
     out["base"] = base
 
+    if branch == base:
+        out["action"] = "refused_default_branch"
+        out["detail"] = (
+            f"refusing lifecycle publication from the default branch {base}; "
+            "create an isolated topic branch first"
+        )
+        return out
+
     if patch_equivalent_or_merged(path, base):
         out["action"] = "already_preserved"
         out["detail"] = f"HEAD is merged or patch-equivalent to origin/{base}"

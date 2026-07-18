@@ -9,9 +9,11 @@ For each repo that currently has open author PRs, configure the default branch s
   • delete_branch_on_merge = false  (source branches are retained for receipt-backed reaping)
 
 For organvm/limen only, keep the classic required check to `pr-gate` with
-strict:false/enforce_admins:false, and idempotently ensure a default-branch ruleset whose only rule
-is the native merge queue. The queue tests GitHub's synthetic integration commit instead of asking
-every concurrent PR to merge a moving main and restart its already-green full CI.
+strict:false/enforce_admins:true, and idempotently ensure a default-branch ruleset containing both
+the native merge queue and a zero-approval pull-request rule. The latter has no bypass actors:
+every mutation, including Tabularius board publication, must enter through a PR. The queue tests
+GitHub's synthetic integration commit instead of asking every concurrent PR to merge a moving main
+and restart its already-green full CI.
 
 SAFE: dry-run by default — prints the exact per-repo plan and executes NOTHING. Reversible:
 branch protection can be removed. `--apply` is GATED on the user.
@@ -59,6 +61,17 @@ def gh_json(args, t=45, default=None):
         return json.loads(gh(args, t).stdout or "null") or default
     except json.JSONDecodeError:
         return default
+
+
+def gh_json_checked(args, t=45):
+    """Return decoded JSON plus an error string; never turn an API failure into an empty estate."""
+    result = gh(args, t)
+    if result.returncode != 0:
+        return None, (result.stderr or result.stdout or "github request failed").strip()[:160]
+    try:
+        return json.loads(result.stdout or "null"), ""
+    except json.JSONDecodeError as exc:
+        return None, f"invalid JSON: {exc}"
 
 
 def gh_input(method, path, body, t=45):
@@ -133,50 +146,145 @@ def checks_for_repo(repo):
 
 
 def classic_protection_body(checks):
-    """Classic CI protection stays non-strict and admin-bypassable for direct data writers."""
+    """Classic CI protection stays non-strict; the ruleset owns the no-direct-push edge."""
     return {
         # strict:false — gate on checks passing, NOT on branch-up-to-date, else auto-merge
         # deadlocks (nothing auto-updates behind branches) and we're back on the treadmill.
         "required_status_checks": {"strict": False, "contexts": checks},
-        "enforce_admins": False,
+        "enforce_admins": True,
         "required_pull_request_reviews": None,
         "restrictions": None,
     }
 
 
+def classic_protection_contract_holds(actual, checks):
+    """Read-after-write verification for the exact non-strict, admin-enforced check gate."""
+    if not isinstance(actual, dict):
+        return False
+    status = actual.get("required_status_checks") or {}
+    contexts = status.get("contexts") or []
+    enforce_admins = actual.get("enforce_admins") or {}
+    return (
+        status.get("strict") is False
+        and contexts == checks
+        and enforce_admins.get("enabled") is True
+        and actual.get("required_pull_request_reviews") is None
+        and actual.get("restrictions") is None
+    )
+
+
 def merge_queue_ruleset_body():
-    """The targeted Limen queue rule; no pull-request or direct-push restriction is added."""
+    """The targeted Limen queue plus a no-bypass, zero-approval PR requirement."""
     return {
         "name": MERGE_QUEUE_RULESET_NAME,
         "target": "branch",
         "enforcement": "active",
+        "bypass_actors": [],
         "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
         "rules": [
             {
+                "type": "pull_request",
+                "parameters": {
+                    "allowed_merge_methods": ["squash"],
+                    "dismiss_stale_reviews_on_push": False,
+                    "require_code_owner_review": False,
+                    "require_last_push_approval": False,
+                    "required_approving_review_count": 0,
+                    "required_review_thread_resolution": False,
+                },
+            },
+            {
                 "type": "merge_queue",
                 "parameters": dict(MERGE_QUEUE_PARAMETERS),
-            }
+            },
         ],
     }
 
 
-def ensure_merge_queue(repo):
-    """Idempotently create/update Limen's dedicated default-branch merge-queue ruleset."""
+def _contains_contract(actual, expected):
+    """Recursively require the exact security-relevant fields while tolerating API metadata."""
+    if isinstance(expected, dict):
+        return isinstance(actual, dict) and all(
+            key in actual and _contains_contract(actual[key], value) for key, value in expected.items()
+        )
+    if isinstance(expected, list):
+        return isinstance(actual, list) and actual == expected
+    return actual == expected
+
+
+def _ruleset_contract_holds(actual):
+    expected = merge_queue_ruleset_body()
+    if not _contains_contract(
+        actual,
+        {
+            "name": expected["name"],
+            "target": expected["target"],
+            "enforcement": "active",
+            "bypass_actors": [],
+            "conditions": expected["conditions"],
+        },
+    ):
+        return False
+    rules = actual.get("rules") if isinstance(actual, dict) else None
+    if not isinstance(rules, list) or [rule.get("type") for rule in rules] != ["pull_request", "merge_queue"]:
+        return False
+    return all(
+        _contains_contract(rule.get("parameters"), wanted.get("parameters"))
+        for rule, wanted in zip(rules, expected["rules"], strict=True)
+    )
+
+
+def actions_workflow_permissions_body():
+    """Keep the token read-only by default while allowing explicit workflows to create board PRs."""
+    return {
+        "default_workflow_permissions": "read",
+        "can_approve_pull_request_reviews": True,
+    }
+
+
+def ensure_actions_pr_permissions(repo):
+    """Enable and verify the repository switch required for GITHUB_TOKEN-created pull requests."""
     if repo != MERGE_QUEUE_REPO:
-        return None
-    existing = gh_json(["api", f"/repos/{repo}/rulesets"], default=[]) or []
+        return True
+    body = actions_workflow_permissions_body()
+    result = gh_input("PUT", f"/repos/{repo}/actions/permissions/workflow", body)
+    if result.returncode != 0:
+        print("      ✗ Actions PR permission: " + result.stderr.strip()[:80])
+        return False
+    observed, error = gh_json_checked(["api", f"/repos/{repo}/actions/permissions/workflow"])
+    ok = not error and _contains_contract(observed, body)
+    print("      " + ("✓ Actions PR permission verified" if ok else f"✗ Actions PR permission unverified: {error}"))
+    return ok
+
+
+def ensure_merge_queue(repo):
+    """Idempotently create/update and read-after-write verify Limen's queue ruleset."""
+    if repo != MERGE_QUEUE_REPO:
+        return True
+    existing, error = gh_json_checked(["api", f"/repos/{repo}/rulesets"])
+    if error or not isinstance(existing, list):
+        print("      ✗ limen merge-queue ruleset list: " + (error or "unexpected response"))
+        return False
     rid = next((r.get("id") for r in existing if r.get("name") == MERGE_QUEUE_RULESET_NAME), None)
     method, path = ("PUT", f"/repos/{repo}/rulesets/{rid}") if rid else ("POST", f"/repos/{repo}/rulesets")
     result = gh_input(method, path, merge_queue_ruleset_body())
-    ok = result.returncode == 0
-    print(
-        "      "
-        + (
-            "✓ limen merge-queue ruleset ensured"
-            if ok
-            else "✗ limen merge-queue ruleset: " + result.stderr.strip()[:60]
-        )
-    )
+    if result.returncode != 0:
+        print("      ✗ limen merge-queue ruleset: " + result.stderr.strip()[:80])
+        return False
+    if not rid:
+        try:
+            rid = json.loads(result.stdout or "{}").get("id")
+        except json.JSONDecodeError:
+            rid = None
+    if not rid:
+        refreshed, error = gh_json_checked(["api", f"/repos/{repo}/rulesets"])
+        if error or not isinstance(refreshed, list):
+            print("      ✗ limen merge-queue ruleset id unverified: " + (error or "unexpected response"))
+            return False
+        rid = next((r.get("id") for r in refreshed if r.get("name") == MERGE_QUEUE_RULESET_NAME), None)
+    observed, error = gh_json_checked(["api", f"/repos/{repo}/rulesets/{rid}"]) if rid else (None, "missing id")
+    ok = not error and _ruleset_contract_holds(observed)
+    print("      " + ("✓ limen merge-queue ruleset verified" if ok else f"✗ limen merge-queue unverified: {error}"))
     return ok
 
 
@@ -206,7 +314,7 @@ def ensure_copilot_review(repo):
         print(
             "      · copilot-review ruleset skipped — no org Copilot Business seat (individual Pro doesn't count; see runbook)"
         )
-        return
+        return True
     existing = gh_json(["api", f"/repos/{repo}/rulesets"], default=[]) or []
     rid = next((r.get("id") for r in existing if r.get("name") == "copilot-review"), None)
     body = {
@@ -232,6 +340,7 @@ def ensure_copilot_review(repo):
     r = gh_input(method, path, body)
     ok = r.returncode == 0
     print(f"      {'✓ copilot-review ruleset ensured' if ok else '✗ copilot-review ruleset: ' + r.stderr.strip()[:60]}")
+    return ok
 
 
 def main():
@@ -241,6 +350,7 @@ def main():
         print(f"    contexts forced (detection skipped): {FORCED}")
     print()
     no_ci = []
+    failures = []
     for repo in repos:
         info = gh_json(["repo", "view", repo, "--json", "defaultBranchRef"], default={}) or {}
         branch = (info.get("defaultBranchRef") or {}).get("name") or "main"
@@ -259,7 +369,7 @@ def main():
         if repo == MERGE_QUEUE_REPO:
             p = MERGE_QUEUE_PARAMETERS
             print(
-                "      + default-branch merge queue: "
+                "      + default-branch PR-only merge queue (zero approvals, no bypass): "
                 f"{p['merge_method']} · {p['grouping_strategy']} · "
                 f"timeout {p['check_response_timeout_minutes']}m · "
                 f"build {p['max_entries_to_build']} · merge {p['max_entries_to_merge']} · "
@@ -268,7 +378,22 @@ def main():
         if not APPLY:
             continue
         # --- APPLY ---
-        gh(
+        # Install and read-after-write verify the no-bypass rule before touching the weaker
+        # classic branch-protection surface. A rejected ruleset can therefore never be hidden by
+        # a later successful API call.
+        if repo == MERGE_QUEUE_REPO:
+            prerequisites_ok = True
+            if not ensure_actions_pr_permissions(repo):
+                failures.append(f"{repo}:actions-pr-permission")
+                prerequisites_ok = False
+            if not ensure_merge_queue(repo):
+                failures.append(f"{repo}:merge-queue-ruleset")
+                prerequisites_ok = False
+            if not prerequisites_ok:
+                print("      ✗ refusing weaker repository/classic mutations until prerequisites verify")
+                continue
+
+        repo_settings = gh(
             [
                 "api",
                 "-X",
@@ -280,16 +405,49 @@ def main():
                 "delete_branch_on_merge=false",
             ]
         )
+        if repo_settings.returncode != 0:
+            failures.append(f"{repo}:repository-settings")
+            print("      ✗ repository settings: " + repo_settings.stderr.strip()[:70])
+            continue
+        observed_settings, settings_error = gh_json_checked(["api", f"/repos/{repo}"])
+        settings_ok = (
+            not settings_error
+            and isinstance(observed_settings, dict)
+            and observed_settings.get("allow_auto_merge") is True
+            and observed_settings.get("delete_branch_on_merge") is False
+        )
+        if not settings_ok:
+            failures.append(f"{repo}:repository-settings-unverified")
+            print("      ✗ repository settings unverified: " + (settings_error or "contract mismatch"))
+            continue
+        print("      ✓ repository settings verified")
         if checks:
             body = classic_protection_body(checks)
             r = gh_input("PUT", f"/repos/{repo}/branches/{branch}/protection", body)
-            ok = r.returncode == 0
-            print(f"      {'✓ protected + auto-merge on' if ok else '✗ ' + r.stderr.strip()[:70]}")
+            if r.returncode != 0:
+                failures.append(f"{repo}:classic-protection")
+                print("      ✗ classic protection: " + r.stderr.strip()[:70])
+                continue
+            observed_protection, protection_error = gh_json_checked(
+                ["api", f"/repos/{repo}/branches/{branch}/protection"]
+            )
+            ok = not protection_error and classic_protection_contract_holds(observed_protection, checks)
+            print(
+                "      "
+                + (
+                    "✓ classic protection verified"
+                    if ok
+                    else "✗ classic protection unverified: " + (protection_error or "contract mismatch")
+                )
+            )
+            if not ok:
+                failures.append(f"{repo}:classic-protection-unverified")
+                continue
         else:
             print("      ✓ allow_auto_merge set (no protection — no CI to gate on)")
-        ensure_merge_queue(repo)
         # The review engine's Copilot lane — a ruleset, orthogonal to the classic protection above.
-        ensure_copilot_review(repo)
+        if not ensure_copilot_review(repo):
+            failures.append(f"{repo}:copilot-review")
 
     print(
         f"\n{len(repos) - len(no_ci)} repos gateable via CI; {len(no_ci)} have no CI "
@@ -304,7 +462,11 @@ def main():
             )
         if any(repo != MERGE_QUEUE_REPO for repo in repos):
             print("For non-queue repos: `gh pr merge <n> --auto --squash` on green PRs.")
+    if failures:
+        print("\nAPPLY FAILED: " + ", ".join(failures), file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
