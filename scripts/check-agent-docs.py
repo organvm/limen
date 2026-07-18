@@ -56,6 +56,10 @@ Checks (exit 0 iff all pass):
      (a) predicate-not-prose done, (b) terminal closeout / fixed-point, (c) derive-before-asking,
      (d) durable-homing for all produced state, (e) active-unblocking, (f) triage-window anchor.
 
+  O. The Record-Keeper Covenant keeper law is encoded: AGENTS.md tabularius note (under
+     ## Agent-Specific Notes / ### Claude) contains "memory", "memory-ticket", and the
+     "Memory is keeper-owned" line; GEMINI.md contains the keeper/memoria mirror line.
+
 Run directly (``scripts/check-agent-docs.py``) or via ``scripts/verify-whole.sh``.
 """
 
@@ -444,6 +448,32 @@ def main() -> int:
                 )
     except ValueError as exc:
         errors.append(str(exc))
+
+    # O. Record-Keeper Covenant keeper law: AGENTS.md tabularius note, session discipline line,
+    # and GEMINI.md mirror line must all be present so the covenant is encoded on every agent surface.
+    claude_note = section(agents_text, "Agent-Specific Notes")
+    for phrase, label in [
+        ("memory", "keeper law: AGENTS.md tabularius note must contain 'memory'"),
+        ("memory-ticket", "keeper law: AGENTS.md tabularius note must contain 'memory-ticket'"),
+    ]:
+        if phrase not in claude_note:
+            errors.append(
+                f"AGENTS.md 'Agent-Specific Notes' lacks {label} "
+                f"(fix: add the TABVLARIVS keeper law to the ### Claude note)"
+            )
+    if "Memory is keeper-owned" not in claude_note:
+        errors.append(
+            "AGENTS.md 'Agent-Specific Notes' lacks the keeper line "
+            "'Memory is keeper-owned — never Write MEMORY.md or memory atoms; submit a memory ticket' "
+            "(fix: add it to the TABVLARIVS note in ### Claude under ## Agent-Specific Notes)"
+        )
+    gemini_text = (ROOT / "GEMINI.md").read_text(encoding="utf-8")
+    if "keeper" not in gemini_text or "memoria" not in gemini_text:
+        errors.append(
+            "GEMINI.md lacks the keeper/memoria mirror line "
+            "(fix: add a section stating Gemini/Jules never write memory directly; "
+            "memory capture goes through the keeper's memoria lane)"
+        )
 
     if errors:
         print("Agent-instruction doc drift detected:")
