@@ -323,22 +323,24 @@ def github_profile_surface() -> dict[str, Any]:
     user, user_error = _json_command(["gh", "api", "user", "--jq", "{bio,blog,public_repos,updated_at}"])
     bio = str((user or {}).get("bio") or "")
     blog = str((user or {}).get("blog") or "")
-    # the bio now has an owner: positioning-seeds.json frontdoor.bio (stable identity, no daily counts).
-    # Any divergence from it is drift — this catches stale counts AND any other rot, not just four
-    # once-frozen tokens. Falls back to the volatile-count regex if the canonical can't be read.
-    canonical_bio = ""
+    # bio + blog now have an owner: positioning-seeds.json frontdoor.{bio,blog} (profile-bio-sync.py
+    # applies them). Any divergence is drift — this catches stale counts, a reverted bio, AND a dead
+    # website link (the 4444j99.github.io/portfolio 404), not just four once-frozen tokens.
+    fd = {}
     try:
-        canonical_bio = str(
-            json.loads((ROOT / "positioning-seeds.json").read_text(encoding="utf-8")).get("frontdoor", {}).get("bio")
-            or ""
-        )
+        fd = json.loads((ROOT / "positioning-seeds.json").read_text(encoding="utf-8")).get("frontdoor", {})
     except Exception:
-        canonical_bio = ""
+        fd = {}
+    canonical_bio = str(fd.get("bio") or "").strip()
+    canonical_blog = str(fd.get("blog") or "").strip()
     if canonical_bio:
         stale_bio = bool(bio.strip()) and bio.strip() != canonical_bio.strip()
     else:
         stale_bio = bool(re.search(r"\b\d[\d,]*\s+(?:repos|code files|test files|CI workflows)\b", bio))
-    stale_blog = "4444j99.github.io/portfolio" in blog
+    if canonical_blog:
+        stale_blog = bool(blog.strip()) and blog.strip().rstrip("/") != canonical_blog.rstrip("/")
+    else:
+        stale_blog = "4444j99.github.io/portfolio" in blog
     return {
         "checked": True,
         "verified": bool(repo and readme_text),
