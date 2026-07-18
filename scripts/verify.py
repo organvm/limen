@@ -86,6 +86,10 @@ def heavy_admission(*, owner: str, surface: str):
     except AdmissionDenied as exc:
         reasons = ",".join(exc.decision.get("reasons") or ["host-admission-denied"])
         raise HostAdmissionFailure(reasons) from exc
+    except ValueError as exc:
+        if str(exc) != "lease owner PID/start identity is unavailable":
+            raise
+        raise HostAdmissionFailure(str(exc)) from exc
 
 
 def glob_to_regex(glob: str) -> re.Pattern[str]:

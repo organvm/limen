@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import json
 import multiprocessing
 import os
@@ -12,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+import limen.host_admission as host_admission
 from limen.host_admission import (
     AdmissionDenied,
     AdmissionController,
@@ -83,6 +85,68 @@ def test_iostat_parser_sums_each_disk_triplet() -> None:
    10.00  20.0  90.00   20.00  10.0  12.00
 """
     assert parse_iostat_mib_samples(raw) == [4.0, 105.0, 102.0]
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="Darwin libproc integration")
+def test_process_identity_uses_libproc_when_ps_is_unavailable(monkeypatch) -> None:
+    def denied_ps(*_args, **_kwargs):
+        raise OSError("sandbox denied ps")
+
+    monkeypatch.setattr(host_admission.subprocess, "run", denied_ps)
+
+    first = host_admission.process_identity(os.getpid())
+    second = host_admission.process_identity(os.getpid())
+
+    assert first is not None
+    assert first.startswith("darwin-proc-start:")
+    assert first == second
+
+
+def test_darwin_process_identity_changes_with_start_time_and_rejects_failures() -> None:
+    pid = 4242
+
+    def proc_result(seconds: int, microseconds: int, *, result_pid: int = pid, returned: int | None = None):
+        def fake_proc_pidinfo(_pid, flavor, arg, buffer, size):
+            assert (_pid, flavor, arg) == (pid, host_admission._PROC_PIDTBSDINFO, 0)
+            info = ctypes.cast(buffer, ctypes.POINTER(host_admission._ProcBsdInfo)).contents
+            info.pbi_pid = result_pid
+            info.pbi_start_tvsec = seconds
+            info.pbi_start_tvusec = microseconds
+            return size if returned is None else returned
+
+        return fake_proc_pidinfo
+
+    first = host_admission._darwin_process_identity(
+        pid,
+        proc_pidinfo=proc_result(1_700_000_000, 123_456),
+    )
+    reused = host_admission._darwin_process_identity(
+        pid,
+        proc_pidinfo=proc_result(1_700_000_000, 123_457),
+    )
+
+    assert first == "darwin-proc-start:1700000000:123456"
+    assert reused == "darwin-proc-start:1700000000:123457"
+    assert reused != first
+    assert (
+        host_admission._darwin_process_identity(
+            pid,
+            proc_pidinfo=proc_result(1_700_000_000, 123_456, result_pid=pid + 1),
+        )
+        is None
+    )
+    assert (
+        host_admission._darwin_process_identity(
+            pid,
+            proc_pidinfo=proc_result(1_700_000_000, 123_456, returned=1),
+        )
+        is None
+    )
+
+    def failed_proc_pidinfo(*_args):
+        raise OSError("libproc unavailable")
+
+    assert host_admission._darwin_process_identity(pid, proc_pidinfo=failed_proc_pidinfo) is None
 
 
 def test_execution_lease_does_not_run_heavy_pressure_probe(tmp_path: Path) -> None:

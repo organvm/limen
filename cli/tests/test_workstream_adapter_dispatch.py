@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import subprocess
 from datetime import date
-from pathlib import Path
 
 import pytest
 
@@ -203,9 +202,10 @@ def test_opencode_environment_drift_stops_before_process_creation(monkeypatch, t
     monkeypatch.setattr(D, "_lane_run_env", bad_env)
     monkeypatch.setattr(D, "_run_capture", forbidden_spawn)
 
-    assert D._run_isolated_agent("opencode", task, tmp_path, cmd, 1800) is False
+    result = D._run_isolated_agent("opencode", task, tmp_path, cmd, 1800)
+    assert D._is_workstream_successor_result(result)
     assert spawned is False
-    assert "refusing provider launch so the lane can cascade" in capsys.readouterr().out
+    assert "refusing provider launch so the lane can successor-route" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
@@ -239,9 +239,10 @@ def test_final_adapter_argv_drift_stops_before_process_creation(agent, argv, mon
 
     monkeypatch.setattr(D, "_run_capture", forbidden_spawn)
 
-    assert D._run_isolated_agent(agent, task, tmp_path, [agent, *argv, "prompt"], 1800) is False
+    result = D._run_isolated_agent(agent, task, tmp_path, [agent, *argv, "prompt"], 1800)
+    assert D._is_workstream_successor_result(result)
     assert spawned is False
-    assert "refusing provider launch so the lane can cascade" in capsys.readouterr().out
+    assert "refusing provider launch so the lane can successor-route" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("agent", ["codex", "agy"])
@@ -302,5 +303,67 @@ def test_expired_packet_blocks_remote_lane_before_provider_call(monkeypatch):
     monkeypatch.setattr(D.time, "time", lambda: 1_900)
 
     result = D.call_agent_dispatch("jules", task, dry_run=False)
-    assert D._is_blocked_result(result)
+    assert D._is_workstream_successor_result(result)
     assert called is False
+
+
+def test_generic_dispatch_override_cannot_bypass_conducted_adapter(monkeypatch):
+    task = _task("codex")
+    monkeypatch.setenv("LIMEN_DISPATCH_CMD", "unsafe-generic-override")
+    monkeypatch.setattr(
+        D,
+        "_run_cmd",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("override must not launch")),
+    )
+
+    result = D.call_agent_dispatch("codex", task, dry_run=False)
+
+    assert D._is_workstream_successor_result(result)
+    assert "cannot bypass" in D._workstream_successor_reason(result)
+
+
+def test_unverifiable_provider_model_override_becomes_routing_blocker(monkeypatch):
+    monkeypatch.setenv("LIMEN_CODEX_MODEL", "fixture-provider-id")
+
+    result = D._call_local_agent("codex", _task("codex"), dry_run=True)
+
+    assert D._is_blocked_result(result)
+    assert "no live model catalog" in D._blocked_reason(result)
+
+
+def test_shared_command_spawn_rechecks_runway_after_provider_preflight(monkeypatch):
+    task = _task("warp")
+    deadline = int(task.workstream_contract["runway"]["deadline_epoch"])
+    monkeypatch.setattr(D.time, "time", lambda: deadline)
+    monkeypatch.setattr(
+        D,
+        "_run_capture",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("expired provider must not launch")),
+    )
+
+    result = D._run_cmd(["provider", "submit"], task, dry_run=False)
+
+    assert D._is_workstream_successor_result(result)
+    assert "runway is exhausted" in D._workstream_successor_reason(result)
+
+
+def test_claude_auth_retry_rechecks_runway_before_second_process(monkeypatch, tmp_path):
+    task = _task("claude")
+    deadline = int(task.workstream_contract["runway"]["deadline_epoch"])
+    clock = [deadline - 1]
+    calls = 0
+
+    def auth_blip(cmd, cwd=None, timeout=600, env=None):
+        nonlocal calls
+        calls += 1
+        clock[0] = deadline
+        return subprocess.CompletedProcess(cmd, 1, "", "Not logged in")
+
+    monkeypatch.setattr(D.time, "time", lambda: clock[0])
+    monkeypatch.setattr(D, "_run_capture", auth_blip)
+
+    result = D._run_isolated_agent("claude", task, tmp_path, ["claude", "prompt"], 30)
+
+    assert D._is_workstream_successor_result(result)
+    assert "runway is exhausted" in D._workstream_successor_reason(result)
+    assert calls == 1

@@ -7,6 +7,8 @@
 - Record changed paths, the once-per-head predicate result, exact remote custody, owner, merge
   condition, and any owner-routed residual.
 - Do not call GitHub blocked because a hosted job executed zero steps.
+- This first launched session commits and pushes the admitted `workstream.json` timestamps as the
+  durable deadline receipt; never revert them to the unstarted null state.
 - Preserve the admitted runway across successor sessions. A genuinely new runway requires a new
   successor contract; never reset this capsule's deadline.
 - Reach two read-only unchanged closeout passes: no dirty/unpushed session worktree, no uncapsuled

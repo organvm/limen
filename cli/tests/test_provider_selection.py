@@ -220,6 +220,15 @@ def test_provider_selector_source_contains_no_literal_provider_model_id() -> Non
     assert not __import__("re").search(r"(['\"])[a-z0-9_.-]+/[a-z0-9_.-]+\1", source, __import__("re").I)
 
 
+def test_dispatch_contains_no_codex_or_gemini_fallback_catalog() -> None:
+    source = (Path(__file__).resolve().parents[1] / "src" / "limen" / "dispatch.py").read_text()
+
+    assert "_CODEX_TIER_MODELS_DEFAULT" not in source
+    assert "_GEMINI_TIER_MODELS_DEFAULT" not in source
+    assert "LIMEN_CODEX_TIER_SELECT" not in source
+    assert "LIMEN_GEMINI_TIER_SELECT" not in source
+
+
 def test_legacy_composite_event_remains_loadable_for_append_only_healing() -> None:
     entry = DispatchLogEntry(
         timestamp="2026-07-10T00:00:00Z",  # type: ignore[arg-type]

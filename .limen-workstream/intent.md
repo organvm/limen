@@ -29,5 +29,14 @@ Added from the operator correction in this continuation:
   drift; Jules, Copilot, and every other routed lane share the same expiry gate;
 - fleet fanout now uses the live capacity registry, including Jules and Copilot when healthy, rather
   than the broken static fallback;
-- local checkpoint `4288ec9a` contains the verified implementation. Its cached remote branch and PR
-  still point to the preceding commit, so the next session must re-probe custody before any push.
+- capsule identity, admission, and launch locking bind the executable module set, preserve the
+  originally admitted deadline, and reject drift, symlink escapes, stale ownership, or unsafe
+  identity fields before a provider process starts;
+- result commits and remote mutations are fenced against fresh execution and lifecycle ownership so
+  a stale packet cannot overwrite a newer claim, human gate, terminal state, or concurrent receipt;
+- other isolated streams, active agents, and an ambient autonomy-pause marker are expected concurrent
+  state, not a stop condition for this bounded lane. They do not authorize this lane to mutate the
+  live root, merge a PR, or bypass its own finite contract;
+- current branch and PR custody must always be derived from the exact live remote head. Re-probe the
+  default branch and exact PR head immediately before push, review, or merge rather than preserving a
+  checkpoint-specific claim in this capsule.

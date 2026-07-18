@@ -8,6 +8,7 @@ reaps records whose PID/start identity or finite TTL proves they are stale.
 
 from __future__ import annotations
 
+import ctypes
 import fcntl
 import json
 import os
@@ -38,6 +39,38 @@ PidAlive = Callable[[int], bool]
 ProcessIdentity = Callable[[int], str | None]
 DescendantCheck = Callable[[int, int], bool]
 PressureProbe = Callable[[], dict[str, Any]]
+
+_PROC_PIDTBSDINFO = 3
+_PROC_BSDINFO_MAXCOMLEN = 16
+
+
+class _ProcBsdInfo(ctypes.Structure):
+    """Darwin ``struct proc_bsdinfo`` from ``<sys/proc_info.h>``."""
+
+    _fields_ = [
+        ("pbi_flags", ctypes.c_uint32),
+        ("pbi_status", ctypes.c_uint32),
+        ("pbi_xstatus", ctypes.c_uint32),
+        ("pbi_pid", ctypes.c_uint32),
+        ("pbi_ppid", ctypes.c_uint32),
+        ("pbi_uid", ctypes.c_uint32),
+        ("pbi_gid", ctypes.c_uint32),
+        ("pbi_ruid", ctypes.c_uint32),
+        ("pbi_rgid", ctypes.c_uint32),
+        ("pbi_svuid", ctypes.c_uint32),
+        ("pbi_svgid", ctypes.c_uint32),
+        ("rfu_1", ctypes.c_uint32),
+        ("pbi_comm", ctypes.c_char * _PROC_BSDINFO_MAXCOMLEN),
+        ("pbi_name", ctypes.c_char * (2 * _PROC_BSDINFO_MAXCOMLEN)),
+        ("pbi_nfiles", ctypes.c_uint32),
+        ("pbi_pgid", ctypes.c_uint32),
+        ("pbi_pjobc", ctypes.c_uint32),
+        ("e_tdev", ctypes.c_uint32),
+        ("e_tpgid", ctypes.c_uint32),
+        ("pbi_nice", ctypes.c_int32),
+        ("pbi_start_tvsec", ctypes.c_uint64),
+        ("pbi_start_tvusec", ctypes.c_uint64),
+    ]
 
 
 class AdmissionStateError(RuntimeError):
@@ -83,6 +116,50 @@ def pid_is_alive(pid: int) -> bool:
     return True
 
 
+def _darwin_process_identity(
+    pid: int,
+    *,
+    proc_pidinfo: Callable[..., int] | None = None,
+) -> str | None:
+    """Read one exact process start timeval through Darwin's bounded libproc ABI."""
+
+    if pid <= 0 or (sys.platform != "darwin" and proc_pidinfo is None):
+        return None
+    try:
+        if proc_pidinfo is None:
+            library = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True)
+            proc_pidinfo = library.proc_pidinfo
+            proc_pidinfo.argtypes = [
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_uint64,
+                ctypes.c_void_p,
+                ctypes.c_int,
+            ]
+            proc_pidinfo.restype = ctypes.c_int
+        info = _ProcBsdInfo()
+        info_size = ctypes.sizeof(info)
+        returned = proc_pidinfo(
+            pid,
+            _PROC_PIDTBSDINFO,
+            0,
+            ctypes.byref(info),
+            info_size,
+        )
+    except (AttributeError, OSError, TypeError, ValueError, ctypes.ArgumentError):
+        return None
+    start_seconds = int(info.pbi_start_tvsec)
+    start_microseconds = int(info.pbi_start_tvusec)
+    if (
+        returned != info_size
+        or int(info.pbi_pid) != pid
+        or start_seconds <= 0
+        or not 0 <= start_microseconds < 1_000_000
+    ):
+        return None
+    return f"darwin-proc-start:{start_seconds}:{start_microseconds}"
+
+
 def process_identity(pid: int) -> str | None:
     """Return a PID-reuse-resistant process start identity when the host exposes one."""
 
@@ -98,6 +175,8 @@ def process_identity(pid: int) -> str | None:
             return f"proc-start:{tail[19]}"
     except (OSError, IndexError):
         pass
+    if identity := _darwin_process_identity(pid):
+        return identity
     try:
         result = subprocess.run(
             ["ps", "-p", str(pid), "-o", "lstart="],
