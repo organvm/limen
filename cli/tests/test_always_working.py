@@ -388,7 +388,9 @@ def test_substrate_packet_is_one_control_host_reclaim_tranche(monkeypatch, tmp_p
 
     assert packet["execution_scope"] == "control-host"
     assert packet["packet_epoch"] == "worktree-debt:7:reapable:4"
-    assert "LIMEN_RECLAIM_MAX=3 python3 scripts/reclaim-worktrees.py --apply --force --json" in packet["task"]
+    assert (
+        "LIMEN_RECLAIM_GENERATED=0 LIMEN_RECLAIM_MAX=3 python3 scripts/reclaim-worktrees.py --apply --force --json"
+    ) in packet["task"]
     assert packet["task"].count("--apply") == 1
     assert "reclaim-generated-state.py" not in packet["task"]
     assert packet["receipt_target"] == "git:organvm/limen:docs/worktree-preservation-receipts.json"
