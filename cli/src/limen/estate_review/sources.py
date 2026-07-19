@@ -200,6 +200,7 @@ class NativeCollectors:
                     "event_ids": event_ids,
                     "time_basis": "native event span",
                     "token_events": token_events,
+                    "_prompt_session_refs": [f"codex:{sid}"],
                 }
             )
             events += fragments[-1]["events"]
@@ -225,11 +226,20 @@ class NativeCollectors:
             late += sum(ts >= self.config.snapshot_at for ts, _ in stamped)
             tokens: list[dict[str, Any]] = []
             native_id, parent_id = path.stem, None
+            prompt_session_refs: set[str] = set()
             event_ids = [
                 _native_event_id(row, timestamp) for timestamp, row in before if timestamp >= self.review_start
             ]
             for index, (timestamp, row) in enumerate(before):
                 row_id, row_parent = claude_identity(row, path.stem)
+                payload = row.get("payload")
+                prompt_session_id = (
+                    row.get("sessionId")
+                    or row.get("session_id")
+                    or (payload.get("session_id") if isinstance(payload, dict) else None)
+                )
+                if prompt_session_id:
+                    prompt_session_refs.add(f"claude:{prompt_session_id}")
                 if row_parent:
                     native_id, parent_id = row_id, row_parent
                 elif parent_id is None:
@@ -265,6 +275,7 @@ class NativeCollectors:
                     "event_ids": event_ids,
                     "time_basis": "native event span",
                     "token_events": tokens,
+                    "_prompt_session_refs": sorted(prompt_session_refs or {f"claude-projects:{path}"}),
                 }
             )
             events += fragments[-1]["events"]
@@ -340,6 +351,7 @@ class NativeCollectors:
                             "events": len(stamped),
                             "time_basis": "native message span",
                             "token_events": token_events,
+                            "_prompt_session_refs": [f"opencode-db:{session['id']}:{path}"],
                         }
                     )
                     messages += len(stamped)
@@ -373,6 +385,9 @@ class NativeCollectors:
                 ).fetchall()
                 for row in records:
                     timestamp = parse_ts(row["last_modified_time"])
+                    conversation_path = (
+                        self.home / ".gemini" / "antigravity-cli" / "conversations" / f"{row['conversation_id']}.db"
+                    )
                     fragments.append(
                         {
                             "agent": "agy",
@@ -383,6 +398,9 @@ class NativeCollectors:
                             "events": int_value(row["step_count"]),
                             "time_basis": "native last-modified point; duration unknown",
                             "token_events": [],
+                            "_prompt_session_refs": [
+                                f"agy-cli-conversations:{conversation_path.stem}:{conversation_path}"
+                            ],
                         }
                     )
         except (OSError, sqlite3.DatabaseError) as exc:
@@ -406,13 +424,24 @@ class NativeCollectors:
             path = Path(name)
             if "agy" in str(path).lower() or "capfill" in str(path).lower():
                 continue
+            rows = list(_jsonl(path))
             timestamps = [
                 value
-                for row in _jsonl(path)
+                for row in rows
                 if (value := parse_ts(row.get("timestamp"))) is not None and value < self.config.snapshot_at
             ]
             if not timestamps or max(timestamps) < self.review_start:
                 continue
+            prompt_session_refs: set[str] = set()
+            for row in rows:
+                payload = row.get("payload")
+                prompt_session_id = (
+                    row.get("sessionId")
+                    or row.get("session_id")
+                    or (payload.get("session_id") if isinstance(payload, dict) else None)
+                )
+                if prompt_session_id:
+                    prompt_session_refs.add(f"gemini:{prompt_session_id}")
             fragments.append(
                 {
                     "agent": "gemini",
@@ -423,6 +452,7 @@ class NativeCollectors:
                     "events": sum(value >= self.review_start for value in timestamps),
                     "time_basis": "native event span",
                     "token_events": [],
+                    "_prompt_session_refs": sorted(prompt_session_refs or {f"gemini-tmp:{path}"}),
                 }
             )
         return fragments, {
@@ -519,6 +549,7 @@ class NativeCollectors:
             return [], {"available": False, "sessions": 0, "tokens": None}
         board = yaml.safe_load(board_path.read_text(encoding="utf-8")) or {}
         groups: dict[str, list[Any]] = collections.defaultdict(list)
+        group_atom_ids: dict[str, set[str]] = collections.defaultdict(set)
         remote_states: collections.Counter[str] = collections.Counter()
         for task in board.get("tasks") or []:
             for event in task.get("dispatch_log") or []:
@@ -532,6 +563,9 @@ class NativeCollectors:
                 session_id = str(event.get("provider_run_id") or event.get("session_id") or "")
                 if session_id:
                     groups[session_id].append(timestamp)
+                    group_atom_ids[session_id].update(
+                        str(value) for value in task.get("source_atom_ids") or [] if value
+                    )
                 state = str(event.get("remote_state") or event.get("status") or "")
                 remote_states[classify_jules_remote_status(state)] += 1
         fragments: list[dict[str, Any]] = [
@@ -544,6 +578,7 @@ class NativeCollectors:
                 "events": len(timestamps),
                 "time_basis": "board dispatch-to-terminal proxy",
                 "token_events": [],
+                "_source_atom_ids": sorted(group_atom_ids[session_id]),
             }
             for session_id, timestamps in groups.items()
         ]
@@ -565,8 +600,8 @@ class NativeCollectors:
             coverage[name] = receipt
         sessions = canonicalize_sessions(fragments)
         for session in sessions:
-            session["source_atom_ids"] = []
-            session["coverage_flags"] = ["coverage_unknown"]
+            session["source_atom_ids"] = list(session.pop("_source_atom_ids", []))
+            session["coverage_flags"] = [] if session["source_atom_ids"] else ["coverage_unknown"]
             session["outcome"] = "coverage_unknown"
             session["executor_role"] = "executor"
             session["canonical_repo"] = "unknown"
@@ -740,12 +775,19 @@ def collect_prompt_atoms(
         if atom_id in atoms_by_id:
             outcomes[atom_id] = row
     task_by_atom: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+    task_atoms_by_session: dict[tuple[str, str], set[str]] = collections.defaultdict(set)
     board_path = config.root / "tasks.yaml"
     if board_path.is_file():
         board = yaml.safe_load(board_path.read_text(encoding="utf-8")) or {}
         for task in board.get("tasks") or []:
-            for atom_id in task.get("source_atom_ids") or []:
-                task_by_atom[str(atom_id)].append(task)
+            task_atom_ids = {str(atom_id) for atom_id in task.get("source_atom_ids") or [] if atom_id}
+            for atom_id in task_atom_ids:
+                task_by_atom[atom_id].append(task)
+            for event in task.get("dispatch_log") or []:
+                session_id = str(event.get("provider_run_id") or event.get("session_id") or "")
+                event_agent = str(event.get("agent") or task.get("target_agent") or "").lower()
+                if session_id and event_agent in AGENT_FAMILY:
+                    task_atoms_by_session[(event_agent, session_id)].update(task_atom_ids)
     asks: list[dict[str, Any]] = []
     for atom_id, atom in sorted(atoms_by_id.items()):
         timestamp = parse_ts(atom.get("timestamp"))
@@ -784,9 +826,20 @@ def collect_prompt_atoms(
         if session_hash:
             atom_by_session[session_hash].add(atom_id)
     for session in sessions:
-        atom_ids = sorted(atom_by_session.get(_session_ref_hash(session["native_id"]), set()))
+        atom_ids: set[str] = set(session.get("source_atom_ids") or [])
+        for session_ref in session.pop("_prompt_session_refs", []):
+            atom_ids.update(atom_by_session.get(_session_ref_hash(session_ref), set()))
+        atom_ids.update(
+            task_atoms_by_session.get(
+                (
+                    str(session.get("agent") or ""),
+                    str(session.get("native_id") or ""),
+                ),
+                set(),
+            )
+        )
         if atom_ids:
-            session["source_atom_ids"] = atom_ids
+            session["source_atom_ids"] = sorted(atom_ids)
             session["coverage_flags"] = []
     source_scope = projection.get("source_scope") or {}
     return asks, {

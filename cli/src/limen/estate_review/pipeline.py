@@ -147,6 +147,22 @@ def _owner_link_summary(
     }
 
 
+def _finalize_reconciliation_state(snapshot: dict[str, Any]) -> None:
+    """Fail closed unless remote, prompt, and owner gates are all complete."""
+
+    reconciliation = snapshot.setdefault("reconciliation", {})
+    remote_state = str(reconciliation.get("remote_state") or reconciliation.get("state") or "partial")
+    owner_links = snapshot.get("owner_link_index") or {}
+    completion_gates = {
+        "remote_receipts": remote_state == "complete",
+        "prompt_authority": bool(owner_links.get("prompt_authority_exact")),
+        "owner_links": owner_links.get("state") == "complete",
+    }
+    reconciliation["remote_state"] = remote_state
+    reconciliation["completion_gates"] = completion_gates
+    reconciliation["state"] = "complete" if all(completion_gates.values()) else "partial"
+
+
 def collect_snapshot(config: ReviewConfig) -> dict[str, Any]:
     """Collect canonical sessions and exact prompt atoms without remote writes."""
 
@@ -186,6 +202,7 @@ def build_outputs(config: ReviewConfig) -> dict[str, bytes]:
         snapshot.get("asks") or [],
         (snapshot.get("coverage") or {}).get("prompt_atoms") or {},
     )
+    _finalize_reconciliation_state(snapshot)
     artifact = build_artifact(snapshot)
     validation = build_validation(
         snapshot,

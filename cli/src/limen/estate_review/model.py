@@ -297,8 +297,12 @@ def canonicalize_sessions(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, A
         }
         token_events: dict[str, dict[str, Any]] = {}
         native_events: set[str] = set()
+        prompt_session_refs: set[str] = set()
+        source_atom_ids: set[str] = set()
         for fragment in fragments:
             native_events.update(str(value) for value in fragment.get("event_ids") or [] if value)
+            prompt_session_refs.update(str(value) for value in fragment.get("_prompt_session_refs") or [] if value)
+            source_atom_ids.update(str(value) for value in fragment.get("_source_atom_ids") or [] if value)
             for event in fragment.get("token_events") or fragment.get("_token_events") or []:
                 if isinstance(event, tuple) and len(event) == 2:
                     timestamp, components = event
@@ -335,6 +339,8 @@ def canonicalize_sessions(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, A
                     token_events.values(),
                     key=lambda event: str(event.get("timestamp") or ""),
                 ),
+                "_prompt_session_refs": sorted(prompt_session_refs),
+                "_source_atom_ids": sorted(source_atom_ids),
             }
         )
     return canonical

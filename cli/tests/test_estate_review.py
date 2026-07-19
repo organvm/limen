@@ -21,6 +21,7 @@ from limen.estate_review.model import (
     semantic_receipt_link,
     session_role_counts,
 )
+from limen.estate_review.pipeline import _finalize_reconciliation_state
 from limen.estate_review import reconcile
 from limen.estate_review.reconcile import copilot_ask_id, estate_census
 from limen.estate_review.render import build_artifact, validate_artifact_contract
@@ -408,6 +409,26 @@ def test_report_uses_runtime_v1_and_exposes_required_partial_access_issue() -> N
     assert validate_artifact_contract(artifact) == []
 
 
+def test_report_reconciliation_fails_closed_without_prompt_or_owner_fixed_point() -> None:
+    snapshot = {
+        "reconciliation": {"state": "complete"},
+        "owner_link_index": {
+            "state": "pending",
+            "prompt_authority_exact": False,
+        },
+    }
+
+    _finalize_reconciliation_state(snapshot)
+
+    assert snapshot["reconciliation"]["remote_state"] == "complete"
+    assert snapshot["reconciliation"]["state"] == "partial"
+    assert snapshot["reconciliation"]["completion_gates"] == {
+        "remote_receipts": True,
+        "prompt_authority": False,
+        "owner_links": False,
+    }
+
+
 def test_exact_private_prompt_lineage_joins_without_exposing_prompt_text(
     tmp_path: Path,
 ) -> None:
@@ -455,14 +476,14 @@ def test_exact_private_prompt_lineage_joins_without_exposing_prompt_text(
                     "occurrence_id": "po-one",
                     "timestamp": "2026-07-17T10:00:00Z",
                     "source": "codex-sessions",
-                    "session_ref_hash": _session_ref_hash(native_id),
+                    "session_ref_hash": _session_ref_hash(f"codex:{native_id}"),
                 },
                 "atoms": [
                     {
                         "atom_id": "pa-one",
                         "kind": "ask",
                         "source": "codex-sessions",
-                        "session_ref_hash": _session_ref_hash(native_id),
+                        "session_ref_hash": _session_ref_hash(f"codex:{native_id}"),
                         "intent": "private prompt text must not appear",
                     }
                 ],
@@ -477,7 +498,15 @@ def test_exact_private_prompt_lineage_joins_without_exposing_prompt_text(
         snapshot_at="2026-07-19T15:11:00Z",
         output_dir=root / "report",
     )
-    sessions = [{"native_id": native_id, "source_atom_ids": [], "coverage_flags": []}]
+    sessions = [
+        {
+            "agent": "codex",
+            "native_id": native_id,
+            "source_atom_ids": [],
+            "coverage_flags": [],
+            "_prompt_session_refs": [f"codex:{native_id}"],
+        }
+    ]
 
     asks, coverage = collect_prompt_atoms(config, sessions)
 
@@ -501,6 +530,81 @@ def test_exact_private_prompt_lineage_joins_without_exposing_prompt_text(
     assert sessions[0]["source_atom_ids"] == ["pa-one"]
     assert coverage["asks_in_window"] == 1
     assert "private prompt text" not in json.dumps(asks)
+
+
+def test_bare_native_id_cannot_infer_prompt_session_binding(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "repo"
+    (root / "docs").mkdir(parents=True)
+    private = root / ".limen-private" / "session-corpus" / "prompt-atoms"
+    private.mkdir(parents=True)
+    public = {
+        "version": 1,
+        "semantic_digest": "semantic",
+        "source_cursor_digest": "cursor",
+        "source_scope": {
+            "scope": "all",
+            "target_scope": "all",
+            "all_baseline_complete": True,
+            "pending_files": 0,
+            "source_errors": [],
+            "adapter_gaps": [],
+        },
+        "coverage": {"atoms": 1},
+        "unresolved_atoms": [],
+        "unresolved_atoms_truncated": 0,
+        "validation": {"ok": True, "errors": []},
+    }
+    public["projection_digest"] = _canonical_digest(public)
+    (root / "docs" / "prompt-atom-ledger.json").write_text(
+        json.dumps(public),
+        encoding="utf-8",
+    )
+    (private / "prompt-atom-ledger.json").write_text(
+        json.dumps(
+            {
+                "public_projection_digest": public["projection_digest"],
+                "semantic_digest": "semantic",
+                "source_cursor_digest": "cursor",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (private / "prompt-events.jsonl").write_text(
+        json.dumps(
+            {
+                "occurrence": {
+                    "occurrence_id": "po-one",
+                    "timestamp": "2026-07-17T10:00:00Z",
+                    "source": "codex-sessions",
+                    "session_ref_hash": _session_ref_hash("codex:native-session"),
+                },
+                "atoms": [{"atom_id": "pa-one", "kind": "ask"}],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (private / "prompt-atom-outcomes.jsonl").write_text("", encoding="utf-8")
+    config = ReviewConfig.from_values(
+        root=root,
+        snapshot_at="2026-07-19T15:11:00Z",
+        output_dir=root / "report",
+    )
+    sessions = [
+        {
+            "agent": "codex",
+            "native_id": "native-session",
+            "source_atom_ids": [],
+            "coverage_flags": ["coverage_unknown"],
+        }
+    ]
+
+    collect_prompt_atoms(config, sessions)
+
+    assert sessions[0]["source_atom_ids"] == []
+    assert sessions[0]["coverage_flags"] == ["coverage_unknown"]
 
 
 def test_repeated_reconciliation_is_byte_identical(
