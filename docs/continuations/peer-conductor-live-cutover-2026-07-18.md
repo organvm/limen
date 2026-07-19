@@ -16,13 +16,19 @@ Missing, stale, contradictory, or unreadable modules make the capsule invalid. S
 isolated continuation from the remotely preserved implementation branch:
 
 ```bash
-limen workstream --autonomous --agent auto \
+bash "$HOME/Workspace/limen/.worktrees/peer-conductor-mesh-20260718/scripts/start-worktree-session.sh" \
+  --autonomous \
+  --agent auto \
   --workstream infrastructure \
   --runway 8h \
   --from origin/work/peer-conductor-mesh-20260718 \
-  --prompt-file docs/continuations/peer-conductor-live-cutover-2026-07-18.md \
+  --prompt-file "$HOME/Workspace/limen/.worktrees/peer-conductor-mesh-20260718/docs/continuations/peer-conductor-live-cutover-2026-07-18.md" \
   limen peer-conductor-live-cutover-2026-07-18
 ```
+
+The launcher is intentionally addressed through the preserved source worktree. Until this PR merges,
+the installed `limen` on `main` does not own the agent-neutral `--agent` surface and must not be used
+to bootstrap this continuation.
 
 The bootstrap command deliberately omits `--conduct`: the production broker must not accept a new
 session until principal-bound authentication and executor-only lease delivery pass. This direct
