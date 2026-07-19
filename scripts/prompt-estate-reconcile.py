@@ -247,9 +247,21 @@ def load_owner_links(
     for row in payload["links"]:
         if not isinstance(row, dict):
             raise EstateReconciliationError("owner-link index contains a non-object row")
-        atom_id = str(row.get("prompt_atom_id") or row.get("review_ask_id") or "")
-        if atom_id not in atom_ids:
-            raise EstateReconciliationError("owner-link index references an unknown prompt atom")
+        prompt_atom_id = str(row.get("prompt_atom_id") or "")
+        review_ask_id = str(row.get("review_ask_id") or "")
+        if bool(prompt_atom_id) == bool(review_ask_id):
+            raise EstateReconciliationError(
+                "owner-link row must name exactly one prompt atom or review ask"
+            )
+        atom_id = prompt_atom_id or review_ask_id
+        if prompt_atom_id and atom_id not in atom_ids:
+            raise EstateReconciliationError(
+                "owner-link index references an unknown prompt atom"
+            )
+        if review_ask_id and not SAFE_ID.fullmatch(review_ask_id):
+            raise EstateReconciliationError(
+                "owner-link index references an unsafe review ask"
+            )
         if atom_id in links:
             raise EstateReconciliationError(f"duplicate owner link for atom {atom_id}")
         owner_type = str(row.get("owner_type") or "")
@@ -295,7 +307,10 @@ def load_owner_links(
             )
         receipt_claims[receipt_target] = current_claim
         links[atom_id] = row
-    missing = sorted(atom_ids - set(links))
+    linked_prompt_atoms = {
+        atom_id for atom_id, row in links.items() if row.get("prompt_atom_id")
+    }
+    missing = sorted(atom_ids - linked_prompt_atoms)
     if missing:
         raise EstateReconciliationError(
             f"owner-link index is not exhaustive; missing {len(missing)} prompt atoms"

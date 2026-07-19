@@ -7,6 +7,7 @@ import collections
 import hashlib
 import json
 import os
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,24 @@ from .sources import NativeCollectors, collect_prompt_atoms
 
 DEFAULT_SNAPSHOT = "2026-07-19T15:11:00Z"
 DEFAULT_OUTPUT = Path("docs/reviews/seven-agent-whole-estate-2026-07-19")
+SAFE_OWNER_REFERENCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/#-]{0,159}$")
+OWNER_LINK_TYPES = {
+    "task",
+    "issue",
+    "pull_request",
+    "worktree",
+    "blocker",
+    "coverage",
+}
+OWNER_LINK_DISPOSITIONS = {
+    "verified_done",
+    "verified_partial",
+    "durably_homed_open",
+    "blocked",
+    "superseded",
+    "not_done_or_unverified",
+    "coverage_unknown",
+}
 
 
 def _atomic_write(path: Path, content: bytes) -> None:
@@ -125,17 +144,70 @@ def _owner_link_summary(
             "missing": len(ask_ids),
             "duplicates": 0,
             "unknown": 0,
+            "invalid": 0,
         }
     rows = payload.get("links") if isinstance(payload, dict) else None
-    if payload.get("schema") != "limen.estate_session_review_owner_links.v1" or not isinstance(rows, list):
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema") != "limen.estate_session_review_owner_links.v1"
+        or not isinstance(rows, list)
+    ):
         rows = []
-    ids = [str(row.get("prompt_atom_id") or row.get("review_ask_id") or "") for row in rows if isinstance(row, dict)]
+    ids: list[str] = []
+    invalid = 0
+    receipt_claims: dict[str, tuple[str, str]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            invalid += 1
+            continue
+        prompt_id = str(row.get("prompt_atom_id") or "")
+        review_id = str(row.get("review_ask_id") or "")
+        if bool(prompt_id) == bool(review_id):
+            invalid += 1
+            continue
+        owner_id = prompt_id or review_id
+        ids.append(owner_id)
+        owner_type = str(row.get("owner_type") or "")
+        reference = str(row.get("canonical_owner_reference") or "")
+        disposition = str(row.get("disposition") or "")
+        predicate = str(row.get("predicate") or "").strip()
+        receipt_target = str(row.get("receipt_target") or "").strip()
+        bindings = row.get("content_bindings")
+        if (
+            owner_type not in OWNER_LINK_TYPES
+            or not SAFE_OWNER_REFERENCE.fullmatch(reference)
+            or disposition not in OWNER_LINK_DISPOSITIONS
+            or not predicate
+            or not receipt_target
+            or not isinstance(bindings, list)
+            or any(not isinstance(binding, str) or not SAFE_OWNER_REFERENCE.fullmatch(binding) for binding in bindings)
+        ):
+            invalid += 1
+        if disposition == "blocked" and (
+            not str(row.get("failed_gate") or "").strip() or not str(row.get("next_command") or "").strip()
+        ):
+            invalid += 1
+        if disposition == "verified_done":
+            result = row.get("predicate_result")
+            if (
+                not isinstance(result, dict)
+                or result.get("passed") is not True
+                or not row.get("predicate_checked_at")
+                or not row.get("receipt_head_sha")
+            ):
+                invalid += 1
+        if disposition == "superseded" and not row.get("successor_atom_id"):
+            invalid += 1
+        claim = (reference, predicate)
+        if receipt_target in receipt_claims and receipt_claims[receipt_target] != claim:
+            invalid += 1
+        receipt_claims[receipt_target] = claim
     counts = collections.Counter(ids)
     linked = set(ids)
     missing = ask_ids - linked
     unknown = linked - ask_ids
     duplicates = sum(value - 1 for value in counts.values() if value > 1)
-    state = "complete" if prompt_exact and not missing and not unknown and not duplicates else "pending"
+    state = "complete" if prompt_exact and not missing and not unknown and not duplicates and not invalid else "pending"
     return {
         "state": state,
         "prompt_authority_exact": prompt_exact,
@@ -144,6 +216,7 @@ def _owner_link_summary(
         "missing": len(missing),
         "duplicates": duplicates,
         "unknown": len(unknown),
+        "invalid": invalid,
     }
 
 

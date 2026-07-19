@@ -244,6 +244,21 @@ def test_owner_link_index_requires_exactly_one_row_per_atom(tmp_path: Path):
         module.load_owner_links(missing, atom_ids={"pa-one", "pa-two"})
 
 
+def test_owner_link_index_accepts_separate_review_ask_rows(tmp_path: Path):
+    module = _load()
+    prompt_row = _owner_link("pa-one")
+    review_row = _owner_link("unused")
+    review_row.pop("prompt_atom_id")
+    review_row["review_ask_id"] = "ask-copilot-deadbeef"
+    review_row["canonical_owner_reference"] = "pull_request:organvm/limen#7"
+    review_row["receipt_target"] = "github:organvm/limen:pull-request:7"
+    path = _owner_links(tmp_path / "links.json", [prompt_row, review_row])
+
+    loaded, _digest = module.load_owner_links(path, atom_ids={"pa-one"})
+
+    assert set(loaded) == {"pa-one", "ask-copilot-deadbeef"}
+
+
 def test_blocked_owner_link_requires_failed_gate_and_next_command(tmp_path: Path):
     module = _load()
     path = _owner_links(

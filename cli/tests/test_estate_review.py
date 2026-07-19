@@ -21,7 +21,10 @@ from limen.estate_review.model import (
     semantic_receipt_link,
     session_role_counts,
 )
-from limen.estate_review.pipeline import _finalize_reconciliation_state
+from limen.estate_review.pipeline import (
+    _finalize_reconciliation_state,
+    _owner_link_summary,
+)
 from limen.estate_review import reconcile
 from limen.estate_review.reconcile import copilot_ask_id, estate_census
 from limen.estate_review.render import build_artifact, validate_artifact_contract
@@ -427,6 +430,48 @@ def test_report_reconciliation_fails_closed_without_prompt_or_owner_fixed_point(
         "prompt_authority": False,
         "owner_links": False,
     }
+
+
+def test_owner_link_summary_rejects_structurally_empty_owner(
+    tmp_path: Path,
+) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "estate-session-review-owner-links.json").write_text(
+        json.dumps(
+            {
+                "schema": "limen.estate_session_review_owner_links.v1",
+                "links": [
+                    {
+                        "prompt_atom_id": "pa-one",
+                        "owner_type": "task",
+                        "canonical_owner_reference": "task:one",
+                        "disposition": "durably_homed_open",
+                        "predicate": "",
+                        "receipt_target": "",
+                        "content_bindings": [],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    summary = _owner_link_summary(
+        tmp_path,
+        [{"ask": "pa-one"}],
+        {
+            "available": True,
+            "coverage": {},
+            "source_scope": {
+                "scope": "all",
+                "target_scope": "all",
+                "all_baseline_complete": True,
+            },
+        },
+    )
+
+    assert summary["state"] == "pending"
+    assert summary["invalid"] > 0
 
 
 def test_exact_private_prompt_lineage_joins_without_exposing_prompt_text(
