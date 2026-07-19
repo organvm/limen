@@ -1,12 +1,12 @@
 # Overnight Watch
 
 - Status: `alert`
-- Updated: `2026-07-19T23:15:48+00:00`
-- Log age: `33` seconds
+- Updated: `2026-07-19T23:50:51+00:00`
+- Log age: `30` seconds
 - Launchd: `active`
-- Latest tick: `tick emitted: 2026-07-19T22:01:42+00:00 total=2995 open=721 spent=13/600`
+- Latest tick: `tick emitted: 2026-07-19T23:44:55+00:00 total=2995 open=721 spent=13/600`
 - Latest async: `async: reaped 0 dead · harvested 0 · 0 still running · launched 0`
-- Stale tick samples: `10`
+- Stale tick samples: `0`
 - Active workers: `0`
 - Heartbeat child processes: `2`
 
@@ -25,15 +25,15 @@
 
 - Handoff refresh: `0`; check: `0`.
 - Value gate: `20`; action: `stop_no_durable_progress`.
-- Dispatch control: all bounded owner packets are closed by current capability, lifecycle, owner gate(s).
+- Dispatch control: all bounded owner packets are closed by current capability, owner gate(s).
 - Selected owner: `organvm/limen`.
 
 ## Throughput
 
 - Recent per-60min completions: `[0, 0, 0]` (derived floor `0.0`, median `0`).
 - Below floor: `false`; suppressed: `no`.
-  - child `17748` `S` `00:33` `bash /Users/4jp/Workspace/limen/scripts/clone-maintenance.sh`
-  - child `17749` `S` `00:33` `tail -3`
+  - child `42802` `R` `00:31` `/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python /Users/4jp/Workspace/limen/scripts/rebalance.py --lanes codex,opencode,agy,claude,gemini --apply`
+  - child `42803` `S` `00:31` `tail -1`
 
 ## WATCH_ALERT
-- `overnight-lane-switch-blocked`: blocker=overnight-owner-packets-gated owner=organvm/limen reason=all bounded owner packets are closed by current capability, lifecycle, owner gate(s)
+- `overnight-lane-switch-blocked`: blocker=overnight-owner-packets-gated owner=organvm/limen reason=all bounded owner packets are closed by current capability, owner gate(s)

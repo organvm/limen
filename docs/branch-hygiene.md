@@ -20,7 +20,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `worktree-fix-macos-fork-oslog-crash` — 414ded13 heal(tests): fix 3 non-hermetic/mismatched cli tests breaking main pr-gate
 - `worktree-linear-conjuring-bear` — 92c21f2e chore(gitignore): ignore .wrangler/ cache at any depth, not just web/worker
 
-## Live-work branches (285) — decide each
+## Live-work branches (286) — decide each
 
 - `_pr198` — 4cd0dbaa fix(ci): heal main CI-poison — remove dead `import time` in dispatch.py (F401)
 - `agent/codex-sessions-adapter-0713` — 4f56aa95 fix(prompt): adapt Codex session records exactly
@@ -86,6 +86,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `limen/aw-credential-wall-token-hygiene-e729c093` — 5552f173 docs(credentials): add token tombstone audit receipt
 - `limen/capfill-agy-20260629-11-a3b7` — 15b3ab83 Agy daily capacity-fill packet 11
 - `limen/capfill-claude-20260629-13-2b0f` — 69e10c5a fix: add CapacityFill TypedDicts and correct mypy type annotations
+- `limen/capfill-opencode-20260629-01-0afd` — 24f367f9 OpenCode daily capacity-fill packet 01
 - `limen/csf-caeb31d8-plan-10-b131e64c-38bd` — 705fcee4 limen: record current-session private boundary packet
 - `limen/gen-organvm-limen-docs-0624-0129` — e454a603 Real usage docs for organvm/limen
 - `limen/gen-organvm-limen-docs-0624-32e1` — 0aea514a limen: GEN-organvm-limen-docs-0624 — accurate Usage docs from real CLI
