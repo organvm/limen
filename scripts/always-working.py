@@ -1238,6 +1238,9 @@ def substrate_receipt() -> dict[str, Any]:
     disk = disk_receipt()
     target_free_gib = float(os.environ.get("LIMEN_ALWAYS_WORKING_TARGET_FREE_GIB", "200"))
     lifecycle = substrate_lifecycle_receipt()
+    worktree_debt = lifecycle["worktree_debt"]
+    debt = worktree_debt.get("debt")
+    reapable = worktree_debt.get("reapable")
     storage_pressure = load_json(SUBSTRATE_STORAGE_INDEX, {})
     shortfall_gib = round(max(target_free_gib - float(disk["free_gib"]), 0.0), 1)
     open_substrate = bool(shortfall_gib > 0 or not disk["tmp_ok"] or not lifecycle["predicate_ok"])
@@ -1305,10 +1308,21 @@ def substrate_receipt() -> dict[str, Any]:
         "assignment_packet": {
             "lane_fit": "codex-local",
             "repo": "organvm/limen",
-            "task": "Run the full disk-relief pass in a worktree: python3 scripts/reclaim-generated-state.py --apply && python3 scripts/reclaim-tool-caches.py --apply && python3 scripts/reclaim-ollama-models.py --apply && python3 scripts/substrate-storage-pressure.py --write && python3 scripts/cvstos-organ.py --check && python3 scripts/worktree-debt.py --fail-on-debt --fail-reapable-over-cap. Reclaim ignored generated state, preserve or owner-route local-only payloads, and keep Scratch as the active work substrate.",
-            "predicate": "python3 -m pytest cli/tests/test_substrate_storage_pressure.py -q",
-            "receipt_target": "git:organvm/limen:logs/reclaim-generated-state.jsonl",
-            "stop_condition": "free disk is at target, temp writes are usable, worktree debt is exactly zero, and reapable roots are zero",
+            "execution_scope": "control-host",
+            "packet_epoch": f"worktree-debt:{debt}:reapable:{reapable}",
+            "task": (
+                "Run exactly one accepted worktree-reclaim tranche from an isolated Limen owner "
+                "worktree: LIMEN_RECLAIM_MAX=3 python3 scripts/reclaim-worktrees.py --apply --force "
+                "--json. Do not run the generated-state, tool-cache, Ollama, or clone reclaimers in "
+                "this packet. Record each removed root and the exact apply receipt in "
+                "docs/worktree-preservation-receipts.json, then push one narrow owner PR."
+            ),
+            "predicate": "python3 -m pytest cli/tests/test_reclaim_worktrees.py -q",
+            "receipt_target": "git:organvm/limen:docs/worktree-preservation-receipts.json",
+            "stop_condition": (
+                "one tranche removes at most three accepted roots or records that no accepted root "
+                "remains; every residual root stays preserved for a later packet"
+            ),
         },
     }
 
@@ -1452,6 +1466,9 @@ def _priority(item: dict[str, Any]) -> str:
 def _task_from_item(item: dict[str, Any]) -> dict[str, Any]:
     packet = item.get("assignment_packet") or {}
     workstream = str(item.get("workstream") or "always-working")
+    labels = ["always-working", "receipt-first", workstream]
+    if packet.get("execution_scope") == "control-host":
+        labels.append("execution:control-host")
     context = "\n".join(
         [
             f"Receipt-first verdict: {item.get('verdict') or ''}",
@@ -1473,7 +1490,7 @@ def _task_from_item(item: dict[str, Any]) -> dict[str, Any]:
         "priority": _priority(item),
         "budget_cost": 1,
         "status": "open",
-        "labels": ["always-working", "receipt-first", workstream],
+        "labels": labels,
         "urls": [str(value) for value in item.get("existing_receipts") or []][:10],
         "context": context,
         "predicate": str(packet.get("predicate") or ""),
