@@ -57,6 +57,12 @@ class DispatchLogEntry(BaseModel):
     remote_state: str | None = None
     remote_request_id: str | None = None
     remote_receipt: str | None = None
+    # Native terminal proof. Optional for historical rows; newly admitted
+    # prompt-owned work writes the complete tuple at its terminal transition.
+    predicate_result: dict[str, Any] | None = None
+    predicate_checked_at: datetime | None = None
+    receipt_head_sha: str | None = None
+    executor_role: Literal["executor", "verifier", "integrator", "lander"] | None = None
     # Crash-resumable Jules landing transaction metadata. These fields are
     # explicit so type checking covers the transaction writer while historical
     # and future extension fields remain readable through ``extra="allow"``.
@@ -123,6 +129,9 @@ class Task(BaseModel):
     # and keeper seams, and selected legacy work is normalized before dispatch.
     predicate: str | None = None
     receipt_target: str | None = None
+    # Exact prompt-authority lineage. Historical tasks omit it; newly admitted
+    # prompt-derived tasks carry at least one opaque atom ID.
+    source_atom_ids: list[str] = Field(default_factory=list)
     # Optional live prerequisites. Missing/empty keeps legacy tasks dispatchable; an explicit
     # requirement is evaluated dynamically by handoff and every dispatch selector.
     execution_requirements: list[ExecutionRequirement] | None = None
@@ -148,6 +157,18 @@ class Task(BaseModel):
         if value not in VALID_STATUSES:
             raise ValueError(f"status must be one of {', '.join(sorted(VALID_STATUSES))}")
         return value
+
+    @field_validator("source_atom_ids")
+    @classmethod
+    def validate_source_atom_ids(cls, values: list[str]) -> list[str]:
+        if len(values) != len(set(values)):
+            raise ValueError("source_atom_ids must be unique")
+        if any(
+            not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", value)
+            for value in values
+        ):
+            raise ValueError("source_atom_ids must contain safe opaque atom IDs")
+        return values
 
     @field_validator("budget_cost", mode="before")
     @classmethod

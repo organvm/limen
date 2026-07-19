@@ -488,6 +488,41 @@ def test_submit_task_status_rejects_invalid_or_conflicting_status(tmp_path):
         submit_task_status(board, "T-1", status="completed", agent="codex")
     with pytest.raises(ValueError, match="conflicts"):
         submit_task_status(board, "T-1", status="done", agent="codex", patch={"status": "failed"})
+
+
+def test_prompt_derived_done_requires_and_preserves_exact_terminal_proof(tmp_path):
+    board = _seed_board(tmp_path)
+    data = load_limen_file(board)
+    task = next(row for row in data.tasks if row.id == "T-1")
+    task.source_atom_ids = ["pa-exact-one"]
+    save_limen_file(board, data)
+
+    submit_task_status(board, "T-1", status="done", agent="codex", now=_NOW)
+    rejected = drain_once(board)
+    assert rejected.rejected == 1
+
+    checked_at = datetime(2026, 7, 19, 15, 0, tzinfo=timezone.utc)
+    submit_task_status(
+        board,
+        "T-1",
+        status="done",
+        agent="codex",
+        now=datetime(2026, 7, 19, 15, 1, tzinfo=timezone.utc),
+        predicate_result={"passed": True, "command": "pytest -q"},
+        predicate_checked_at=checked_at,
+        receipt_head_sha="a" * 40,
+        executor_role="executor",
+        remote_receipt="https://github.com/organvm/limen/pull/1",
+    )
+    applied = drain_once(board)
+
+    assert applied.applied == 1
+    entry = next(row for row in load_limen_file(board).tasks if row.id == "T-1").dispatch_log[-1]
+    assert entry.predicate_result == {"passed": True, "command": "pytest -q"}
+    assert entry.predicate_checked_at == checked_at
+    assert entry.receipt_head_sha == "a" * 40
+    assert entry.executor_role == "executor"
+    assert entry.remote_receipt == "https://github.com/organvm/limen/pull/1"
     assert pending_count(board) == 0
 
 

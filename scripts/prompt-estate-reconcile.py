@@ -45,6 +45,7 @@ ATOM_INDEX = ROOT / "docs" / "prompt-atom-ledger.json"
 TASKS_PATH = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
 PRIVATE_OUTPUT = PRIVATE_ROOT / "lifecycle" / "prompt-estate-reconciliation.json"
 PRIORITY_MAP_SCRIPT = Path(__file__).with_name("prompt-priority-map.py")
+OWNER_LINKS = ROOT / "docs" / "estate-session-review-owner-links.json"
 
 SAFE_ATOM_TOKEN = re.compile(r"(?<![A-Za-z0-9._:-])([A-Za-z0-9][A-Za-z0-9._:-]{0,127})(?![A-Za-z0-9._:-])")
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
@@ -69,6 +70,16 @@ KNOWN_TASK_STATUSES = {
     "archived",
 }
 TERMINAL_TASK_STATUSES = {"done", "archived"}
+OWNER_LINK_TYPES = {"task", "issue", "pull_request", "worktree", "blocker", "coverage"}
+OWNER_LINK_DISPOSITIONS = {
+    "verified_done",
+    "verified_partial",
+    "durably_homed_open",
+    "blocked",
+    "superseded",
+    "not_done_or_unverified",
+    "coverage_unknown",
+}
 
 
 class EstateReconciliationError(RuntimeError):
@@ -206,6 +217,90 @@ def load_tasks(path: Path) -> tuple[list[dict[str, Any]], str]:
     if any(not isinstance(task, dict) for task in tasks):
         raise EstateReconciliationError("tasks board contains a non-object task")
     return tasks, _sha256_bytes(raw)
+
+
+def load_owner_links(
+    path: Path,
+    *,
+    atom_ids: set[str],
+) -> tuple[dict[str, dict[str, Any]], str]:
+    """Load an exhaustive exact-ID owner index and reject ambiguous proof."""
+
+    try:
+        raw = path.read_bytes()
+    except FileNotFoundError as exc:
+        raise EstateReconciliationError(f"owner-link index is missing: {path.name}") from exc
+    except OSError as exc:
+        raise EstateReconciliationError(f"cannot read owner-link index: {path.name}") from exc
+    try:
+        payload = json.loads(raw)
+    except (UnicodeError, ValueError) as exc:
+        raise EstateReconciliationError("owner-link index is malformed JSON") from exc
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema") != "limen.estate_session_review_owner_links.v1"
+        or not isinstance(payload.get("links"), list)
+    ):
+        raise EstateReconciliationError("owner-link index has an unsupported schema")
+    links: dict[str, dict[str, Any]] = {}
+    receipt_claims: dict[str, tuple[str, str, str]] = {}
+    for row in payload["links"]:
+        if not isinstance(row, dict):
+            raise EstateReconciliationError("owner-link index contains a non-object row")
+        atom_id = str(row.get("prompt_atom_id") or row.get("review_ask_id") or "")
+        if atom_id not in atom_ids:
+            raise EstateReconciliationError("owner-link index references an unknown prompt atom")
+        if atom_id in links:
+            raise EstateReconciliationError(f"duplicate owner link for atom {atom_id}")
+        owner_type = str(row.get("owner_type") or "")
+        reference = str(row.get("canonical_owner_reference") or "")
+        disposition = str(row.get("disposition") or "")
+        predicate = str(row.get("predicate") or "").strip()
+        receipt_target = str(row.get("receipt_target") or "").strip()
+        bindings = row.get("content_bindings")
+        if owner_type not in OWNER_LINK_TYPES:
+            raise EstateReconciliationError(f"owner link {atom_id} has an invalid owner type")
+        if not SAFE_ROUTE.fullmatch(reference):
+            raise EstateReconciliationError(f"owner link {atom_id} has an unsafe owner reference")
+        if disposition not in OWNER_LINK_DISPOSITIONS:
+            raise EstateReconciliationError(f"owner link {atom_id} has an invalid disposition")
+        if not predicate or not receipt_target:
+            raise EstateReconciliationError(f"owner link {atom_id} lacks predicate or receipt target")
+        if not isinstance(bindings, list) or any(
+            not isinstance(binding, str) or not SAFE_ROUTE.fullmatch(binding)
+            for binding in bindings
+        ):
+            raise EstateReconciliationError(f"owner link {atom_id} has unsafe content bindings")
+        if disposition == "blocked" and (
+            not str(row.get("failed_gate") or "").strip()
+            or not str(row.get("next_command") or "").strip()
+        ):
+            raise EstateReconciliationError(f"blocked owner link {atom_id} lacks failed gate or next command")
+        if disposition == "verified_done":
+            result = row.get("predicate_result")
+            if (
+                not isinstance(result, dict)
+                or result.get("passed") is not True
+                or not row.get("predicate_checked_at")
+                or not row.get("receipt_head_sha")
+            ):
+                raise EstateReconciliationError(f"verified owner link {atom_id} lacks exact predicate proof")
+        if disposition == "superseded" and not row.get("successor_atom_id"):
+            raise EstateReconciliationError(f"superseded owner link {atom_id} lacks successor lineage")
+        prior_claim = receipt_claims.get(receipt_target)
+        current_claim = (atom_id, reference, predicate)
+        if prior_claim and prior_claim[1:] != current_claim[1:]:
+            raise EstateReconciliationError(
+                f"conflicting receipt {receipt_target} claimed by {prior_claim[0]} and {atom_id}"
+            )
+        receipt_claims[receipt_target] = current_claim
+        links[atom_id] = row
+    missing = sorted(atom_ids - set(links))
+    if missing:
+        raise EstateReconciliationError(
+            f"owner-link index is not exhaustive; missing {len(missing)} prompt atoms"
+        )
+    return links, _sha256_bytes(raw)
 
 
 def _unwrap_pr_payload(payload: Any) -> list[dict[str, Any]]:
@@ -404,6 +499,20 @@ def _worktree_receipt(row: dict[str, Any], *, repository_owner: str) -> dict[str
     }
 
 
+def _owner_link_receipt(row: dict[str, Any]) -> dict[str, Any]:
+    reference = str(row["canonical_owner_reference"])
+    disposition = str(row["disposition"])
+    return {
+        "surface": "owner_link",
+        "receipt_id": f"owner-link:{reference}",
+        "owner": reference,
+        "status": disposition,
+        "live": disposition not in {"verified_done", "superseded"},
+        "predicate": str(row["predicate"]),
+        "receipt_target": str(row["receipt_target"]),
+    }
+
+
 def _projection_route(row: dict[str, Any]) -> tuple[str, str]:
     outcome = row.get("outcome") if isinstance(row.get("outcome"), dict) else {}
     owner = row.get("owner") or outcome.get("owner")
@@ -448,6 +557,7 @@ def build_reconciliation(
     repository_owner: str,
     projection_check_receipt: Path | None = None,
     generated_at: str | None = None,
+    owner_links_path: Path | None = None,
 ) -> dict[str, Any]:
     """Build a complete, redacted, non-mutating atom-to-estate map."""
 
@@ -459,6 +569,13 @@ def build_reconciliation(
     open_prs = normalize_open_prs(open_prs)
     retained_worktrees = [row for row in worktrees if "prunable" not in row]
     atom_ids = {str(row["atom_id"]) for row in atom_rows}
+    owner_links: dict[str, dict[str, Any]] = {}
+    owner_links_digest: str | None = None
+    if owner_links_path is not None:
+        owner_links, owner_links_digest = load_owner_links(
+            owner_links_path,
+            atom_ids=atom_ids,
+        )
 
     matches: dict[str, list[dict[str, Any]]] = defaultdict(list)
     seen: dict[str, set[tuple[str, str]]] = defaultdict(set)
@@ -480,6 +597,11 @@ def build_reconciliation(
             row,
             _worktree_receipt(row, repository_owner=repository_owner),
         )
+    for atom_id, row in owner_links.items():
+        receipt = _owner_link_receipt(row)
+        key = (str(receipt["surface"]), str(receipt["receipt_id"]))
+        matches[atom_id].append(receipt)
+        seen[atom_id].add(key)
 
     reconciliation: list[dict[str, Any]] = []
     conflicts: list[dict[str, Any]] = []
@@ -580,6 +702,11 @@ def build_reconciliation(
                 "sha256": worktrees_digest,
                 "records": len(retained_worktrees),
                 "source": worktrees_source,
+            },
+            "owner_links": {
+                "sha256": owner_links_digest,
+                "records": len(owner_links),
+                "source": "tracked_exact_owner_index" if owner_links_path else "not_requested",
             },
         },
         "live_counts": {
@@ -737,6 +864,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Explicit owner/repo for local worktree receipts; defaults to origin.",
     )
     parser.add_argument(
+        "--owner-links",
+        type=Path,
+        help=(
+            "Tracked exact prompt-atom owner index. When supplied it must contain "
+            "exactly one complete owner or blocker row for every unresolved atom."
+        ),
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="Validate and reconcile without writing output files.",
@@ -770,6 +905,7 @@ def main(argv: list[str] | None = None) -> int:
             worktrees_source=worktrees_source,
             repository_owner=repository_owner,
             projection_check_receipt=args.atom_check_receipt,
+            owner_links_path=args.owner_links,
         )
         if not args.check:
             write_outputs(

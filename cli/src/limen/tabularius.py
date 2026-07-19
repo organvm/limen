@@ -204,6 +204,11 @@ def submit_task_status(
     agent: str,
     session_id: str = "unknown",
     output: str | None = None,
+    predicate_result: dict[str, Any] | None = None,
+    predicate_checked_at: datetime | None = None,
+    receipt_head_sha: str | None = None,
+    executor_role: str | None = None,
+    remote_receipt: str | None = None,
     patch: dict[str, Any] | None = None,
     now: datetime | None = None,
 ) -> Path:
@@ -222,6 +227,17 @@ def submit_task_status(
         raise ValueError("status patch conflicts with status argument")
     fields["status"] = status
     now = now or datetime.now(timezone.utc)
+    proof = {
+        "predicate_result": predicate_result,
+        "predicate_checked_at": (predicate_checked_at.isoformat() if predicate_checked_at else None),
+        "receipt_head_sha": receipt_head_sha,
+        "executor_role": executor_role,
+        "remote_receipt": remote_receipt,
+    }
+    supplied = {key for key, value in proof.items() if value is not None}
+    if supplied and supplied != set(proof):
+        missing = sorted(set(proof) - supplied)
+        raise ValueError("terminal proof is all-or-nothing; missing " + ", ".join(missing))
     ticket = Ticket(
         ticket_id=new_ticket_id(session_id, now),
         timestamp=now,
@@ -230,7 +246,11 @@ def submit_task_status(
         intent=INTENT_STATUS,
         task_id=task_id,
         patch=fields,
-        log={"status": status, "output": output},
+        log={
+            "status": status,
+            "output": output,
+            **{key: value for key, value in proof.items() if value is not None},
+        },
     )
     return submit_ticket(board_path, ticket)
 
@@ -1270,10 +1290,24 @@ def _apply(ticket: Ticket, tasks: OrderedDict[str, dict[str, Any]], meta: dict[s
                 "status": status,
                 "output": ticket.log.get("output"),
             }
+            proof_fields = (
+                "predicate_result",
+                "predicate_checked_at",
+                "receipt_head_sha",
+                "executor_role",
+                "remote_receipt",
+            )
+            entry.update({field: ticket.log[field] for field in proof_fields if ticket.log.get(field) is not None})
             merged["dispatch_log"] = list(base.get("dispatch_log", [])) + [entry]
             # a task.status ticket carries the transition in its log payload; honor it as the status
             if ticket.intent == INTENT_STATUS and "status" not in (ticket.patch or {}) and status:
                 merged["status"] = status
+            if (
+                status == "done"
+                and merged.get("source_atom_ids")
+                and any(entry.get(field) is None for field in proof_fields)
+            ):
+                raise ValueError(f"prompt-derived terminal task {ticket.task_id} lacks exact predicate proof")
         if not is_new and WORKSTREAM_SUCCESSOR_REQUIRED_LABEL in (base.get("labels") or []):
             next_status = str(merged.get("status") or "")
             if next_status not in {"failed", "done", "archived"}:

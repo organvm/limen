@@ -20,6 +20,7 @@ SOURCE_PATHS = {
     "contributions": "logs/contributions.json",
     "financial": "logs/financial-organ-state.json",
     "portfolio": "logs/portfolio-debt.json",
+    "estate_review": "docs/estate-session-review-seal.json",
 }
 
 
@@ -106,7 +107,7 @@ def test_snapshot_keeps_origins_horizons_and_unknown_coverage_distinct(
     assert snapshot["summary"]["complete"] == 1
     assert snapshot["summary"]["board_debt"] == 3
     assert snapshot["summary"]["active_debt"] == 3
-    assert snapshot["summary"]["coverage_debt"] == 8
+    assert snapshot["summary"]["coverage_debt"] == 9
     assert snapshot["summary"]["verified_receipt_debt"] == 1
     assert snapshot["summary"]["closure_pct"] == 25.0
     assert snapshot["summary"]["contract_ready_active"] == 1
@@ -145,7 +146,7 @@ def test_snapshot_marks_missing_sensors_dark_and_does_not_invent_zero(
     )
     assert snapshot["summary"]["source_freshness_pct"] == 0.0
     assert snapshot["summary"]["source_readiness_pct"] == 0.0
-    assert snapshot["summary"]["coverage_debt"] == 8
+    assert snapshot["summary"]["coverage_debt"] == 9
     assert {row["status"] for row in snapshot["source_coverage"]} == {"dark"}
 
 
@@ -167,6 +168,18 @@ def test_fresh_semantic_source_debt_never_becomes_ready(tmp_path: Path) -> None:
                 "exhaustive": True,
             },
         )
+    _write_source(
+        tmp_path,
+        "estate_review",
+        {
+            "generated_at": generated_at,
+            "status": "partial",
+            "complete": False,
+            "production_readiness": "partial",
+            "coverage_completeness": "partial",
+            "owner_reconciliation": "partial",
+        },
+    )
 
     snapshot = build_progress_snapshot(
         _board(),
@@ -182,8 +195,8 @@ def test_fresh_semantic_source_debt_never_becomes_ready(tmp_path: Path) -> None:
     assert by_id["mail"]["status"] == "incomplete"
     assert {by_id[source_id]["status"] for source_id in ("contributions", "financial", "portfolio")} == {"ready"}
     assert snapshot["summary"]["source_freshness_pct"] == 100.0
-    assert snapshot["summary"]["source_readiness_pct"] == 37.5
-    assert snapshot["summary"]["coverage_debt"] == 5
+    assert snapshot["summary"]["source_readiness_pct"] == 33.3
+    assert snapshot["summary"]["coverage_debt"] == 6
 
 
 def test_non_exhaustive_source_is_capped_debt(tmp_path: Path) -> None:
@@ -207,6 +220,35 @@ def test_non_exhaustive_source_is_capped_debt(tmp_path: Path) -> None:
 
     assert portfolio["status"] == "capped"
     assert "capped" in portfolio["debt_reasons"]
+
+
+def test_estate_review_seal_exposes_separate_readiness_facets(tmp_path: Path) -> None:
+    _write_source(
+        tmp_path,
+        "estate_review",
+        {
+            "generated_at": "2026-07-13T11:30:00Z",
+            "status": "partial",
+            "complete": False,
+            "production_readiness": "pending_corrected_sites_version",
+            "coverage_completeness": "partial",
+            "owner_reconciliation": "pending_owner_link_fixed_point",
+            "freshness": "frozen",
+        },
+    )
+
+    snapshot = build_progress_snapshot(
+        _board(),
+        tmp_path,
+        now=datetime(2026, 7, 13, 12, tzinfo=UTC),
+    )
+    row = next(source for source in snapshot["source_coverage"] if source["id"] == "estate_review")
+
+    assert row["status"] == "incomplete"
+    assert row["production_readiness"] == "pending_corrected_sites_version"
+    assert row["coverage_completeness"] == "partial"
+    assert row["owner_reconciliation"] == "pending_owner_link_fixed_point"
+    assert row["frozen_freshness"] == "frozen"
 
 
 def test_explicit_false_scope_inclusion_is_partial_debt(tmp_path: Path) -> None:
@@ -424,6 +466,6 @@ def test_progress_cli_can_write_a_bounded_receipt(tmp_path: Path, monkeypatch) -
     payload = json.loads(receipt.read_text(encoding="utf-8"))
     assert payload["summary"]["active_debt"] == 3
     assert payload["summary"]["board_debt"] == 3
-    assert payload["summary"]["coverage_debt"] == 8
+    assert payload["summary"]["coverage_debt"] == 9
     assert payload["summary"]["requested_active_debit_runs"] == 3
     assert len(payload["tasks"]) == 4

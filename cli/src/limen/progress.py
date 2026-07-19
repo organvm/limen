@@ -467,6 +467,12 @@ def _source_coverage(root: Path, now: datetime) -> list[dict[str, Any]]:
             root / "logs" / "portfolio-debt.json",
             24.0,
         ),
+        (
+            "estate_review",
+            "Canonical estate session review seal",
+            root / "docs" / "estate-session-review-seal.json",
+            24.0 * 8,
+        ),
     )
     rows: list[dict[str, Any]] = []
     for source_id, label, path, max_age in definitions:
@@ -481,6 +487,14 @@ def _source_coverage(root: Path, now: datetime) -> list[dict[str, Any]]:
             freshness = (payload.get("current_ops") or {}).get("freshness") or {}
             if freshness.get("is_stale") is True:
                 freshness_status = "stale"
+        estate_review_facets = {}
+        if source_id == "estate_review" and isinstance(payload, dict):
+            estate_review_facets = {
+                "production_readiness": payload.get("production_readiness", "unknown"),
+                "coverage_completeness": payload.get("coverage_completeness", "unknown"),
+                "owner_reconciliation": payload.get("owner_reconciliation", "unknown"),
+                "frozen_freshness": payload.get("freshness", "unknown"),
+            }
         status = semantic_status if semantic_status != "ready" else freshness_status
         debt_reasons = [candidate for candidate in (semantic_status, freshness_status) if candidate != "ready"]
         rows.append(
@@ -498,6 +512,7 @@ def _source_coverage(root: Path, now: datetime) -> list[dict[str, Any]]:
                 "content_sha256": content_sha256,
                 "normalized_sha256": normalized_sha256,
                 "content_state": read_status or "valid_json",
+                **estate_review_facets,
             }
         )
     return rows

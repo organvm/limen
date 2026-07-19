@@ -211,6 +211,8 @@ def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(
     }
     assert ".capsule.lock" in kickstart_text
     assert "validate_capsule_receipt" in kickstart_text
+    assert 'case "${1:-}" in' in kickstart_text
+    assert "capsule check: PASS" in kickstart_text
     assert receipt_data["schema"] == "limen.workstream.receipt.v1"
     assert receipt_data["slug"] == "next-epoch"
     assert receipt_data["branch"] == "work/next-epoch"
@@ -243,6 +245,34 @@ def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(
         check=False,
     )
     assert ignored_receipt.returncode != 0
+
+    immutable_paths = (contract, identity, receipt)
+    immutable_before = {path: path.read_bytes() for path in immutable_paths}
+    provider_marker = tmp_path / "provider-launched"
+    no_launch_bin = tmp_path / "no-launch-bin"
+    no_launch_bin.mkdir()
+    fake_codex = no_launch_bin / "codex"
+    fake_codex.write_text(
+        '#!/usr/bin/env bash\n: > "$PROVIDER_MARKER"\n',
+        encoding="utf-8",
+    )
+    fake_codex.chmod(0o755)
+    check_env = {
+        **os.environ,
+        "PATH": f"{no_launch_bin}:{os.environ['PATH']}",
+        "PROVIDER_MARKER": str(provider_marker),
+    }
+    for option in ("--help", "--check"):
+        result = subprocess.run(
+            ["bash", str(kickstart), option],
+            cwd=wt,
+            env=check_env,
+            text=True,
+            capture_output=True,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert {path: path.read_bytes() for path in immutable_paths} == immutable_before
+        assert not provider_marker.exists()
 
     capsule_files = (
         readme,

@@ -20,7 +20,7 @@ from limen.workstream_contract import ContractError as WorkstreamContractError
 from limen.workstream_contract import validate_packet_contract
 
 
-EXECUTION_CONTRACT_SCHEMA_VERSION = "limen-execution-contract.v3"
+EXECUTION_CONTRACT_SCHEMA_VERSION = "limen-execution-contract.v4"
 
 
 class ExecutionContractError(ValueError):
@@ -124,6 +124,7 @@ def execution_contract_payload(task: Mapping[str, Any] | object) -> dict[str, An
         "context": _string(data, "context", default=None, nullable=True),
         "predicate": _string(data, "predicate", default=None, nullable=True),
         "receipt_target": _string(data, "receipt_target", default=None, nullable=True),
+        "source_atom_ids": _string_list(data, "source_atom_ids", order_insensitive=True),
         "execution_requirements": _execution_requirements(data),
         "workstream_contract": _workstream_contract(data),
         "claude_tier": _string(data, "claude_tier", default=None, nullable=True),
