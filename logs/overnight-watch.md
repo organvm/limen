@@ -1,12 +1,12 @@
 # Overnight Watch
 
 - Status: `alert`
-- Updated: `2026-07-19T22:11:53+00:00`
-- Log age: `545` seconds
+- Updated: `2026-07-19T23:15:48+00:00`
+- Log age: `33` seconds
 - Launchd: `active`
 - Latest tick: `tick emitted: 2026-07-19T22:01:42+00:00 total=2995 open=721 spent=13/600`
 - Latest async: `async: reaped 0 dead · harvested 0 · 0 still running · launched 0`
-- Stale tick samples: `1`
+- Stale tick samples: `10`
 - Active workers: `0`
 - Heartbeat child processes: `2`
 
@@ -25,15 +25,15 @@
 
 - Handoff refresh: `0`; check: `0`.
 - Value gate: `20`; action: `stop_no_durable_progress`.
-- Dispatch control: all bounded owner packets are closed by current capability, owner gate(s).
+- Dispatch control: all bounded owner packets are closed by current capability, lifecycle, owner gate(s).
 - Selected owner: `organvm/limen`.
 
 ## Throughput
 
-- Recent per-60min completions: `[0, 0, 0]` (derived floor `0.0`, median `0.0`).
+- Recent per-60min completions: `[0, 0, 0]` (derived floor `0.0`, median `0`).
 - Below floor: `false`; suppressed: `no`.
-  - child `63068` `S` `09:06` `bash /Users/4jp/Workspace/limen/scripts/mail-beat.sh`
-  - child `63069` `S` `09:06` `tail -3`
+  - child `17748` `S` `00:33` `bash /Users/4jp/Workspace/limen/scripts/clone-maintenance.sh`
+  - child `17749` `S` `00:33` `tail -3`
 
 ## WATCH_ALERT
-- `overnight-lane-switch-blocked`: blocker=overnight-owner-packets-gated owner=organvm/limen reason=all bounded owner packets are closed by current capability, owner gate(s)
+- `overnight-lane-switch-blocked`: blocker=overnight-owner-packets-gated owner=organvm/limen reason=all bounded owner packets are closed by current capability, lifecycle, owner gate(s)
