@@ -1,18 +1,18 @@
 # Substrate Storage Pressure
 
-Generated: `2026-07-19T23:12:40Z`
+Generated: `2026-07-19T23:24:52Z`
 Status: `partial`
 Scope status: `partial`
 Inventory: `cheap`; fresh: `False`; unknown buckets: `3`
-Internal free: `15.2 GiB`
+Internal free: `18.1 GiB`
 Target free: `200.0 GiB`
-Shortfall: `184.8 GiB`
-Free-space trend: `falling` (`-99.9 GiB` over `809067.381249s`)
+Shortfall: `181.9 GiB`
+Free-space trend: `falling` (`-97.0 GiB` over `809800.483802s`)
 
 ## Host and Backup Admission
 
-- Backblaze CPU: `97.6%`; RSS: `529104896` bytes.
-- Swap fraction: `0.5181347656180151`; host admission allowed: `False`.
+- Backblaze CPU: `98.4%`; RSS: `2354511872` bytes.
+- Swap fraction: `0.305328369140625`; host admission allowed: `False`.
 - Exclusion coverage: `missing`; complete: `False`; missing: `2`; unknown pools: `0`.
 
 ## Safe Reclaim Already Run
@@ -24,7 +24,7 @@ Free-space trend: `falling` (`-99.9 GiB` over `809067.381249s`)
 ## Scratch / Worktree Lifecycle
 
 - Cached stale summary: `404 debt roots / 701 scanned; 0 reapable roots`.
-- Inventory age: `809067.381249s`; fresh: `False`.
+- Inventory age: `809800.483802s`; fresh: `False`.
 - Debt target: `0`; complete: `False`; reapable cap: `0`.
 
 | Reason | Roots |
