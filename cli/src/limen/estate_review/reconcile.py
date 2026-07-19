@@ -440,7 +440,7 @@ def _summary(
         for agent in review_agents:
             matched = []
             intervals = []
-            tokens = collections.Counter()
+            tokens: collections.Counter[str] = collections.Counter()
             for session in sessions:
                 if session["agent"] != agent:
                     continue

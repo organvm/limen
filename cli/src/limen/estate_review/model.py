@@ -288,10 +288,8 @@ def canonicalize_sessions(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, A
             grouped[(agent, native_id)].append(row)
     canonical: list[dict[str, Any]] = []
     for (agent, native_id), fragments in sorted(grouped.items()):
-        starts = [parse_ts(row.get("start")) for row in fragments]
-        ends = [parse_ts(row.get("end")) for row in fragments]
-        starts = [value for value in starts if value]
-        ends = [value for value in ends if value]
+        starts = [value for row in fragments if (value := parse_ts(row.get("start"))) is not None]
+        ends = [value for row in fragments if (value := parse_ts(row.get("end"))) is not None]
         parents = {
             str(row.get("parent_id") or row.get("_parent_id") or "")
             for row in fragments

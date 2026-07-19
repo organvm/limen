@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import collections
+import datetime as dt
 import glob
 import hashlib
 import json
@@ -45,6 +46,19 @@ def _jsonl(path: Path) -> Iterable[dict[str, Any]]:
                     yield row
     except OSError:
         return
+
+
+def _timestamped(
+    rows: Iterable[dict[str, Any]],
+) -> list[tuple[dt.datetime, dict[str, Any]]]:
+    """Parse timestamped rows while narrowing away malformed timestamps."""
+
+    stamped: list[tuple[dt.datetime, dict[str, Any]]] = []
+    for row in rows:
+        timestamp = parse_ts(row.get("timestamp"))
+        if timestamp is not None:
+            stamped.append((timestamp, row))
+    return stamped
 
 
 def _ro_db(path: Path) -> sqlite3.Connection:
@@ -126,13 +140,11 @@ class NativeCollectors:
     def codex(self) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         fragments: list[dict[str, Any]] = []
         files = events = late = 0
-        direct = collections.Counter()
+        direct: collections.Counter[str] = collections.Counter()
         pattern = str(self.home / ".codex" / "sessions" / "**" / "*.jsonl")
         for name in glob.iglob(pattern, recursive=True):
             path = Path(name)
-            rows = list(_jsonl(path))
-            stamped = [(parse_ts(row.get("timestamp")), row) for row in rows]
-            stamped = [(ts, row) for ts, row in stamped if ts]
+            stamped = _timestamped(_jsonl(path))
             if (
                 not stamped
                 or max(ts for ts, _ in stamped) < self.review_start
@@ -201,12 +213,11 @@ class NativeCollectors:
     def claude(self) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         fragments: list[dict[str, Any]] = []
         files = events = late = 0
-        direct = collections.Counter()
+        direct: collections.Counter[str] = collections.Counter()
         pattern = str(self.home / ".claude" / "projects" / "**" / "*.jsonl")
         for name in glob.iglob(pattern, recursive=True):
             path = Path(name)
-            stamped = [(parse_ts(row.get("timestamp")), row) for row in _jsonl(path)]
-            stamped = [(ts, row) for ts, row in stamped if ts]
+            stamped = _timestamped(_jsonl(path))
             before = [(ts, row) for ts, row in stamped if ts < self.config.snapshot_at]
             if not before or max(ts for ts, _ in before) < self.review_start:
                 continue
@@ -269,7 +280,7 @@ class NativeCollectors:
         if not path.is_file():
             return [], {"available": False, "sessions": 0, "tokens": None}
         fragments: list[dict[str, Any]] = []
-        direct = collections.Counter()
+        direct: collections.Counter[str] = collections.Counter()
         messages = 0
         try:
             with closing(_ro_db(path)) as connection:
@@ -395,8 +406,11 @@ class NativeCollectors:
             path = Path(name)
             if "agy" in str(path).lower() or "capfill" in str(path).lower():
                 continue
-            timestamps = [parse_ts(row.get("timestamp")) for row in _jsonl(path)]
-            timestamps = [value for value in timestamps if value and value < self.config.snapshot_at]
+            timestamps = [
+                value
+                for row in _jsonl(path)
+                if (value := parse_ts(row.get("timestamp"))) is not None and value < self.config.snapshot_at
+            ]
             if not timestamps or max(timestamps) < self.review_start:
                 continue
             fragments.append(
@@ -423,7 +437,7 @@ class NativeCollectors:
         if not path.is_file():
             return [], {"available": False, "sessions": 0, "tokens": None}
         fragments: list[dict[str, Any]] = []
-        direct = collections.Counter()
+        direct: collections.Counter[str] = collections.Counter()
         usage_events = 0
         try:
             with closing(_ro_db(path)) as connection:
@@ -505,7 +519,7 @@ class NativeCollectors:
             return [], {"available": False, "sessions": 0, "tokens": None}
         board = yaml.safe_load(board_path.read_text(encoding="utf-8")) or {}
         groups: dict[str, list[Any]] = collections.defaultdict(list)
-        remote_states = collections.Counter()
+        remote_states: collections.Counter[str] = collections.Counter()
         for task in board.get("tasks") or []:
             for event in task.get("dispatch_log") or []:
                 timestamp = parse_ts(event.get("timestamp"))
@@ -520,7 +534,7 @@ class NativeCollectors:
                     groups[session_id].append(timestamp)
                 state = str(event.get("remote_state") or event.get("status") or "")
                 remote_states[classify_jules_remote_status(state)] += 1
-        fragments = [
+        fragments: list[dict[str, Any]] = [
             {
                 "agent": "jules",
                 "native_id": session_id,
