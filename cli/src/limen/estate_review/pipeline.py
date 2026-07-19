@@ -145,6 +145,7 @@ def _owner_link_summary(
             "duplicates": 0,
             "unknown": 0,
             "invalid": 0,
+            "source_binding_valid": False,
         }
     rows = payload.get("links") if isinstance(payload, dict) else None
     if (
@@ -153,6 +154,13 @@ def _owner_link_summary(
         or not isinstance(rows, list)
     ):
         rows = []
+    source_binding_valid = bool(
+        isinstance(payload, dict)
+        and prompt_coverage.get("projection_digest")
+        and prompt_coverage.get("authority_seal_hash")
+        and payload.get("source_projection_digest") == prompt_coverage.get("projection_digest")
+        and payload.get("source_authority_seal_hash") == prompt_coverage.get("authority_seal_hash")
+    )
     ids: list[str] = []
     invalid = 0
     receipt_claims: dict[str, tuple[str, str]] = {}
@@ -187,6 +195,8 @@ def _owner_link_summary(
             not str(row.get("failed_gate") or "").strip() or not str(row.get("next_command") or "").strip()
         ):
             invalid += 1
+        if (owner_type == "blocker") != (disposition == "blocked"):
+            invalid += 1
         if disposition == "verified_done":
             result = row.get("predicate_result")
             if (
@@ -207,7 +217,11 @@ def _owner_link_summary(
     missing = ask_ids - linked
     unknown = linked - ask_ids
     duplicates = sum(value - 1 for value in counts.values() if value > 1)
-    state = "complete" if prompt_exact and not missing and not unknown and not duplicates and not invalid else "pending"
+    state = (
+        "complete"
+        if (prompt_exact and source_binding_valid and not missing and not unknown and not duplicates and not invalid)
+        else "pending"
+    )
     return {
         "state": state,
         "prompt_authority_exact": prompt_exact,
@@ -217,6 +231,7 @@ def _owner_link_summary(
         "duplicates": duplicates,
         "unknown": len(unknown),
         "invalid": invalid,
+        "source_binding_valid": source_binding_valid,
     }
 
 

@@ -532,6 +532,110 @@ def test_owner_link_summary_rejects_structurally_empty_owner(
     assert summary["invalid"] > 0
 
 
+def test_owner_link_summary_requires_exact_projection_and_seal_binding(
+    tmp_path: Path,
+) -> None:
+    projection_digest = "a" * 64
+    seal_hash = "b" * 64
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    owner_path = docs / "estate-session-review-owner-links.json"
+    payload = {
+        "schema": "limen.estate_session_review_owner_links.v1",
+        "status": "complete",
+        "source_projection_digest": projection_digest,
+        "source_authority_seal_hash": seal_hash,
+        "links": [
+            {
+                "prompt_atom_id": "pa-one",
+                "owner_type": "task",
+                "canonical_owner_reference": "task:one",
+                "disposition": "durably_homed_open",
+                "predicate": "task owner remains durable",
+                "receipt_target": "task:one",
+                "content_bindings": ["atom:pa-one"],
+            }
+        ],
+    }
+    owner_path.write_text(json.dumps(payload), encoding="utf-8")
+    coverage = {
+        "available": True,
+        "coverage": {},
+        "projection_digest": projection_digest,
+        "authority_seal_hash": seal_hash,
+        "source_scope": {
+            "scope": "all",
+            "target_scope": "all",
+            "all_baseline_complete": True,
+        },
+    }
+
+    exact = _owner_link_summary(tmp_path, [{"ask": "pa-one"}], coverage)
+
+    assert exact["state"] == "complete"
+    assert exact["source_binding_valid"] is True
+
+    payload["source_authority_seal_hash"] = "c" * 64
+    owner_path.write_text(json.dumps(payload), encoding="utf-8")
+    stale = _owner_link_summary(tmp_path, [{"ask": "pa-one"}], coverage)
+
+    assert stale["state"] == "pending"
+    assert stale["source_binding_valid"] is False
+
+
+def test_owner_link_summary_rejects_duplicate_and_conflicting_receipt_claims(
+    tmp_path: Path,
+) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    common = {
+        "prompt_atom_id": "pa-one",
+        "owner_type": "task",
+        "disposition": "durably_homed_open",
+        "receipt_target": "task:shared",
+        "content_bindings": ["atom:pa-one"],
+    }
+    (docs / "estate-session-review-owner-links.json").write_text(
+        json.dumps(
+            {
+                "schema": "limen.estate_session_review_owner_links.v1",
+                "source_projection_digest": "a" * 64,
+                "source_authority_seal_hash": "b" * 64,
+                "links": [
+                    {
+                        **common,
+                        "canonical_owner_reference": "task:one",
+                        "predicate": "first predicate",
+                    },
+                    {
+                        **common,
+                        "canonical_owner_reference": "task:two",
+                        "predicate": "conflicting predicate",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    coverage = {
+        "available": True,
+        "coverage": {},
+        "projection_digest": "a" * 64,
+        "authority_seal_hash": "b" * 64,
+        "source_scope": {
+            "scope": "all",
+            "target_scope": "all",
+            "all_baseline_complete": True,
+        },
+    }
+
+    summary = _owner_link_summary(tmp_path, [{"ask": "pa-one"}], coverage)
+
+    assert summary["state"] == "pending"
+    assert summary["duplicates"] == 1
+    assert summary["invalid"] > 0
+
+
 def test_exact_private_prompt_lineage_joins_without_exposing_prompt_text(
     tmp_path: Path,
 ) -> None:
