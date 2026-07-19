@@ -17,7 +17,11 @@ from typing import Any, Iterable
 import yaml
 
 from limen.jules_remote import classify_jules_remote_status
-from limen.prompt_projection import PROJECTION_FORM, load_window_rows
+from limen.prompt_projection import (
+    PROJECTION_FORM,
+    load_window_rows,
+    validate_authority_seal_binding,
+)
 from limen.prompt_sources import source_adapter_contract
 
 from .config import ReviewConfig
@@ -635,6 +639,7 @@ def _canonical_digest(value: Any) -> str:
 def _exact_prompt_authority(
     public: dict[str, Any],
     marker: dict[str, Any],
+    seal: dict[str, Any],
 ) -> tuple[bool, list[str]]:
     """Verify the tracked projection and private marker form one exact all/all seal."""
 
@@ -672,6 +677,13 @@ def _exact_prompt_authority(
         errors.append("private_marker_semantic_mismatch")
     if marker.get("source_cursor_digest") != public.get("source_cursor_digest"):
         errors.append("private_marker_cursor_mismatch")
+    errors.extend(
+        validate_authority_seal_binding(
+            seal,
+            public,
+            require_ready=True,
+        )
+    )
     return not errors, errors
 
 
@@ -713,12 +725,13 @@ def collect_prompt_atoms(
     """Stream exact private prompt atoms; task rows are ownership evidence, never asks."""
 
     projection_path = config.root / "docs" / "prompt-atom-ledger.json"
-    if not projection_path.is_file():
+    seal_path = config.root / "docs" / "prompt-authority-seal.json"
+    if not projection_path.is_file() or not seal_path.is_file():
         return [], {
             "available": False,
             "authority": "prompt_atom_projection",
             "coverage": "coverage_unknown",
-            "reason": "exact all/all prompt atom projection is absent",
+            "reason": "exact all/all prompt atom projection or authority seal is absent",
         }
     marker_path, events_path, outcomes_path = _private_prompt_paths(config)
     if not marker_path.is_file():
@@ -729,8 +742,9 @@ def collect_prompt_atoms(
             "reason": "private prompt authority marker is unavailable",
         }
     projection = json.loads(projection_path.read_text(encoding="utf-8"))
+    seal = json.loads(seal_path.read_text(encoding="utf-8"))
     marker = json.loads(marker_path.read_text(encoding="utf-8"))
-    exact, authority_errors = _exact_prompt_authority(projection, marker)
+    exact, authority_errors = _exact_prompt_authority(projection, marker, seal)
     if not exact:
         return [], {
             "available": True,
@@ -912,6 +926,7 @@ def collect_prompt_atoms(
         "available": True,
         "authority": projection.get("authority") or "prompt_atom_projection",
         "projection_digest": projection.get("projection_digest"),
+        "authority_seal_hash": seal.get("content_hash"),
         "source_scope": source_scope,
         "coverage": projection.get("coverage") or {},
         "occurrences_in_window": occurrence_count,

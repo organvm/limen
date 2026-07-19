@@ -46,6 +46,20 @@ def t(value: str) -> dt.datetime:
     return dt.datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(UTC)
 
 
+def write_prompt_authority_seal(root: Path, public: dict) -> None:
+    seal = {
+        "schema": "limen.prompt-authority-seal.v1",
+        "schema_version": 1,
+        "authority_ready": True,
+        "public_projection_digest": public["projection_digest"],
+    }
+    seal["content_hash"] = _canonical_digest(seal)
+    (root / "docs" / "prompt-authority-seal.json").write_text(
+        json.dumps(seal),
+        encoding="utf-8",
+    )
+
+
 def test_windows_follow_america_new_york_calendar_rules() -> None:
     completed, rolling = derive_windows(t("2026-07-19T15:11:00Z"))
 
@@ -547,6 +561,7 @@ def test_exact_private_prompt_lineage_joins_without_exposing_prompt_text(
         json.dumps(public),
         encoding="utf-8",
     )
+    write_prompt_authority_seal(root, public)
     (private / "prompt-atom-ledger.json").write_text(
         json.dumps(
             {
@@ -689,6 +704,7 @@ def test_chunk_manifest_loads_only_redacted_window_rows_by_default(
         json.dumps(public),
         encoding="utf-8",
     )
+    write_prompt_authority_seal(root, public)
     (private / "prompt-atom-ledger.json").write_text(
         json.dumps(
             {
@@ -726,6 +742,14 @@ def test_chunk_manifest_loads_only_redacted_window_rows_by_default(
     assert "private text" not in json.dumps(public)
     assert all(b"private text" not in content for content in payloads.values())
 
+    seal_path = root / "docs" / "prompt-authority-seal.json"
+    tampered = json.loads(seal_path.read_text(encoding="utf-8"))
+    tampered["content_hash"] = "0" * 64
+    seal_path.write_text(json.dumps(tampered), encoding="utf-8")
+    refused, refusal = collect_prompt_atoms(config, [])
+    assert refused == []
+    assert "prompt authority seal digest is invalid" in refusal["authority_errors"]
+
 
 def test_bare_native_id_cannot_infer_prompt_session_binding(
     tmp_path: Path,
@@ -756,6 +780,7 @@ def test_bare_native_id_cannot_infer_prompt_session_binding(
         json.dumps(public),
         encoding="utf-8",
     )
+    write_prompt_authority_seal(root, public)
     (private / "prompt-atom-ledger.json").write_text(
         json.dumps(
             {

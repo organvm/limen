@@ -19,6 +19,8 @@ from typing import Any, Iterable
 MANIFEST_SCHEMA = "limen.prompt_atom_chunk_manifest.v1"
 CHUNK_SCHEMA = "limen.prompt_atom_projection_chunk.v1"
 PROJECTION_FORM = "chunk_manifest"
+AUTHORITY_SEAL_SCHEMA = "limen.prompt-authority-seal.v1"
+AUTHORITY_SEAL_SCHEMA_VERSION = 1
 _CHUNK_NAME = re.compile(r"^(?:day-\d{4}-\d{2}-\d{2}|unknown)\.json$")
 _UTC = dt.timezone.utc
 
@@ -39,6 +41,40 @@ def canonical_json_bytes(value: Any) -> bytes:
 
 def sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def digest(value: Any) -> str:
+    encoded = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def validate_authority_seal_binding(
+    seal: dict[str, Any],
+    projection: dict[str, Any],
+    *,
+    require_ready: bool,
+) -> list[str]:
+    """Validate the bounded seal's identity and exact projection binding."""
+
+    errors: list[str] = []
+    if seal.get("schema") != AUTHORITY_SEAL_SCHEMA:
+        errors.append("prompt authority seal schema is invalid")
+    if seal.get("schema_version") != AUTHORITY_SEAL_SCHEMA_VERSION:
+        errors.append("prompt authority seal version is stale")
+    content_hash = str(seal.get("content_hash") or "")
+    material = {key: value for key, value in seal.items() if key != "content_hash"}
+    if not content_hash or digest(material) != content_hash:
+        errors.append("prompt authority seal digest is invalid")
+    if seal.get("public_projection_digest") != projection.get("projection_digest"):
+        errors.append("prompt authority seal projection binding is stale")
+    if require_ready and seal.get("authority_ready") is not True:
+        errors.append("prompt authority seal is not authority-ready")
+    return errors
 
 
 def parse_timestamp(value: Any) -> dt.datetime | None:

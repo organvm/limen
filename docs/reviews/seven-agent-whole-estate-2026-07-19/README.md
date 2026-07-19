@@ -36,8 +36,10 @@ PYTHONPATH=cli/src python3 -m limen.estate_review \
 
 The equivalent installed CLI is `limen estate-review`. Collection reads the
 native provider stores and only the digest-bound prompt chunks intersecting the
-frozen windows, without mutating them. It rejects the legacy monolithic prompt
-projection by default; `--legacy-full-prompt-projection` exists only for an
+frozen windows, without mutating them. Collection also requires the authority
+seal to be digest-valid, authority-ready, and bound to that exact manifest. It
+rejects the legacy monolithic prompt projection by default;
+`--legacy-full-prompt-projection` exists only for an
 explicit compatibility run and is not an accepted corrected-report path.
 Board rows are evidence only when they carry exact `source_atom_ids`; they are
 never reconstructed into asks. Reconciliation dynamically enumerates GitVS
