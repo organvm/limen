@@ -4,6 +4,16 @@ This directory contains the reproducible, redacted source for the frozen
 2026-07-19 whole-estate review of Codex, Claude, Agy, OpenCode, Gemini,
 Copilot, and Jules.
 
+## Delivery status
+
+The existing owner-only Sites version 1 is a private historical receipt. Its
+analytical conclusions are provisional and must not be cited. The corrected
+version 2 will replace it only after exact prompt authority, exhaustive owner
+links, byte-identical shadow runs, default-branch custody, and owner-only
+access verification all pass. Until then, the current `snapshot.json`,
+`artifact.json`, and `validation.json` are likewise superseded provisional
+outputs rather than decision evidence.
+
 The two half-open windows overlap and are never added:
 
 - completed calendar week: `2026-07-06T04:00:00Z` through
