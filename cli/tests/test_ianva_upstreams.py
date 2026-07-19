@@ -37,7 +37,7 @@ def test_load_upstreams_defensively_normalizes_registry_shapes(tmp_path):
         )
     )
 
-    enabled = {u.name: u for u in load_upstreams(registry=registry)}
+    enabled = {u.name: u for u in load_upstreams(registry=registry, extra=tmp_path / "extra.json")}
     assert set(enabled) == {"remote", "scalar-args"}
     assert enabled["remote"].transport == "http"
     assert enabled["remote"].headers == {"X-Test": "1"}
@@ -45,7 +45,7 @@ def test_load_upstreams_defensively_normalizes_registry_shapes(tmp_path):
     assert enabled["scalar-args"].args == ["7"]
     assert enabled["scalar-args"].headers == {}
 
-    all_upstreams = {u.name: u for u in load_upstreams(registry=registry, include_disabled=True)}
+    all_upstreams = {u.name: u for u in load_upstreams(registry=registry, extra=tmp_path / "extra.json", include_disabled=True)}
     assert all_upstreams["disabled-local"].enabled is False
     assert all_upstreams["disabled-local"].command == "node"
     assert all_upstreams["disabled-local"].args == ["server.js", "--flag", "value"]
