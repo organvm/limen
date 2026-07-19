@@ -202,6 +202,7 @@ def _receipt_query(chunk: list[tuple[str, str, int]]) -> str:
               p: pullRequest(number:{number}) {{
                 url title state createdAt mergedAt closedAt baseRefName headRefOid
                 author {{ login }}
+                mergedBy {{ login }}
                 commits(last:1) {{ nodes {{ commit {{
                   committedDate oid
                   statusCheckRollup {{
@@ -209,8 +210,13 @@ def _receipt_query(chunk: list[tuple[str, str, int]]) -> str:
                       pageInfo {{ hasNextPage endCursor }}
                       nodes {{
                         __typename
-                        ... on CheckRun {{ name status conclusion completedAt detailsUrl }}
-                        ... on StatusContext {{ context state createdAt targetUrl }}
+                        ... on CheckRun {{
+                          name status conclusion completedAt detailsUrl
+                          checkSuite {{ app {{ slug }} }}
+                        }}
+                        ... on StatusContext {{
+                          context state createdAt targetUrl creator {{ login }}
+                        }}
                       }}
                     }}
                   }}
@@ -261,6 +267,7 @@ def _paginated_head_checks(
                     "conclusion": row.get("conclusion"),
                     "completed_at": row.get("completed_at"),
                     "url": row.get("details_url"),
+                    "actor": (row.get("app") or {}).get("slug"),
                 }
             )
     for page in status_pages if isinstance(status_pages, list) else []:
@@ -272,6 +279,7 @@ def _paginated_head_checks(
                     "conclusion": row.get("state"),
                     "completed_at": row.get("created_at"),
                     "url": row.get("target_url"),
+                    "actor": (row.get("creator") or {}).get("login"),
                 }
             )
     deduplicated: dict[tuple[str, str, str], dict[str, Any]] = {}
@@ -363,6 +371,7 @@ def batch_receipts(
                                 "conclusion": context.get("conclusion"),
                                 "completed_at": context.get("completedAt"),
                                 "url": context.get("detailsUrl"),
+                                "actor": ((context.get("checkSuite") or {}).get("app") or {}).get("slug"),
                             }
                         )
                     elif context.get("__typename") == "StatusContext":
@@ -373,6 +382,7 @@ def batch_receipts(
                                 "conclusion": context.get("state"),
                                 "completed_at": context.get("createdAt"),
                                 "url": context.get("targetUrl"),
+                                "actor": (context.get("creator") or {}).get("login"),
                             }
                         )
             head_sha = pull.get("headRefOid")
@@ -401,6 +411,7 @@ def batch_receipts(
                 "canonical_url": public_url,
                 "title": None if is_private else pull.get("title"),
                 "author": (pull.get("author") or {}).get("login"),
+                "merged_by": (pull.get("mergedBy") or {}).get("login"),
                 "created_at": pull.get("createdAt"),
                 "merged_at": pull.get("mergedAt"),
                 "closed_at": pull.get("closedAt"),
@@ -418,6 +429,20 @@ def batch_receipts(
             if public_url:
                 found[str(public_url)] = receipt
     return found, errors
+
+
+def receipt_role_credits(receipt: dict[str, Any]) -> dict[str, Any]:
+    """Keep execution, verification, integration, and landing actors distinct."""
+
+    verifiers = sorted({str(check.get("actor")) for check in receipt.get("checks") or [] if check.get("actor")})
+    return {
+        "executor": receipt.get("author"),
+        "verifiers": verifiers,
+        # The PR-head APIs used here do not prove who composed a merge-group.
+        # Keep integration unknown rather than assigning it to author/merger.
+        "integrator": receipt.get("integrator"),
+        "lander": receipt.get("merged_by"),
+    }
 
 
 def _summary(
@@ -698,12 +723,11 @@ def reconcile_snapshot(
     snapshot["deliverables"] = sorted(
         [
             {
-                "agent": ("copilot" if str(receipt.get("author") or "").lower() == "copilot-swe-agent" else "unknown"),
-                "executor_role": "executor",
                 "title": receipt.get("title"),
                 "receipt": url,
                 "receipt_head_sha": receipt.get("head_sha"),
                 "outcome": receipt.get("outcome"),
+                **receipt_role_credits(receipt),
                 "predicate_result": {
                     "passed": receipt.get("outcome") == "verified_done",
                     "detail": receipt.get("reason"),
@@ -715,7 +739,7 @@ def reconcile_snapshot(
         ],
         key=lambda row: (
             row["outcome"] != "verified_done",
-            row["agent"],
+            str(row["executor"] or ""),
             str(row["title"] or ""),
         ),
     )

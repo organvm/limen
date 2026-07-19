@@ -246,6 +246,7 @@ def build_artifact(snapshot: dict[str, Any]) -> dict[str, Any]:
                 "Executor, verifier, integrator, and lander roles stay separate."
             ),
         },
+        {"id": "role_table_block", "type": "table", "tableId": "role_table"},
         {"id": "appendix_table_block", "type": "table", "tableId": "appendix_table"},
         {
             "id": "limitations",
@@ -330,6 +331,23 @@ def build_artifact(snapshot: dict[str, Any]) -> dict[str, Any]:
                 ("token_basis", "Native token basis", "string"),
             ],
             "root_sessions",
+        ),
+        _table(
+            "role_table",
+            "Receipt role credit",
+            "deliverables",
+            [
+                ("title", "Deliverable", "string"),
+                ("outcome", "Outcome", "string"),
+                ("executor", "Executor", "string"),
+                ("verifiers", "Verifiers", "string"),
+                ("integrator", "Integrator", "string"),
+                ("lander", "Lander", "string"),
+                ("receipt", "Receipt", "string"),
+            ],
+            "outcome",
+            "asc",
+            subtitle=("Unknown actors remain blank; one role is never substituted for another."),
         ),
         _table(
             "appendix_table",

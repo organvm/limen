@@ -26,7 +26,11 @@ from limen.estate_review.pipeline import (
     _owner_link_summary,
 )
 from limen.estate_review import reconcile
-from limen.estate_review.reconcile import copilot_ask_id, estate_census
+from limen.estate_review.reconcile import (
+    copilot_ask_id,
+    estate_census,
+    receipt_role_credits,
+)
 from limen.estate_review.render import build_artifact, validate_artifact_contract
 from limen.estate_review.render import stable_json
 from limen.estate_review.sources import (
@@ -331,6 +335,27 @@ def test_collision_safe_copilot_ids_include_repository() -> None:
 def test_missing_native_meter_and_non_executor_transition_stay_unknown() -> None:
     assert native_metric(None) is None
     assert event_executor_role({"agent": "heal-board", "status": "done"}) is None
+
+
+def test_receipt_roles_never_credit_executor_as_missing_integrator() -> None:
+    credits = receipt_role_credits(
+        {
+            "author": "coding-agent",
+            "merged_by": "human-lander",
+            "checks": [
+                {"actor": "github-actions"},
+                {"actor": "github-actions"},
+                {"actor": "codeql"},
+            ],
+        }
+    )
+
+    assert credits == {
+        "executor": "coding-agent",
+        "verifiers": ["codeql", "github-actions"],
+        "integrator": None,
+        "lander": "human-lander",
+    }
 
 
 def test_registry_owner_order_and_evidence_union_are_dynamic(
