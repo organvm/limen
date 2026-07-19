@@ -343,11 +343,29 @@ def test_receipt_roles_never_credit_executor_as_missing_integrator() -> None:
             "author": "coding-agent",
             "merged_by": "human-lander",
             "checks": [
-                {"actor": "github-actions"},
-                {"actor": "github-actions"},
-                {"actor": "codeql"},
+                {
+                    "actor": "github-actions",
+                    "completed_at": "2026-07-19T15:00:00Z",
+                    "conclusion": "success",
+                },
+                {
+                    "actor": "github-actions",
+                    "completed_at": "2026-07-19T15:00:00Z",
+                    "conclusion": "success",
+                },
+                {
+                    "actor": "codeql",
+                    "completed_at": "2026-07-19T15:00:00Z",
+                    "conclusion": "success",
+                },
+                {
+                    "actor": "late-verifier",
+                    "completed_at": "2026-07-19T16:00:00Z",
+                    "conclusion": "success",
+                },
             ],
-        }
+        },
+        snapshot_at=t("2026-07-19T15:11:00Z"),
     )
 
     assert credits == {

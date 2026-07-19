@@ -431,10 +431,24 @@ def batch_receipts(
     return found, errors
 
 
-def receipt_role_credits(receipt: dict[str, Any]) -> dict[str, Any]:
-    """Keep execution, verification, integration, and landing actors distinct."""
+def receipt_role_credits(
+    receipt: dict[str, Any],
+    *,
+    snapshot_at: dt.datetime,
+) -> dict[str, Any]:
+    """Keep only role evidence established by the frozen snapshot."""
 
-    verifiers = sorted({str(check.get("actor")) for check in receipt.get("checks") or [] if check.get("actor")})
+    accepted = {"SUCCESS", "NEUTRAL", "SKIPPED", "EXPECTED"}
+    verifiers = sorted(
+        {
+            str(check.get("actor"))
+            for check in receipt.get("checks") or []
+            if check.get("actor")
+            and (completed := parse_ts(check.get("completed_at"))) is not None
+            and completed <= snapshot_at
+            and str(check.get("conclusion") or check.get("state") or "").upper() in accepted
+        }
+    )
     return {
         "executor": receipt.get("author"),
         "verifiers": verifiers,
@@ -727,7 +741,10 @@ def reconcile_snapshot(
                 "receipt": url,
                 "receipt_head_sha": receipt.get("head_sha"),
                 "outcome": receipt.get("outcome"),
-                **receipt_role_credits(receipt),
+                **receipt_role_credits(
+                    receipt,
+                    snapshot_at=config.snapshot_at,
+                ),
                 "predicate_result": {
                     "passed": receipt.get("outcome") == "verified_done",
                     "detail": receipt.get("reason"),
