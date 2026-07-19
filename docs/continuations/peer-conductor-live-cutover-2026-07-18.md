@@ -17,9 +17,11 @@ isolated continuation from the remotely preserved implementation branch:
 
 ```bash
 limen workstream --autonomous --agent auto \
+  --workstream infrastructure \
+  --runway 8h \
   --from origin/work/peer-conductor-mesh-20260718 \
   --prompt-file docs/continuations/peer-conductor-live-cutover-2026-07-18.md \
-  limen peer-conductor-live-cutover
+  limen peer-conductor-live-cutover-2026-07-18
 ```
 
 The bootstrap command deliberately omits `--conduct`: the production broker must not accept a new
