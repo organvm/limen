@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/start-worktree-session.sh [--autonomous] [--codex] [--shell] [--from <branch-or-ref>] [--prompt <text>] [--prompt-file <path>] [--runway <duration>] [--workstream <handle>] <repo-or-alias> <slug>
+  scripts/start-worktree-session.sh [--autonomous] [--codex] [--shell] [--check] [--from <branch-or-ref>] [--prompt <text>] [--prompt-file <path>] [--runway <duration>] [--worktree-root <path>] [--workstream <handle>] <repo-or-alias> <slug>
 
 Examples:
   scripts/start-worktree-session.sh portvs triptych-story
@@ -12,6 +12,7 @@ Examples:
   scripts/start-worktree-session.sh --autonomous --codex --runway 8h --prompt-file /tmp/next-session.md limen next-epoch
   scripts/start-worktree-session.sh --shell --prompt-file /tmp/prompt.md domus package-map
   scripts/start-worktree-session.sh --workstream contributions --prompt 'drain the code lane' limen contrib-run
+  scripts/start-worktree-session.sh --check --worktree-root /tmp/limen-worktrees limen next-epoch
 
 --workstream pins the worker to ONE purpose channel (contributions/correspondence/… — see
 docs/lanes/). It is stamped into the kickoff packet so the session stays single-purpose.
@@ -22,6 +23,11 @@ first kickstart, survives successor sessions, and is never silently reset by a r
 --autonomous requires an explicit prompt and turns the README into the initial Codex prompt. The
 packet defines live probes and completion/switch predicates; it never predeclares the ending.
 
+--worktree-root explicitly selects the checkout pool. Without it (or LIMEN_WORKTREE_ROOT), the
+launcher requires a mounted writable /Volumes/Scratch and uses /Volumes/Scratch/limen-worktrees.
+There is no silent internal fallback. --check validates the same plan without any filesystem or Git
+mutation.
+
 Aliases:
   portvs, portus  /Users/4jp/Workspace/4444J99/portvs
   limen           /Users/4jp/Workspace/limen
@@ -29,13 +35,13 @@ Aliases:
   relpipe         /Users/4jp/Workspace/4444J99/relationship-pipeline
 
 Creates or reuses:
-  <repo>/.worktrees/<slug> on branch work/<slug>
-  <repo>/.worktrees/<slug>/.limen-workstream/README.md as a thin prompt index
-  <repo>/.worktrees/<slug>/.limen-workstream/{manifest,intent,runtime,closeout}.md
-  <repo>/.worktrees/<slug>/docs/continuations/<slug>/workstream.json as a tracked redacted receipt
+  <worktree-root>/<slug> on branch work/<slug>
+  <worktree-root>/<slug>/.limen-workstream/README.md as a thin prompt index
+  <worktree-root>/<slug>/.limen-workstream/{manifest,intent,runtime,closeout}.md
+  <worktree-root>/<slug>/docs/continuations/<slug>/workstream.json as a tracked redacted receipt
 
-The target repo's .git/info/exclude is updated so .worktrees/ and the private
-capsule never appear as Git noise. The receipt remains visible for commit and remote custody.
+The target repo's .git/info/exclude is updated so the private capsule never appears as Git noise.
+The receipt remains visible for commit and remote custody.
 USAGE
 }
 
@@ -49,6 +55,8 @@ runway=""
 runway_explicit=0
 workstream=""
 write_readme=1
+worktree_root=""
+check_only=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -100,6 +108,19 @@ while [[ $# -gt 0 ]]; do
       runway="$2"
       runway_explicit=1
       shift 2
+      ;;
+    --worktree-root)
+      if [[ $# -lt 2 ]]; then
+        echo "missing value for --worktree-root" >&2
+        usage >&2
+        exit 2
+      fi
+      worktree_root="$2"
+      shift 2
+      ;;
+    --check)
+      check_only=1
+      shift
       ;;
     --workstream|--ws)
       if [[ $# -lt 2 ]]; then
@@ -223,18 +244,52 @@ if [[ -n "$workstream" ]]; then
 fi
 
 branch="work/$slug"
-wt="$repo/.worktrees/$slug"
+if ! worktree_root="$(
+  PYTHONPATH="$script_dir/../cli/src${PYTHONPATH:+:$PYTHONPATH}" \
+    python3 - "$worktree_root" <<'PY'
+import sys
+from limen.worktree_roots import workstream_worktree_root
+
+try:
+    print(workstream_worktree_root(sys.argv[1] or None))
+except RuntimeError as exc:
+    print(exc, file=sys.stderr)
+    raise SystemExit(2)
+PY
+)"; then
+  exit 2
+fi
+wt="$worktree_root/$slug"
+
+expected_common_dir="$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir)"
+if [[ -e "$wt" ]]; then
+  if [[ ! -d "$wt" ]] || ! git -C "$wt" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "worktree-root collision: path exists but is not a git worktree: $wt" >&2
+    exit 1
+  fi
+  actual_common_dir="$(git -C "$wt" rev-parse --path-format=absolute --git-common-dir)"
+  if [[ "$actual_common_dir" != "$expected_common_dir" ]]; then
+    echo "worktree-root collision: $wt belongs to a different repository" >&2
+    exit 1
+  fi
+fi
+
+if [[ "$check_only" -eq 1 ]]; then
+  if [[ -e "$worktree_root" && ! -d "$worktree_root" ]]; then
+    echo "worktree root exists but is not a directory: $worktree_root" >&2
+    exit 1
+  fi
+  echo "check ok (zero writes)"
+  echo "worktree: $wt"
+  echo "branch: $branch"
+  echo "source: ${from_ref:-auto}"
+  exit 0
+fi
 
 git_info_dir="$(git -C "$repo" rev-parse --path-format=absolute --git-path info)"
 mkdir -p "$git_info_dir"
 exclude_file="$git_info_dir/exclude"
 touch "$exclude_file"
-if ! grep -qxF ".worktrees/" "$exclude_file"; then
-  {
-    printf '\n'
-    printf '.worktrees/\n'
-  } >> "$exclude_file"
-fi
 if ! grep -qxF ".limen-workstream/" "$exclude_file"; then
   {
     printf '\n'

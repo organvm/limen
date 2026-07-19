@@ -1,0 +1,61 @@
+{
+  "schema": "limen.storage_recovery_receipt.v1",
+  "observed_at": "2026-07-19T18:08:18Z",
+  "status": "blocked_on_operator_pause",
+  "host_admission": {
+    "allowed": false,
+    "internal_free_gib_rounded": 17,
+    "backblaze_rss_bytes": 1334362112,
+    "swap_used_bytes": 9898232381,
+    "disk_mib_per_second_samples": [
+      290.84,
+      288.74
+    ],
+    "reasons": [
+      "backblaze-rss",
+      "swap-fraction",
+      "disk-throughput"
+    ]
+  },
+  "accepted_reaper": {
+    "command_contract": "LIMEN_RECLAIM_MAX=6 LIMEN_RECLAIM_GENERATED=0 reclaim-worktrees.py --apply --force --json",
+    "removed": [
+      "lane-fitness-beat-wiring",
+      "omega-ask-lineage-live",
+      "archive-account-resolution",
+      "archive-bounded-scan",
+      "modular-continuation-20260714"
+    ],
+    "refused": [
+      {
+        "root": "codex-prompt-corpus-control-20260711",
+        "reason": "locked active prompt-corpus control-plane correction"
+      }
+    ],
+    "generated_payload_cleanup": false,
+    "dirty_or_unpushed_roots_removed": 0
+  },
+  "worktree_inventory_after_reap": {
+    "total": 386,
+    "debt": 186,
+    "reapable": 1,
+    "dirty": 61,
+    "unpushed": 43,
+    "not_merged_to_default": 80
+  },
+  "backblaze_cutover": {
+    "owner": "organvm/domus-genoma#306",
+    "receipt": "docs/backblaze-cutover-receipt-20260719.json",
+    "missing_exclusions": [
+      "/users/4jp/workspace/limen/.worktrees/",
+      "/users/4jp/workspace/limen/.codex/worktrees/"
+    ],
+    "live_apply_performed": false
+  },
+  "report_pipeline": {
+    "prompt_all_all_scan_started": false,
+    "reason": "Machine-wide host admission is red; heavy scans remain frozen.",
+    "pr": "organvm/limen#1311",
+    "site_v2_published": false
+  }
+}

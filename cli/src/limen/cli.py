@@ -483,6 +483,18 @@ def harvest(agent):
     help="Finite workstream runway (for example 90m, 8h, or 7d); defaults to 1d.",
 )
 @click.option(
+    "--worktree-root",
+    default=None,
+    type=click.Path(),
+    help="Explicit checkout root; otherwise a mounted writable Scratch volume is required.",
+)
+@click.option(
+    "--check",
+    "check_only",
+    is_flag=True,
+    help="Validate and print the launch plan without changing files, refs, or worktrees.",
+)
+@click.option(
     "--no-readme",
     is_flag=True,
     help="Create/reuse the worktree without writing the private kickoff packet.",
@@ -498,6 +510,8 @@ def workstream(
     prompt_text,
     prompt_file,
     runway,
+    worktree_root,
+    check_only,
     workstream_handle,
     no_readme,
     repo,
@@ -521,6 +535,10 @@ def workstream(
         args.extend(["--prompt-file", prompt_file])
     if runway:
         args.extend(["--runway", runway])
+    if worktree_root:
+        args.extend(["--worktree-root", worktree_root])
+    if check_only:
+        args.append("--check")
     if workstream_handle:
         args.extend(["--workstream", workstream_handle])
     if no_readme:
