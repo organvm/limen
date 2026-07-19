@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compatibility entrypoint for canonical frozen report rendering."""
+"""Compatibility entrypoint for the canonical frozen report rendering."""
 
 import sys
 from pathlib import Path
