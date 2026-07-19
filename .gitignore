@@ -65,3 +65,6 @@ docs/prompt-atom-ledger.json
 logs/insight-cross-vendor/
 # sensitive publication-judgment rationale (shallow-merged into repo_overrides at load; arca-sealed)
 institutio/github/estate.private.yaml
+# whole-PR campaign census receipts (generated locally by scripts/conduct-pr-campaign.py; ~1.5MB
+# each — findings live in README.md, raw leaf dumps are regenerable and must not bloat the diff)
+docs/receipts/pr-campaign/*.json
