@@ -104,9 +104,7 @@ def workstream_worktree_root(explicit: str | Path | None = None) -> Path:
     scratch = Path(os.environ.get("LIMEN_SCRATCH_ROOT", "/Volumes/Scratch")).expanduser()
     if scratch.is_dir() and os.access(scratch, os.W_OK):
         return (scratch / "limen-worktrees").absolute()
-    raise RuntimeError(
-        "Scratch is unavailable; pass --worktree-root PATH to explicitly admit a fallback"
-    )
+    raise RuntimeError("Scratch is unavailable; pass --worktree-root PATH to explicitly admit a fallback")
 
 
 def _existing_ancestor(path: Path) -> Path | None:

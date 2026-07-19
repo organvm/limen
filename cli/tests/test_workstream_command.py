@@ -47,8 +47,7 @@ def _init_repo(path: Path) -> Path:
 
 def _tree_bytes(root: Path) -> dict[str, bytes | None]:
     return {
-        str(path.relative_to(root)): path.read_bytes() if path.is_file() else None
-        for path in sorted(root.rglob("*"))
+        str(path.relative_to(root)): path.read_bytes() if path.is_file() else None for path in sorted(root.rglob("*"))
     }
 
 
@@ -67,9 +66,7 @@ def test_workstream_launcher_routes_to_scratch_by_default(tmp_path: Path, monkey
     assert not (repo / ".worktrees").exists()
 
 
-def test_workstream_launcher_accepts_explicit_internal_fallback(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_workstream_launcher_accepts_explicit_internal_fallback(tmp_path: Path, monkeypatch) -> None:
     repo = _init_repo(tmp_path / "repo")
     internal = repo / ".worktrees"
     monkeypatch.setenv("LIMEN_ROOT", str(ROOT))
@@ -90,9 +87,7 @@ def test_workstream_launcher_accepts_explicit_internal_fallback(
     assert (internal / "explicit-fallback").is_dir()
 
 
-def test_workstream_launcher_rejects_cross_repo_slug_collision(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_workstream_launcher_rejects_cross_repo_slug_collision(tmp_path: Path, monkeypatch) -> None:
     first = _init_repo(tmp_path / "first")
     second = _init_repo(tmp_path / "second")
     shared = tmp_path / "shared-worktrees"
@@ -126,9 +121,7 @@ def test_workstream_launcher_rejects_cross_repo_slug_collision(
     assert "belongs to a different repository" in collided.output
 
 
-def test_workstream_launcher_help_and_check_are_byte_preserving(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_workstream_launcher_help_and_check_are_byte_preserving(tmp_path: Path, monkeypatch) -> None:
     repo = _init_repo(tmp_path / "repo")
     root = tmp_path / "not-created-worktrees"
     script = ROOT / "scripts" / "start-worktree-session.sh"
