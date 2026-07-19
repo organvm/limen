@@ -1,0 +1,20 @@
+# Direct tasks.yaml writer paths (task-writer-audit ratchet baseline).
+# Green at this set; red on any NEW writer path not listed here.
+# Shrink this file as the burn-down lands — never grow it.
+cli/src/limen/cli.py
+cli/src/limen/dispatch.py
+cli/src/limen/harvest.py
+scripts/check-main-green.py
+scripts/dispatch-async.py
+scripts/dispatch-continuity-check.py
+scripts/heal-board.py
+scripts/heal-dispatch.py
+scripts/jules-land.py
+scripts/mine-backlog.py
+scripts/quicken.py
+scripts/rewrite-owners.py
+scripts/route.py
+scripts/routine-freshness-audit.py
+scripts/self-heal.py
+scripts/self-improve.py
+scripts/usage-telemetry.py
