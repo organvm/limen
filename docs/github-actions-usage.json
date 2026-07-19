@@ -1,44 +1,44 @@
 {
   "actions_top_repos_minutes": {
-    "a-i-chat--exporter": 489,
-    "domus-genoma": 945,
-    "dot-github--theoria": 5446,
-    "limen": 42414,
-    "organvm-corpvs-testamentvm": 430,
-    "organvm-engine": 460,
-    "peer-audited--behavioral-blockchain": 1443,
-    "portfolio": 356,
-    "public-record-data-scrapper": 373,
-    "universal-mail--automation": 685
+    "a-i-chat--exporter": 538,
+    "domus-genoma": 1003,
+    "dot-github--theoria": 5705,
+    "limen": 53170,
+    "metasystem-master": 413,
+    "organvm-corpvs-testamentvm": 555,
+    "organvm-engine": 549,
+    "peer-audited--behavioral-blockchain": 1692,
+    "public-record-data-scrapper": 446,
+    "universal-mail--automation": 829
   },
-  "as_of_day": 18,
+  "as_of_day": 19,
   "billing_canary": {
-    "detail": "newest run 29638973973 concluded 'success'",
+    "detail": "newest run 29694357741 concluded 'cancelled'",
     "green": true,
     "repo": "organvm/limen"
   },
   "budget_net_usd": 25.0,
   "by_product": {
     "actions": {
-      "gross_usd": 376.14,
+      "gross_usd": 468.26,
       "net_usd": 0.0,
-      "quantity": 60065.94
+      "quantity": 74561.83
     },
     "ghas": {
-      "gross_usd": 1.58,
-      "net_usd": 1.58,
-      "quantity": 0.06
+      "gross_usd": 3.16,
+      "net_usd": 3.16,
+      "quantity": 0.13
     },
     "git_lfs": {
-      "gross_usd": 0.72,
+      "gross_usd": 0.78,
       "net_usd": 0.0,
-      "quantity": 7693.19
+      "quantity": 8336.04
     }
   },
-  "gross_usd_total": 378.45,
+  "gross_usd_total": 472.2,
   "month": "2026-07",
-  "net_usd_projected_month_end": 2.72,
-  "net_usd_total": 1.58,
+  "net_usd_projected_month_end": 5.16,
+  "net_usd_total": 3.16,
   "org": "organvm",
   "schema": "limen.github_actions_usage.v1"
 }

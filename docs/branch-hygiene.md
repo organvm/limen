@@ -20,7 +20,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `worktree-fix-macos-fork-oslog-crash` — 414ded13 heal(tests): fix 3 non-hermetic/mismatched cli tests breaking main pr-gate
 - `worktree-linear-conjuring-bear` — 92c21f2e chore(gitignore): ignore .wrangler/ cache at any depth, not just web/worker
 
-## Live-work branches (277) — decide each
+## Live-work branches (283) — decide each
 
 - `_pr198` — 4cd0dbaa fix(ci): heal main CI-poison — remove dead `import time` in dispatch.py (F401)
 - `agent/codex-sessions-adapter-0713` — 4f56aa95 fix(prompt): adapt Codex session records exactly
@@ -63,6 +63,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `feat/vigilia-nohardcode-gate` — b94e1242 feat(vigilia): wire organ-health VIGILIA rung + heartbeat stamp (build #4)
 - `feat/vltima-organ-engine` — fe3e5eb4 fix(ci): clear ruff E702/E703 in test_sync_reclaim.py — unjams the merge backlog
 - `feat/walls-auto-regen` — 990a39da feat(heartbeat): auto-regenerate the credential + his-hand Walls every 12 beats
+- `feature/ORG-artist-organ-face-0628` — a99db3a6 fix: add missing pydantic dep to auto-scale CI workflow
 - `feature/ORG-education-organ-face-0630` — 9d174794 feat(education): author polished macro and micro face for education organ
 - `feature/tale-of-genji-chapters-2-5` — 50a31de4 studium: author Tale of Genji chapters 2-5
 - `fix-branch` — 70689bf3 fix: resolve ruff format failure and remove mypy_cache artifacts
@@ -93,6 +94,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `limen/gen-organvm-limen-docs-0625-86a3` — 2ba9c114 Real usage docs for organvm/limen
 - `limen/gen-organvm-limen-docs-0625-9c44` — 83e805e6 Real usage docs for organvm/limen
 - `limen/gen-organvm-limen-docs-0625-db1d` — 44b39586 Real usage docs for organvm/limen
+- `limen/gen-organvm-limen-docs-0628-31d6` — 2470b06f docs: fix dispatch --budget flag description in CLI reference table
 - `limen/gen-organvm-limen-security-0624-a9e5` — 0d705fe1 security: harden input validation across API and CLI models
 - `limen/gen-organvm-limen-security-0625-57ce` — 02f256ed Security hardening pass on organvm/limen
 - `limen/gen-organvm-limen-security-0625-b412` — bd88bf7e docs(security): audit results for organvm/limen hardening pass
@@ -102,6 +104,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `limen/gen-organvm-limen-test-coverage-0625-1c32` — dc89769a test(nomenclator): add 37-case unit suite for INDEX·NOMINVM enforcer
 - `limen/gen-organvm-limen-typing-0622-9eb5` — c60bc170 refactor(types): tighten the most-imported limen modules — kill capacity.py's any hotspot
 - `limen/gen-organvm-limen-typing-0627-ccac` — d280f1d1 fix: tighten types in limen's most-imported modules
+- `limen/gen-organvm-limen-typing-0629-7bfb` — 98415581 Tighten types in organvm/limen
 - `limen/gh-organvm-limen-262-0a16` — 3ebc05c2 docs(levers): L-IANVA-LOCAL — launchd plist staged, ONE command to bootstrap (#262)
 - `limen/gh-organvm-limen-352-b4c3` — 18129a47 fix(cli): type-modernization — PEP 604 syntax and TypedDict definitions
 - `limen/heal-cifix-organvm-limen-376-7a338dd4` — c331f297 Aeneid film companion (empire/fate/sacrifice)
@@ -208,6 +211,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `limen/jules-aw-mail-historical-backlog-c97e` — a9797d4a Continue historical mail backlog in resumable batches
 - `limen/jules-aw-mail-historical-backlog-e50f` — 4cbf2f03 Continue historical mail backlog in resumable batches
 - `limen/jules-org-contributions-organ-deepen-0704-7930` — b035e97c Deepen the contributions organ toward a usable institution
+- `limen/jules-studium-film-beowulf-3e40` — 8573c3f8 Beowulf film companion (wyrd/heroic doom)
 - `limen/org-artist-organ-face-0704-2152` — 0bf299b0 artist: polish macro and micro faces (ORG-artist-organ-face-0704)
 - `limen/org-artist-organ-face-0704-54ed` — f0ca6297 chore(artist): mark ORG-artist-organ-face-0704 as done
 - `limen/org-governance-organ-deepen-0628-0e39` — f23a6f66 limen: ruff-format test_dispatch_engine and test_session_lifecycle_pressure
@@ -284,6 +288,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `promote-domus-genoma` — 6bbd51f7 limen: promote organvm/domus-genoma to ranked value tier
 - `rebase-630` — 51bfc3fa Make the financial organ's macro + micro face excellent
 - `rebase-814` — 94246f98 limen: guard worktree session launches
+- `recovery/codex-runaway-prevention-20260718-120912` — d7449e0b chore: retire inherited continuation capsule
 - `refactor/armed-valve-derive` — e342c68f refactor(armed-valve): read sensor gates from the SENSORS registry, not just the shell
 - `registry-update` — c2490e09 docs(registry): credential CLOSED (keyless lane); Exporter funnel verified BUILT
 - `studium-beowulf-fitts-2-4` — cd8625b8 studium: author Beowulf fitts 2-4 music arcs and essays
@@ -293,6 +298,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `studium-film-canterbury-tales` — d7fcab07 feat(studium): add Canterbury Tales film companion
 - `task-conference-of-birds-batch-1` — e1facc15 feat(studium): author Conference of the Birds arcs 2-4
 - `tmp-rebase-394` — 05596a46 Deepen the financial organ toward a usable institution
+- `work/runaway-prevention-recovery-20260718-120912` — 0aa219ad Merge remote-tracking branch 'origin/main' into work/runaway-prevention-recovery-20260718-120912
 - `work/workstream-agent-launcher-20260629` — a66424e0 chore: execute dynamic-substrate fanout executor packet
 - `worktree-feat+opencode-tier-ladder` — bf7f2091 feat(dispatch): opencode multi-model tier ladder (free floor / Zen subscription rung)
 - `worktree-fluttering-twirling-abelson` — c2c54884 Redact circle-personal business intel from public consulting organ
