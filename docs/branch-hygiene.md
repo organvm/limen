@@ -20,7 +20,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `worktree-fix-macos-fork-oslog-crash` — 414ded13 heal(tests): fix 3 non-hermetic/mismatched cli tests breaking main pr-gate
 - `worktree-linear-conjuring-bear` — 92c21f2e chore(gitignore): ignore .wrangler/ cache at any depth, not just web/worker
 
-## Live-work branches (279) — decide each
+## Live-work branches (280) — decide each
 
 - `_pr198` — 4cd0dbaa fix(ci): heal main CI-poison — remove dead `import time` in dispatch.py (F401)
 - `agent/codex-sessions-adapter-0713` — 4f56aa95 fix(prompt): adapt Codex session records exactly
@@ -63,6 +63,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `feat/vigilia-nohardcode-gate` — b94e1242 feat(vigilia): wire organ-health VIGILIA rung + heartbeat stamp (build #4)
 - `feat/vltima-organ-engine` — fe3e5eb4 fix(ci): clear ruff E702/E703 in test_sync_reclaim.py — unjams the merge backlog
 - `feat/walls-auto-regen` — 990a39da feat(heartbeat): auto-regenerate the credential + his-hand Walls every 12 beats
+- `feature/ORG-artist-organ-face-0628` — a99db3a6 fix: add missing pydantic dep to auto-scale CI workflow
 - `feature/ORG-education-organ-face-0630` — 9d174794 feat(education): author polished macro and micro face for education organ
 - `feature/tale-of-genji-chapters-2-5` — 50a31de4 studium: author Tale of Genji chapters 2-5
 - `fix-branch` — 70689bf3 fix: resolve ruff format failure and remove mypy_cache artifacts

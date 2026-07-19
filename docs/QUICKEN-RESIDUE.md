@@ -15,5 +15,5 @@
 - **finish stalled session 'bash permission config investigation' (breathed 53x, still stalling)**  ·  owner: **you**  ·  hung: `ASK-quicken-misc` (needs_human)  ·  unblocks: permanent queue
 - **land the credential/secret (your account/identity)**  ·  owner: **you**  ·  hung: `ASK-quicken-credential` (needs_human)  ·  unblocks: web estate audit mapping
 - **one login/identity step (your hand: browser/OAuth/portal)**  ·  owner: **you**  ·  hung: `ASK-quicken-login` (needs_human)  ·  unblocks: exercise app launch
-- **send the drafted message (never auto-send)**  ·  owner: **you**  ·  hung: `ASK-quicken-send` (needs_human)  ·  unblocks: mail workstream roadmap, professor padavano email drafting
+- **send the drafted message (never auto-send)**  ·  owner: **you**  ·  hung: `ASK-quicken-send` (needs_human)  ·  unblocks: mail workstream roadmap
 - **the D2L go-live click + cadence confirm (your login + judgment)**  ·  owner: **you**  ·  hung: `ASK-quicken-d2l` (needs_human)  ·  unblocks: Continue previous coding session

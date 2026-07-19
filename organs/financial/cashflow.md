@@ -1,6 +1,6 @@
 # Financial Office — Rolling Cash-Flow Projection
 
-> Generated: 2026-07-18T07:07:24Z
+> Generated: 2026-07-19T10:32:05Z
 > *Forward-looking estimate based on known revenue stages and obligations.
 > Confidence increases as more balances and obligation amounts are confirmed.*
 
@@ -23,18 +23,18 @@
 
 | Week | Starting | Known Inflows | Known Outflows | Net | Cumulative | Note |
 |---|---|---|---|---|---|---|
-| W1 | 2026-07-18 | — | — | $+0.00 | $+0.00 |  |
-| W2 | 2026-07-25 | — | — | $+0.00 | $+0.00 |  |
-| W3 | 2026-08-01 | — | — | $+0.00 | $+0.00 | post-deploy |
-| W4 | 2026-08-08 | — | — | $+0.00 | $+0.00 | post-deploy |
-| W5 | 2026-08-15 | — | — | $+0.00 | $+0.00 | post-deploy |
-| W6 | 2026-08-22 | — | — | $+0.00 | $+0.00 | post-deploy |
-| W7 | 2026-08-29 | — | — | $+0.00 | $+0.00 | post-deploy |
-| W8 | 2026-09-05 | — | — | $+0.00 | $+0.00 | post-deploy |
-| W9 | 2026-09-12 | — | — | $+0.00 | $+0.00 | post-deploy |
-| W10 | 2026-09-19 | — | — | $+0.00 | $+0.00 | post-deploy |
-| W11 | 2026-09-26 | — | — | $+0.00 | $+0.00 | post-deploy |
-| W12 | 2026-10-03 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W1 | 2026-07-19 | — | — | $+0.00 | $+0.00 |  |
+| W2 | 2026-07-26 | — | — | $+0.00 | $+0.00 |  |
+| W3 | 2026-08-02 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W4 | 2026-08-09 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W5 | 2026-08-16 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W6 | 2026-08-23 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W7 | 2026-08-30 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W8 | 2026-09-06 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W9 | 2026-09-13 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W10 | 2026-09-20 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W11 | 2026-09-27 | — | — | $+0.00 | $+0.00 | post-deploy |
+| W12 | 2026-10-04 | — | — | $+0.00 | $+0.00 | post-deploy |
 
 ### Runway
 
