@@ -20,6 +20,7 @@ class ReviewConfig:
     snapshot_at: dt.datetime
     output_dir: Path
     timezone: str = DEFAULT_TIMEZONE
+    legacy_full_prompt_projection: bool = False
 
     @classmethod
     def from_values(
@@ -29,6 +30,7 @@ class ReviewConfig:
         snapshot_at: str | dt.datetime,
         output_dir: Path,
         timezone: str = DEFAULT_TIMEZONE,
+        legacy_full_prompt_projection: bool = False,
     ) -> "ReviewConfig":
         parsed = parse_ts(snapshot_at)
         if parsed is None:
@@ -38,6 +40,7 @@ class ReviewConfig:
             snapshot_at=parsed,
             output_dir=output_dir.resolve(),
             timezone=timezone,
+            legacy_full_prompt_projection=legacy_full_prompt_projection,
         )
 
     @property

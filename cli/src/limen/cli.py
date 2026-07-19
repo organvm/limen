@@ -284,7 +284,12 @@ def progress(view, scope, level, limit, show_all, ascii_only, json_output, repor
     show_default=True,
     help="Tracked dated output directory, relative to LIMEN_ROOT by default.",
 )
-def estate_review(snapshot_at, write, check, output_dir):
+@click.option(
+    "--legacy-full-prompt-projection",
+    is_flag=True,
+    help="Explicitly admit the monolithic prompt projection compatibility path.",
+)
+def estate_review(snapshot_at, write, check, output_dir, legacy_full_prompt_projection):
     """Build or verify the canonical frozen whole-estate agent review."""
 
     if write and check:
@@ -304,6 +309,8 @@ def estate_review(snapshot_at, write, check, output_dir):
         arguments.append("--write")
     elif check:
         arguments.append("--check")
+    if legacy_full_prompt_projection:
+        arguments.append("--legacy-full-prompt-projection")
     exit_code = run_estate_review(arguments)
     if exit_code:
         raise click.ClickException(f"estate review exited with status {exit_code}")

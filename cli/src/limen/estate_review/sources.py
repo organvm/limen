@@ -17,6 +17,7 @@ from typing import Any, Iterable
 import yaml
 
 from limen.jules_remote import classify_jules_remote_status
+from limen.prompt_projection import PROJECTION_FORM, load_window_rows
 from limen.prompt_sources import source_adapter_contract
 
 from .config import ReviewConfig
@@ -649,7 +650,14 @@ def _exact_prompt_authority(
         errors.append("source_errors")
     if scope.get("adapter_gaps"):
         errors.append("adapter_gaps")
-    if int(public.get("unresolved_atoms_truncated") or 0):
+    if public.get("projection_form") == PROJECTION_FORM:
+        if public.get("unresolved_atoms") != [] or int(public.get("unresolved_atoms_truncated") or 0):
+            errors.append("chunk_manifest_legacy_rows_present")
+        if int(public.get("current_unresolved_atoms_indexed") or 0) != int(
+            (public.get("coverage") or {}).get("current_unresolved_atoms") or 0
+        ):
+            errors.append("chunk_manifest_unresolved_count_mismatch")
+    elif int(public.get("unresolved_atoms_truncated") or 0):
         errors.append("public_projection_truncated")
     validation = public.get("validation") or {}
     if validation.get("ok") is not True:
@@ -713,13 +721,12 @@ def collect_prompt_atoms(
             "reason": "exact all/all prompt atom projection is absent",
         }
     marker_path, events_path, outcomes_path = _private_prompt_paths(config)
-    required = (marker_path, events_path, outcomes_path)
-    if any(not path.is_file() for path in required):
+    if not marker_path.is_file():
         return [], {
             "available": False,
             "authority": "prompt_atom_projection",
             "coverage": "coverage_unknown",
-            "reason": "private prompt lineage is unavailable",
+            "reason": "private prompt authority marker is unavailable",
         }
     projection = json.loads(projection_path.read_text(encoding="utf-8"))
     marker = json.loads(marker_path.read_text(encoding="utf-8"))
@@ -737,43 +744,102 @@ def collect_prompt_atoms(
     atoms_by_id: dict[str, dict[str, Any]] = {}
     atom_ids_by_occurrence: dict[str, set[str]] = collections.defaultdict(set)
     occurrence_count = 0
-    for row in _jsonl(events_path):
-        occurrence = row.get("occurrence") or {}
-        if not isinstance(occurrence, dict):
-            continue
-        timestamp = parse_ts(occurrence.get("timestamp"))
-        if timestamp is None or not review_start <= timestamp < config.snapshot_at:
-            continue
-        occurrence_id = str(occurrence.get("occurrence_id") or "")
-        if not occurrence_id:
-            continue
-        occurrence_count += 1
-        if row.get("revision_of"):
-            for old_id in atom_ids_by_occurrence.pop(occurrence_id, set()):
-                atoms_by_id.pop(old_id, None)
-        current_ids: set[str] = set()
-        for atom in row.get("atoms") or []:
-            if not isinstance(atom, dict):
-                continue
+    outcomes: dict[str, dict[str, Any]] = {}
+    if projection.get("projection_form") == PROJECTION_FORM:
+        chunk_root = marker_path.parent / "projection-chunks"
+        chunk_rows, chunk_errors = load_window_rows(
+            projection,
+            chunk_root,
+            start=review_start,
+            end=config.snapshot_at,
+        )
+        if chunk_errors:
+            return [], {
+                "available": True,
+                "authority": "prompt_atom_projection",
+                "coverage": "coverage_unknown",
+                "source_scope": projection.get("source_scope") or {},
+                "reason": "prompt projection chunks are invalid",
+                "authority_errors": chunk_errors,
+            }
+        occurrence_ids: set[str] = set()
+        for atom in chunk_rows:
             atom_id = str(atom.get("atom_id") or "")
             if not atom_id:
                 continue
-            current_ids.add(atom_id)
+            occurrence_id = str(atom.get("occurrence_id") or "")
+            if occurrence_id:
+                occurrence_ids.add(occurrence_id)
+                atom_ids_by_occurrence[occurrence_id].add(atom_id)
             atoms_by_id[atom_id] = {
                 "atom_id": atom_id,
                 "kind": str(atom.get("kind") or "prompt atom"),
-                "source": str(atom.get("source") or occurrence.get("source") or ""),
-                "timestamp": iso_z(timestamp),
+                "source": str(atom.get("source") or ""),
+                "timestamp": str(atom.get("timestamp") or ""),
                 "owner": atom.get("owner"),
                 "owner_route": atom.get("owner_route"),
-                "session_ref_hash": str(atom.get("session_ref_hash") or occurrence.get("session_ref_hash") or ""),
+                "session_ref_hash": str(atom.get("session_ref_hash") or ""),
             }
-        atom_ids_by_occurrence[occurrence_id] = current_ids
-    outcomes: dict[str, dict[str, Any]] = {}
-    for row in _jsonl(outcomes_path):
-        atom_id = str(row.get("atom_id") or "")
-        if atom_id in atoms_by_id:
-            outcomes[atom_id] = row
+            outcomes[atom_id] = {
+                "atom_id": atom_id,
+                "disposition": str(atom.get("disposition") or "unassessed"),
+            }
+        occurrence_count = len(occurrence_ids)
+    else:
+        if not config.legacy_full_prompt_projection:
+            return [], {
+                "available": True,
+                "authority": "prompt_atom_projection",
+                "coverage": "coverage_unknown",
+                "source_scope": projection.get("source_scope") or {},
+                "reason": (
+                    "legacy full prompt projection is not admitted by the default report path; "
+                    "use an explicit compatibility flag"
+                ),
+            }
+        if not events_path.is_file() or not outcomes_path.is_file():
+            return [], {
+                "available": False,
+                "authority": "prompt_atom_projection",
+                "coverage": "coverage_unknown",
+                "reason": "private prompt lineage is unavailable",
+            }
+        for row in _jsonl(events_path):
+            occurrence = row.get("occurrence") or {}
+            if not isinstance(occurrence, dict):
+                continue
+            timestamp = parse_ts(occurrence.get("timestamp"))
+            if timestamp is None or not review_start <= timestamp < config.snapshot_at:
+                continue
+            occurrence_id = str(occurrence.get("occurrence_id") or "")
+            if not occurrence_id:
+                continue
+            occurrence_count += 1
+            if row.get("revision_of"):
+                for old_id in atom_ids_by_occurrence.pop(occurrence_id, set()):
+                    atoms_by_id.pop(old_id, None)
+            current_ids: set[str] = set()
+            for atom in row.get("atoms") or []:
+                if not isinstance(atom, dict):
+                    continue
+                atom_id = str(atom.get("atom_id") or "")
+                if not atom_id:
+                    continue
+                current_ids.add(atom_id)
+                atoms_by_id[atom_id] = {
+                    "atom_id": atom_id,
+                    "kind": str(atom.get("kind") or "prompt atom"),
+                    "source": str(atom.get("source") or occurrence.get("source") or ""),
+                    "timestamp": iso_z(timestamp),
+                    "owner": atom.get("owner"),
+                    "owner_route": atom.get("owner_route"),
+                    "session_ref_hash": str(atom.get("session_ref_hash") or occurrence.get("session_ref_hash") or ""),
+                }
+            atom_ids_by_occurrence[occurrence_id] = current_ids
+        for row in _jsonl(outcomes_path):
+            atom_id = str(row.get("atom_id") or "")
+            if atom_id in atoms_by_id:
+                outcomes[atom_id] = row
     task_by_atom: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
     task_atoms_by_session: dict[tuple[str, str], set[str]] = collections.defaultdict(set)
     board_path = config.root / "tasks.yaml"
@@ -853,9 +919,15 @@ def collect_prompt_atoms(
         "asks_in_window": len(asks),
         "private_lineage_digest": _canonical_digest(
             {
-                "event_journal_size": events_path.stat().st_size,
-                "outcome_journal_size": outcomes_path.stat().st_size,
+                "projection_form": projection.get("projection_form") or "legacy_full",
                 "public_projection_digest": projection.get("projection_digest"),
+                "chunks": [
+                    {
+                        "file": row.get("file"),
+                        "sha256": row.get("sha256"),
+                    }
+                    for row in (projection.get("chunks") or [])
+                ],
             }
         ),
     }

@@ -134,6 +134,7 @@ def test_private_session_corpus_env_owns_default_journal_root(tmp_path: Path, mo
     paths = corpus.LedgerPaths.for_root(tmp_path / "checkout")
 
     assert paths.private_dir == durable / "prompt-atoms"
+    assert paths.projection_chunks == durable / "prompt-atoms" / "projection-chunks"
     assert paths.public_snapshot == tmp_path / "checkout" / "docs" / "prompt-atom-ledger.json"
     assert paths.public_seal == tmp_path / "checkout" / "docs" / "prompt-authority-seal.json"
 
@@ -656,12 +657,16 @@ def test_public_projection_is_redacted_and_has_complete_opaque_queue(tmp_path: P
         cursor=_cursor(corpus),
     )
     public = json.loads(paths.public_snapshot.read_text(encoding="utf-8"))
+    chunk = json.loads((paths.projection_chunks / public["chunks"][0]["file"]).read_text(encoding="utf-8"))
 
     assert public["unresolved_atoms_truncated"] == 0
-    assert len(public["unresolved_atoms"]) == 1
+    assert public["unresolved_atoms"] == []
+    assert public["current_unresolved_atoms_indexed"] == 1
+    assert len(chunk["rows"]) == 1
     assert public["coverage"]["current_unresolved_atoms"] == 1
-    assert "lineage_id" not in public["unresolved_atoms"][0]
+    assert "lineage_id" not in chunk["rows"][0]
     assert "private but unresolved" not in paths.public_snapshot.read_text(encoding="utf-8")
+    assert "private but unresolved" not in json.dumps(chunk)
     assert corpus.check_ledger(paths) == []
 
 
@@ -2532,14 +2537,15 @@ def test_runtime_policy_controls_confidence_and_owner_route(tmp_path: Path):
     )
     atom = snapshot["atoms"][0]
     public = json.loads(paths.public_snapshot.read_text(encoding="utf-8"))
+    chunk = json.loads((paths.projection_chunks / public["chunks"][0]["file"]).read_text(encoding="utf-8"))
     policy = corpus.load_policy(paths.policy)
 
     assert atom["atomization_mode"] == "structural_fallback"
     assert atom["classification_confidence"] == 0.1
     assert atom["owner"] == "owner/runtime"
     assert atom["owner_route"] == "route/runtime"
-    assert public["unresolved_atoms"][0]["owner"] == "owner/runtime"
-    assert public["unresolved_atoms"][0]["owner_route"] == "route/runtime"
+    assert chunk["rows"][0]["owner"] == "owner/runtime"
+    assert chunk["rows"][0]["owner_route"] == "route/runtime"
     assert policy["owner_routing"]["default_next_command"] == "python3 scripts/runtime-owner.py"
     assert policy["owner_routing"]["sources"] == {"agy-cli-conversations": {"route": "issue:641"}}
 
@@ -3295,6 +3301,75 @@ def _scan_and_bind(tmp_path: Path) -> None:
         text=True,
     )
     assert result.returncode == 0, f"scan failed:\n{result.stdout}\n{result.stderr}"
+
+
+def test_script_write_defaults_to_compact_chunk_manifest(tmp_path: Path):
+    corpus = _load()
+    paths = _paths(corpus, tmp_path)
+
+    _scan_and_bind(tmp_path)
+
+    public = json.loads(paths.public_snapshot.read_text(encoding="utf-8"))
+    assert public["projection_form"] == "chunk_manifest"
+    assert public["unresolved_atoms"] == []
+    assert public["unresolved_atoms_truncated"] == 0
+    assert public["chunks"] == []
+    assert paths.public_snapshot.stat().st_size < 64 * 1024
+    assert not (tmp_path / "docs" / "projection-chunks").exists()
+    assert corpus.check_ledger(paths) == []
+
+
+def test_compact_chunks_are_integrity_checked_and_byte_identical_on_rerun(tmp_path: Path):
+    corpus = _load()
+    paths = _paths(corpus, tmp_path)
+    corpus.update_ledger(
+        paths,
+        events=[_event("Keep the report projection bounded.", event_ref="compact")],
+        cursor=_cursor(corpus),
+        legacy_full_projection=False,
+    )
+    public_before = paths.public_snapshot.read_bytes()
+    chunk_path = next(paths.projection_chunks.glob("*.json"))
+    chunk_before = chunk_path.read_bytes()
+    public_mtime = paths.public_snapshot.stat().st_mtime_ns
+    chunk_mtime = chunk_path.stat().st_mtime_ns
+
+    unchanged = corpus.update_ledger(paths, legacy_full_projection=False)
+
+    assert unchanged["write_changed"] is False
+    assert paths.public_snapshot.read_bytes() == public_before
+    assert chunk_path.read_bytes() == chunk_before
+    assert paths.public_snapshot.stat().st_mtime_ns == public_mtime
+    assert chunk_path.stat().st_mtime_ns == chunk_mtime
+
+    chunk_path.write_bytes(chunk_before[:-1] + b" ")
+    errors = corpus.check_ledger(paths)
+    assert any("chunk digest mismatch" in error for error in errors)
+
+
+def test_explicit_legacy_full_projection_compatibility_mode(tmp_path: Path):
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--scan",
+            "--unbounded",
+            "--days",
+            "0",
+            "--write",
+            "--legacy-full-projection",
+            "--root",
+            str(tmp_path),
+            "--source-home",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f"scan failed:\n{result.stdout}\n{result.stderr}"
+    corpus = _load()
+    public = json.loads(_paths(corpus, tmp_path).public_snapshot.read_text(encoding="utf-8"))
+    assert "projection_form" not in public
 
 
 def test_rebind_checkpoint_restores_bound_cursor(tmp_path: Path):

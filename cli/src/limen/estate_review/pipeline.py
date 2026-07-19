@@ -338,6 +338,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--snapshot-at", default=DEFAULT_SNAPSHOT)
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--legacy-full-prompt-projection",
+        action="store_true",
+        help="explicit compatibility mode for the monolithic prompt projection",
+    )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--write", action="store_true")
     mode.add_argument("--check", action="store_true")
@@ -354,6 +359,7 @@ def main(argv: list[str] | None = None) -> int:
         root=root,
         snapshot_at=args.snapshot_at,
         output_dir=output,
+        legacy_full_prompt_projection=args.legacy_full_prompt_projection,
     )
     try:
         outputs = build_outputs(config)

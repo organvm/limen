@@ -51,8 +51,8 @@ from limen.prompt_corpus import (  # noqa: E402
     load_policy,
     occurrence_from_event,
     private_marker,
+    projection_for_mode,
     prompt_authority_seal,
-    public_projection,
     read_raw_object,
     render_markdown,
     structural_segments,
@@ -6042,7 +6042,11 @@ def scan_native_sources(
     return events, updated
 
 
-def rebind_checkpoint(paths: LedgerPaths) -> list[str]:
+def rebind_checkpoint(
+    paths: LedgerPaths,
+    *,
+    legacy_full_projection: bool = False,
+) -> list[str]:
     """Rebuild and write the private checkpoint from the live cursor and journals.
 
     This is the recovery effector for the "cursor not bound to current private
@@ -6093,7 +6097,10 @@ def rebind_checkpoint(paths: LedgerPaths) -> list[str]:
     # Semantic validation findings stay recorded in snapshot["validation"]
     # (exactly as update_ledger seals them); --check remains their reporter.
 
-    public = public_projection(snapshot)
+    public, chunks = projection_for_mode(
+        snapshot,
+        legacy_full_projection=legacy_full_projection,
+    )
     seal = prompt_authority_seal(snapshot, public=public)
     markdown = render_markdown(public, policy)
     next_marker = private_marker(snapshot, public, seal, paths=paths)
@@ -6104,6 +6111,11 @@ def rebind_checkpoint(paths: LedgerPaths) -> list[str]:
     markdown_bytes = markdown.encode("utf-8")
 
     paths.private_dir.mkdir(parents=True, exist_ok=True)
+    if chunks:
+        paths.projection_chunks.mkdir(parents=True, exist_ok=True)
+        os.chmod(paths.projection_chunks, 0o700)
+        for filename, content in sorted(chunks.items()):
+            atomic_write_bytes(paths.projection_chunks / filename, content, mode=0o600)
     atomic_write_bytes(paths.public_snapshot, public_bytes, mode=0o644)
     atomic_write_bytes(paths.public_seal, seal_bytes, mode=0o644)
     atomic_write_bytes(paths.public_markdown, markdown_bytes, mode=0o644)
@@ -6203,6 +6215,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--public-markdown", type=Path)
     parser.add_argument("--public-snapshot", type=Path)
     parser.add_argument("--public-seal", type=Path)
+    parser.add_argument(
+        "--legacy-full-projection",
+        action="store_true",
+        help=(
+            "compatibility mode: materialize the monolithic public atom projection; "
+            "the default is a compact manifest with private window-addressable chunks"
+        ),
+    )
     parser.add_argument("--policy", type=Path)
     parser.add_argument(
         "--source-home",
@@ -6225,7 +6245,10 @@ def main() -> int:
         policy=args.policy.resolve() if args.policy else None,
     )
     if args.rebind_checkpoint:
-        errors = rebind_checkpoint(paths)
+        errors = rebind_checkpoint(
+            paths,
+            legacy_full_projection=args.legacy_full_projection,
+        )
         if errors:
             for error in errors:
                 print(f"FAIL: {error}")
@@ -6301,7 +6324,13 @@ def main() -> int:
         )
         return 0
     try:
-        snapshot = update_ledger(paths, events=events, outcomes=outcomes, cursor=cursor)
+        snapshot = update_ledger(
+            paths,
+            events=events,
+            outcomes=outcomes,
+            cursor=cursor,
+            legacy_full_projection=args.legacy_full_projection,
+        )
     except ValueError as exc:
         print(f"FAIL: cannot update prompt atom ledger: {exc}", file=sys.stderr)
         return 1

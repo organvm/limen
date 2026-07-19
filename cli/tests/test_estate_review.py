@@ -39,6 +39,7 @@ from limen.estate_review.sources import (
     _session_ref_hash,
     collect_prompt_atoms,
 )
+from limen.prompt_projection import apply_manifest, build_chunks
 
 
 def t(value: str) -> dt.datetime:
@@ -581,10 +582,20 @@ def test_exact_private_prompt_lineage_joins_without_exposing_prompt_text(
         encoding="utf-8",
     )
     (private / "prompt-atom-outcomes.jsonl").write_text("", encoding="utf-8")
+    default_config = ReviewConfig.from_values(
+        root=root,
+        snapshot_at="2026-07-19T15:11:00Z",
+        output_dir=root / "report",
+    )
+    refused, refusal = collect_prompt_atoms(default_config, [])
+    assert refused == []
+    assert "legacy full prompt projection is not admitted" in refusal["reason"]
+
     config = ReviewConfig.from_values(
         root=root,
         snapshot_at="2026-07-19T15:11:00Z",
         output_dir=root / "report",
+        legacy_full_prompt_projection=True,
     )
     sessions = [
         {
@@ -618,6 +629,102 @@ def test_exact_private_prompt_lineage_joins_without_exposing_prompt_text(
     assert sessions[0]["source_atom_ids"] == ["pa-one"]
     assert coverage["asks_in_window"] == 1
     assert "private prompt text" not in json.dumps(asks)
+
+
+def test_chunk_manifest_loads_only_redacted_window_rows_by_default(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "repo"
+    (root / "docs").mkdir(parents=True)
+    private = root / ".limen-private" / "session-corpus" / "prompt-atoms"
+    chunks = private / "projection-chunks"
+    chunks.mkdir(parents=True)
+    public = {
+        "version": 1,
+        "semantic_digest": "semantic",
+        "source_cursor_digest": "cursor",
+        "source_scope": {
+            "scope": "all",
+            "target_scope": "all",
+            "all_baseline_complete": True,
+            "pending_files": 0,
+            "source_errors": [],
+            "adapter_gaps": [],
+        },
+        "coverage": {"atoms": 2, "current_unresolved_atoms": 2},
+        "unresolved_atoms": [],
+        "unresolved_atoms_truncated": 0,
+        "validation": {"ok": True, "errors": []},
+    }
+    native_id = "native-session"
+    descriptors, payloads = build_chunks(
+        [
+            {
+                "atom_id": "pa-old",
+                "occurrence_id": "po-old",
+                "kind": "ask",
+                "source": "codex-sessions",
+                "timestamp": "2026-07-01T10:00:00Z",
+                "session_ref_hash": _session_ref_hash("codex:old"),
+                "intent": "old private text",
+                "outcome": {"disposition": "unassessed"},
+                "is_current_intent": True,
+            },
+            {
+                "atom_id": "pa-window",
+                "occurrence_id": "po-window",
+                "kind": "constraint",
+                "source": "codex-sessions",
+                "timestamp": "2026-07-17T10:00:00Z",
+                "session_ref_hash": _session_ref_hash(f"codex:{native_id}"),
+                "intent": "window private text",
+                "outcome": {"disposition": "blocked"},
+                "is_current_intent": True,
+            },
+        ]
+    )
+    public = apply_manifest(public, descriptors)
+    public["projection_digest"] = _canonical_digest(public)
+    (root / "docs" / "prompt-atom-ledger.json").write_text(
+        json.dumps(public),
+        encoding="utf-8",
+    )
+    (private / "prompt-atom-ledger.json").write_text(
+        json.dumps(
+            {
+                "public_projection_digest": public["projection_digest"],
+                "semantic_digest": "semantic",
+                "source_cursor_digest": "cursor",
+            }
+        ),
+        encoding="utf-8",
+    )
+    for filename, content in payloads.items():
+        (chunks / filename).write_bytes(content)
+    config = ReviewConfig.from_values(
+        root=root,
+        snapshot_at="2026-07-19T15:11:00Z",
+        output_dir=root / "report",
+    )
+    sessions = [
+        {
+            "agent": "codex",
+            "native_id": native_id,
+            "source_atom_ids": [],
+            "coverage_flags": [],
+            "_prompt_session_refs": [f"codex:{native_id}"],
+        }
+    ]
+
+    asks, coverage = collect_prompt_atoms(config, sessions)
+
+    assert [row["ask"] for row in asks] == ["pa-window"]
+    assert asks[0]["outcome"] == "blocked"
+    assert sessions[0]["source_atom_ids"] == ["pa-window"]
+    assert coverage["occurrences_in_window"] == 1
+    assert coverage["atoms_loaded"] == 1
+    assert "private text" not in json.dumps(public)
+    assert all(b"private text" not in content for content in payloads.values())
 
 
 def test_bare_native_id_cannot_infer_prompt_session_binding(
@@ -679,6 +786,7 @@ def test_bare_native_id_cannot_infer_prompt_session_binding(
         root=root,
         snapshot_at="2026-07-19T15:11:00Z",
         output_dir=root / "report",
+        legacy_full_prompt_projection=True,
     )
     sessions = [
         {

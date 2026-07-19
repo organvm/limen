@@ -225,6 +225,24 @@ parameters:
     self_update: none
     owner: vitals
     note: "Deny a new heavy lease only when both post-baseline iostat samples are strictly above this aggregate MiB/s threshold."
+  LIMEN_STORAGE_INVENTORY_MAX_AGE_SECONDS:
+    default: 21600
+    env: LIMEN_STORAGE_INVENTORY_MAX_AGE_SECONDS
+    self_update: none
+    owner: substrate
+    note: "Maximum age in seconds for a cached bounded storage inventory. Older inventory remains visible as stale evidence and can never make the storage receipt green."
+  LIMEN_STORAGE_BUCKET_SCAN_BUDGET_SECONDS:
+    default: 30
+    env: LIMEN_STORAGE_BUCKET_SCAN_BUDGET_SECONDS
+    self_update: none
+    owner: substrate
+    note: "Aggregate wall-clock ceiling for one admitted bounded bucket inventory. Under pressure the receipt writer uses cheap sensors and cached inventory instead."
+  LIMEN_STORAGE_BUCKET_SCAN_TIMEOUT_SECONDS:
+    default: 8
+    env: LIMEN_STORAGE_BUCKET_SCAN_TIMEOUT_SECONDS
+    self_update: none
+    owner: substrate
+    note: "Per-bucket timeout within the admitted aggregate storage scan budget. A timed-out bucket is explicitly partial or unknown, never zero."
   VITALS_SHED_OLLAMA:
     default: "1"
     env: LIMEN_VITALS_SHED_OLLAMA
