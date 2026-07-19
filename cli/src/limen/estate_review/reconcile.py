@@ -451,7 +451,7 @@ def receipt_role_credits(
     )
     return {
         "executor": receipt.get("author"),
-        "verifiers": verifiers,
+        "verifiers": ", ".join(verifiers) if verifiers else None,
         # The PR-head APIs used here do not prove who composed a merge-group.
         # Keep integration unknown rather than assigning it to author/merger.
         "integrator": receipt.get("integrator"),

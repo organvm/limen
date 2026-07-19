@@ -370,7 +370,7 @@ def test_receipt_roles_never_credit_executor_as_missing_integrator() -> None:
 
     assert credits == {
         "executor": "coding-agent",
-        "verifiers": ["codeql", "github-actions"],
+        "verifiers": "codeql, github-actions",
         "integrator": None,
         "lander": "human-lander",
     }
