@@ -509,6 +509,8 @@ class ConductBroker:
                     }
                 return self._submit_result(state, run, duplicate=True)
             parent = self._validate_lineage(state, packet, principal_id=principal.principal_id)
+            if parent is None:
+                raise ConductConflict("dependent fanout node requires a parent run")
             dependency_runs = []
             for dependency in dependencies:
                 dependency_id = state["work_index"].get(dependency)
