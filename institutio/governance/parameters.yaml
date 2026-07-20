@@ -1121,13 +1121,19 @@ parameters:
     env: LIMEN_CONDUCT_TOKEN
     self_update: "credential wall rotation only"
     owner: dispatch
-    note: "Credential-wall-owned bearer for an authenticated conduct client or Worker. It is consumed by the adapter and removed before launching a model process."
-  LIMEN_CONDUCT_TOKENS:
+    note: "Credential-wall-owned bearer for exactly one authenticated conduct principal. The Worker derives principal, native lane, surface, and roles from LIMEN_CONDUCT_PRINCIPAL_REGISTRY; this client-side value is consumed by the adapter and removed before launching a model process."
+  LIMEN_CONDUCT_PRINCIPAL_REGISTRY:
     default: ""
-    env: LIMEN_CONDUCT_TOKENS
+    env: LIMEN_CONDUCT_PRINCIPAL_REGISTRY
     self_update: "credential wall rotation only"
     owner: dispatch
-    note: "Optional comma-separated Worker bearer rotation set. Values remain secret-owned and are never emitted in receipts."
+    note: "Secret JSON registry installed only in the remote keeper. Each entry binds one bearer to a stable principal ID, native agent, surface, and observer/conductor/executor/compatibility roles. Values never enter git, logs, responses, or receipts."
+  LIMEN_CONDUCT_CAPABILITY_SECRET:
+    default: ""
+    env: LIMEN_CONDUCT_CAPABILITY_SECRET
+    self_update: "credential wall rotation only"
+    owner: dispatch
+    note: "Remote-keeper HMAC secret for loss-recoverable executor lease capabilities bound to lease ID, generation, and executor principal. It is never returned; only the derived executor capability is delivered by the authenticated claim route."
   LIMEN_CONDUCT_STATE:
     default: ""
     env: LIMEN_CONDUCT_STATE
