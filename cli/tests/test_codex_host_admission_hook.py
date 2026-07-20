@@ -326,15 +326,17 @@ def test_subagent_start_is_advisory_and_names_finite_bounds(tmp_path: Path) -> N
 def test_stop_allows_at_most_one_explicit_closeout_continuation(tmp_path: Path) -> None:
     hook = load_hook()
     service = controller(tmp_path)
+    _, worktree, _ = linked_worktrees(tmp_path)
     write = payload(
         "PreToolUse",
+        cwd=str(worktree),
         tool_name="Edit",
-        tool_input={"file_path": str(ROOT / "README.md")},
+        tool_input={"file_path": str(worktree / "tracked.txt")},
     )
     assert hook.handle(write, controller=service, owner_pid=101) is None
 
     first = hook.handle(
-        payload("Stop", stop_hook_active=False),
+        payload("Stop", cwd=str(worktree), stop_hook_active=False),
         controller=service,
         owner_pid=101,
         closeout_probe=lambda _cwd: True,
@@ -345,7 +347,7 @@ def test_stop_allows_at_most_one_explicit_closeout_continuation(tmp_path: Path) 
     assert len(service.status(probe=False)["leases"]) == 1
 
     final = hook.handle(
-        payload("Stop", stop_hook_active=True),
+        payload("Stop", cwd=str(worktree), stop_hook_active=True),
         controller=service,
         owner_pid=101,
         closeout_probe=lambda _cwd: True,
