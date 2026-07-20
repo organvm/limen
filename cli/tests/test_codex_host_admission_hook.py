@@ -74,6 +74,7 @@ def test_user_prompt_submit_hard_stops_second_non_plan_root(tmp_path: Path) -> N
         controller=service,
         owner_pid=202,
     )
+    assert set(denied) == {"continue", "stopReason"}
     assert denied["continue"] is False
     assert "execution-lease-held" in denied["stopReason"]
     assert len(service.status(probe=False)["leases"]) == 1
@@ -136,6 +137,7 @@ def test_stop_allows_at_most_one_explicit_closeout_continuation(tmp_path: Path) 
         owner_pid=101,
         closeout_probe=lambda _cwd: True,
     )
+    assert set(first) == {"continue", "stopReason"}
     assert first["continue"] is False
     assert "One bounded closeout pass" in first["stopReason"]
     assert len(service.status(probe=False)["leases"]) == 1

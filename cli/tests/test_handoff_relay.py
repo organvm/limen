@@ -247,7 +247,7 @@ def test_check_rejects_missing_or_stale_provider_truth(monkeypatch, tmp_path, ca
     assert "provider headroom stale" in capsys.readouterr().out
 
 
-def test_handoff_refresh_is_wired_across_heartbeat_metabolize_and_session_end():
+def test_handoff_refresh_is_owned_by_heartbeat_and_metabolize_not_session_end():
     heartbeat = (ROOT / "scripts" / "heartbeat-loop.sh").read_text(encoding="utf-8")
     metabolize = (ROOT / "scripts" / "metabolize.sh").read_text(encoding="utf-8")
     session_end = (ROOT / "scripts" / "hooks" / "session-closeout.sh").read_text(encoding="utf-8")
@@ -255,5 +255,5 @@ def test_handoff_refresh_is_wired_across_heartbeat_metabolize_and_session_end():
     # Observe-mode and normal dispatch beats both refresh; metabolize remains independently wired.
     assert heartbeat.count('python3 "$LIMEN_ROOT/scripts/handoff-relay.py"') >= 2
     assert 'python3 "$LIMEN_ROOT/scripts/handoff-relay.py"' in metabolize
-    # Every SessionEnd refreshes before the worktree-only early return.
-    assert session_end.index('python3 "$HANDOFF_ROOT/scripts/handoff-relay.py"') < session_end.index('case "$CWD" in')
+    # SessionEnd stays a constant-time signal; the continuous owners do the rebuild.
+    assert "handoff-relay.py" not in session_end

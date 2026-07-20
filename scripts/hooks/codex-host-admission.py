@@ -99,10 +99,9 @@ def _turn_owner(payload: dict[str, Any]) -> str | None:
 
 
 def _message(text: str, *, stop: bool = False) -> dict[str, Any]:
-    output: dict[str, Any] = {"systemMessage": text}
     if stop:
-        output.update({"continue": False, "stopReason": text})
-    return output
+        return {"continue": False, "stopReason": text}
+    return {"systemMessage": text}
 
 
 def _tool_command(payload: dict[str, Any]) -> str:

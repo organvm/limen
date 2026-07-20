@@ -248,14 +248,19 @@ gates:
     note: "Workflow-filtered completed CI must match the full current origin/main head; a prior or pending run is never green proof."
   orphan-watchers-test:
     command: "python3 -m pytest cli/tests/test_orphan_watchers.py -q"
-    paths: ["scripts/orphan-watchers.py", "scripts/hooks/session-closeout.sh", "cli/tests/test_orphan_watchers.py"]
+    paths: ["scripts/orphan-watchers.py", "cli/tests/test_orphan_watchers.py"]
     owner: tabularius
-    note: "Watcher detection stays honest: shell-snapshot poll loops classified, orphan age floor above await-pr's deadline, --check never signals, --reap kills only orphans, --session-end never blocks session end."
+    note: "Watcher detection stays honest: shell-snapshot poll loops classified, orphan age floor above await-pr's deadline, --check never signals, --reap kills only orphans, and the bounded audit mode remains fail-open."
   handoff-relay-test:
     command: "python3 -m pytest cli/tests/test_handoff_relay.py -q"
-    paths: ["scripts/handoff-relay.py", "scripts/heartbeat-loop.sh", "scripts/metabolize.sh", "scripts/hooks/session-closeout.sh", "cli/tests/test_handoff_relay.py"]
+    paths: ["scripts/handoff-relay.py", "scripts/heartbeat-loop.sh", "scripts/metabolize.sh", "cli/tests/test_handoff_relay.py"]
     owner: continuity
-    note: "The warm-resume packet carries authoritative budget/provider/next truth and refreshes across heartbeat, metabolize, and SessionEnd seams."
+    note: "The warm-resume packet carries authoritative budget/provider/next truth and refreshes through its heartbeat and metabolize owners."
+  session-closeout-test:
+    command: "python3 -m pytest cli/tests/test_session_closeout_hook.py -q"
+    paths: [".claude/settings.json", "scripts/hooks/session-closeout.sh", "scripts/hooks/session-closeout.py", "cli/tests/test_session_closeout_hook.py"]
+    owner: lifecycle
+    note: "Claude SessionEnd parses the runtime payload and writes the worktree breadcrumb in under one second without invoking handoff, watcher, transcript, or board work; the configured outer timeout is five seconds."
   autonomy-governor-test:
     command: "python3 -m pytest cli/tests/test_autonomy_governor.py -q"
     paths: ["scripts/autonomy-governor.py", "cli/tests/test_autonomy_governor.py"]
