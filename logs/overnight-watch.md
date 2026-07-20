@@ -1,12 +1,12 @@
 # Overnight Watch
 
 - Status: `alert`
-- Updated: `2026-07-20T00:27:28+00:00`
-- Log age: `6` seconds
+- Updated: `2026-07-20T01:58:48+00:00`
+- Log age: `89` seconds
 - Launchd: `active`
-- Latest tick: `tick emitted: 2026-07-20T00:18:08+00:00 total=2995 open=721 spent=13/600`
+- Latest tick: `tick emitted: 2026-07-20T01:44:28+00:00 total=2999 open=725 spent=4/600`
 - Latest async: `async: reaped 0 dead · harvested 0 · 0 still running · launched 0`
-- Stale tick samples: `1`
+- Stale tick samples: `2`
 - Active workers: `0`
 - Heartbeat child processes: `2`
 
@@ -30,10 +30,10 @@
 
 ## Throughput
 
-- Recent per-60min completions: `[0, 0, 0]` (derived floor `0.0`, median `0.0`).
+- Recent per-60min completions: `[0, 0, 0]` (derived floor `0.0`, median `0`).
 - Below floor: `false`; suppressed: `no`.
-  - child `13550` `S` `00:07` `timeout 300 python3 /Users/4jp/Workspace/limen/scripts/reclaim-worktrees.py --apply`
-  - child `13551` `S` `00:07` `tail -4`
+  - child `75807` `S` `01:29` `bash /Users/4jp/Workspace/limen/scripts/clone-maintenance.sh`
+  - child `75808` `S` `01:29` `tail -3`
 
 ## WATCH_ALERT
 - `overnight-lane-switch-blocked`: blocker=overnight-owner-packets-gated owner=organvm/limen reason=all bounded owner packets are closed by current capability, owner gate(s)
