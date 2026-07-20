@@ -153,9 +153,7 @@ class FanoutLeafV1(ProtocolModel):
         if self.effect == "write" and not self.topic_branch:
             raise ValueError("write leaves require a topic branch")
         claimed_repositories = {
-            resource.repo
-            for resource in (parse_resource(claim.key) for claim in self.resource_claims)
-            if resource.repo
+            resource.repo for resource in (parse_resource(claim.key) for claim in self.resource_claims) if resource.repo
         }
         if claimed_repositories - {self.owner_repository}:
             raise ValueError("resource claims may not exceed the owner repository")
@@ -306,11 +304,7 @@ def _topological_order(leaves: tuple[FanoutLeafV1, ...]) -> tuple[str, ...]:
 def _is_local(session: dict[str, Any]) -> bool:
     transport = str(session.get("transport", "")).lower()
     capabilities = set(session.get("capabilities") or ())
-    return (
-        transport.startswith("local")
-        or "local-heavy" in capabilities
-        or "local-worktree" in capabilities
-    )
+    return transport.startswith("local") or "local-heavy" in capabilities or "local-worktree" in capabilities
 
 
 def _metric(value: Any, default: float) -> float:
@@ -461,13 +455,16 @@ def plan_manifest(
 
 
 def _run_id(packet: WorkPacketV1) -> str:
-    return "run-" + canonical_hash(
-        {
-            "work_id": packet.work_id,
-            "intent_hash": packet.intent_hash,
-            "execution_hash": packet.execution_hash,
-        }
-    )[:32]
+    return (
+        "run-"
+        + canonical_hash(
+            {
+                "work_id": packet.work_id,
+                "intent_hash": packet.intent_hash,
+                "execution_hash": packet.execution_hash,
+            }
+        )[:32]
+    )
 
 
 def compile_packets(
@@ -586,9 +583,7 @@ def start_manifest(
         "schema_version": "limen.fanout_start.v1",
         "root_run_id": result["root_run_id"],
         "manifest_hash": canonical.manifest_hash,
-        "idempotent": any(
-            run.get("duplicate") or run.get("status") == "duplicate" for run in result.get("runs", [])
-        ),
+        "idempotent": any(run.get("duplicate") or run.get("status") == "duplicate" for run in result.get("runs", [])),
         "routing": routing,
     }
 
@@ -642,8 +637,7 @@ class PullRequestReceiptAdapter:
         )
         if completed.returncode != 0:
             raise FanoutError(
-                f"merge queue rejected {check['url']}: "
-                f"{(completed.stdout + completed.stderr).strip()[-1000:]}"
+                f"merge queue rejected {check['url']}: {(completed.stdout + completed.stderr).strip()[-1000:]}"
             )
         result["merged"] = True
         return result
@@ -748,7 +742,6 @@ def canonical_entry_hash(manifest: FanoutManifestV1, *, entry: str) -> str:
 
 def should_evaluate_fanout(request_text: str, *, reversible_leaf_count: int) -> bool:
     forced = any(
-        phrase in request_text.casefold()
-        for phrase in ("multitask", "parallelize", "fan out", "fanout", "use cloud")
+        phrase in request_text.casefold() for phrase in ("multitask", "parallelize", "fan out", "fanout", "use cloud")
     )
     return forced or reversible_leaf_count >= 2

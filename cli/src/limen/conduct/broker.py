@@ -437,11 +437,7 @@ class ConductBroker:
                         "conflicts": result["conflicts"],
                     }
                 results.append(result)
-                if (
-                    index == 0
-                    and packet.intent.get("kind") == "fanout-root"
-                    and result["status"] != "duplicate"
-                ):
+                if index == 0 and packet.intent.get("kind") == "fanout-root" and result["status"] != "duplicate":
                     staged._start_fanout_root(result["run_id"], now=now)
             committed = staged_store.snapshot()
             state.clear()
@@ -459,9 +455,7 @@ class ConductBroker:
         with self.store.transaction() as state:
             run = state["runs"][run_id]
             lease = LeaseV1.model_validate(state["leases"][run["lease_id"]])
-            state["leases"][lease.lease_id] = _dump(
-                lease.model_copy(update={"state": "released", "heartbeat_at": now})
-            )
+            state["leases"][lease.lease_id] = _dump(lease.model_copy(update={"state": "released", "heartbeat_at": now}))
             run["status"] = "running"
             run["executor_session_id"] = None
             run["updated_at"] = now.isoformat()

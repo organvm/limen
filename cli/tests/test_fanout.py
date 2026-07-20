@@ -121,11 +121,7 @@ def test_manifest_rejects_raw_prompts_models_and_unbounded_retry() -> None:
 
 def test_portable_manifest_schema_matches_the_runtime_contract() -> None:
     schema_path = (
-        Path(__file__).resolve().parents[2]
-        / "spec"
-        / "contracts"
-        / "conduct"
-        / "fanout-manifest-v1.schema.json"
+        Path(__file__).resolve().parents[2] / "spec" / "contracts" / "conduct" / "fanout-manifest-v1.schema.json"
     )
     expected = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -150,10 +146,9 @@ def test_conflicts_become_dependencies_and_all_entry_hashes_match() -> None:
 
     assert canonical.leaves[1].dependencies == ("leaf-a",)
     assert plan_manifest(manifest)["topological_order"] == ["leaf-a", "leaf-b"]
-    assert {
-        canonical_entry_hash(manifest, entry=entry)
-        for entry in ("automatic", "conversational", "cli")
-    } == {canonical.manifest_hash}
+    assert {canonical_entry_hash(manifest, entry=entry) for entry in ("automatic", "conversational", "cli")} == {
+        canonical.manifest_hash
+    }
 
 
 def test_dynamic_route_prefers_remote_and_caps_local_fallback() -> None:
