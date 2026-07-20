@@ -260,6 +260,62 @@ def progress(view, scope, level, limit, show_all, ascii_only, json_output, repor
     )
 
 
+@main.command("estate-review")
+@click.option(
+    "--snapshot-at",
+    default="2026-07-19T15:11:00Z",
+    show_default=True,
+    help="Frozen ISO-8601 review boundary.",
+)
+@click.option(
+    "--write",
+    is_flag=True,
+    help="Atomically write tracked redacted outputs and the review seal.",
+)
+@click.option(
+    "--check",
+    is_flag=True,
+    help="Verify existing outputs byte-for-byte without writing.",
+)
+@click.option(
+    "--output-dir",
+    type=click.Path(path_type=Path),
+    default=Path("docs/reviews/seven-agent-whole-estate-2026-07-19"),
+    show_default=True,
+    help="Tracked dated output directory, relative to LIMEN_ROOT by default.",
+)
+@click.option(
+    "--legacy-full-prompt-projection",
+    is_flag=True,
+    help="Explicitly admit the monolithic prompt projection compatibility path.",
+)
+def estate_review(snapshot_at, write, check, output_dir, legacy_full_prompt_projection):
+    """Build or verify the canonical frozen whole-estate agent review."""
+
+    if write and check:
+        raise click.UsageError("--write and --check are mutually exclusive")
+    from limen.estate_review.pipeline import main as run_estate_review
+
+    root = resolve_limen_repo_root()
+    arguments = [
+        "--snapshot-at",
+        snapshot_at,
+        "--root",
+        str(root),
+        "--output-dir",
+        str(output_dir),
+    ]
+    if write:
+        arguments.append("--write")
+    elif check:
+        arguments.append("--check")
+    if legacy_full_prompt_projection:
+        arguments.append("--legacy-full-prompt-projection")
+    exit_code = run_estate_review(arguments)
+    if exit_code:
+        raise click.ClickException(f"estate review exited with status {exit_code}")
+
+
 def _open_prs_via_gh(limit: int = 200):
     """Enumerate open PRs in the current repo via `gh pr list` → list[workstream.PullRequest].
 
@@ -434,6 +490,18 @@ def harvest(agent):
     help="Finite workstream runway (for example 90m, 8h, or 7d); defaults to 1d.",
 )
 @click.option(
+    "--worktree-root",
+    default=None,
+    type=click.Path(),
+    help="Explicit checkout root; otherwise a mounted writable Scratch volume is required.",
+)
+@click.option(
+    "--check",
+    "check_only",
+    is_flag=True,
+    help="Validate and print the launch plan without changing files, refs, or worktrees.",
+)
+@click.option(
     "--no-readme",
     is_flag=True,
     help="Create/reuse the worktree without writing the private kickoff packet.",
@@ -449,6 +517,8 @@ def workstream(
     prompt_text,
     prompt_file,
     runway,
+    worktree_root,
+    check_only,
     workstream_handle,
     no_readme,
     repo,
@@ -472,6 +542,10 @@ def workstream(
         args.extend(["--prompt-file", prompt_file])
     if runway:
         args.extend(["--runway", runway])
+    if worktree_root:
+        args.extend(["--worktree-root", worktree_root])
+    if check_only:
+        args.append("--check")
     if workstream_handle:
         args.extend(["--workstream", workstream_handle])
     if no_readme:

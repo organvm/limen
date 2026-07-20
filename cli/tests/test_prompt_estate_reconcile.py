@@ -172,6 +172,33 @@ def _by_atom(snapshot: dict) -> dict[str, dict]:
     return {row["atom_id"]: row for row in snapshot["atom_reconciliation"]}
 
 
+def _owner_links(path: Path, links: list[dict]) -> Path:
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "limen.estate_session_review_owner_links.v1",
+                "links": links,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _owner_link(atom_id: str, **over) -> dict:
+    row = {
+        "prompt_atom_id": atom_id,
+        "owner_type": "task",
+        "canonical_owner_reference": f"task:{atom_id}",
+        "predicate": "python3 scripts/check-owner.py",
+        "receipt_target": f"github:organvm/limen:task:{atom_id}",
+        "disposition": "durably_homed_open",
+        "content_bindings": [f"binding:{atom_id}"],
+    }
+    row.update(over)
+    return row
+
+
 def test_reuses_one_existing_task_receipt_without_duplicate_minting(tmp_path: Path):
     module = _load()
     projection, board = _write_inputs(
@@ -200,6 +227,98 @@ def test_reuses_one_existing_task_receipt_without_duplicate_minting(tmp_path: Pa
     assert snapshot["control"]["private_check"]["result"] == "pass"
     assert snapshot["coverage"]["matched_atom_ids"] == 1
     assert board.read_bytes() == board_before
+
+
+def test_owner_link_index_requires_exactly_one_row_per_atom(tmp_path: Path):
+    module = _load()
+    path = _owner_links(
+        tmp_path / "links.json",
+        [_owner_link("pa-one"), _owner_link("pa-one")],
+    )
+
+    with pytest.raises(module.EstateReconciliationError, match="duplicate owner link"):
+        module.load_owner_links(path, atom_ids={"pa-one"})
+
+    missing = _owner_links(tmp_path / "missing.json", [_owner_link("pa-one")])
+    with pytest.raises(module.EstateReconciliationError, match="not exhaustive"):
+        module.load_owner_links(missing, atom_ids={"pa-one", "pa-two"})
+
+
+def test_owner_link_index_accepts_separate_review_ask_rows(tmp_path: Path):
+    module = _load()
+    prompt_row = _owner_link("pa-one")
+    review_row = _owner_link("unused")
+    review_row.pop("prompt_atom_id")
+    review_row["review_ask_id"] = "ask-copilot-deadbeef"
+    review_row["canonical_owner_reference"] = "pull_request:organvm/limen#7"
+    review_row["receipt_target"] = "github:organvm/limen:pull-request:7"
+    path = _owner_links(tmp_path / "links.json", [prompt_row, review_row])
+
+    loaded, _digest = module.load_owner_links(path, atom_ids={"pa-one"})
+
+    assert set(loaded) == {"pa-one", "ask-copilot-deadbeef"}
+
+
+def test_blocked_owner_link_requires_failed_gate_and_next_command(tmp_path: Path):
+    module = _load()
+    path = _owner_links(
+        tmp_path / "links.json",
+        [
+            _owner_link(
+                "pa-blocked",
+                disposition="blocked",
+                owner_type="blocker",
+            )
+        ],
+    )
+
+    with pytest.raises(module.EstateReconciliationError, match="failed gate or next command"):
+        module.load_owner_links(path, atom_ids={"pa-blocked"})
+
+
+def test_conflicting_receipt_claims_are_rejected(tmp_path: Path):
+    module = _load()
+    shared = "github:organvm/limen:pull-request:839"
+    path = _owner_links(
+        tmp_path / "links.json",
+        [
+            _owner_link("pa-one", receipt_target=shared),
+            _owner_link(
+                "pa-two",
+                receipt_target=shared,
+                canonical_owner_reference="task:other-owner",
+            ),
+        ],
+    )
+
+    with pytest.raises(module.EstateReconciliationError, match="conflicting receipt"):
+        module.load_owner_links(path, atom_ids={"pa-one", "pa-two"})
+
+
+def test_verified_owner_link_requires_timestamped_exact_head_proof(tmp_path: Path):
+    module = _load()
+    path = _owner_links(
+        tmp_path / "links.json",
+        [_owner_link("pa-done", disposition="verified_done")],
+    )
+
+    with pytest.raises(module.EstateReconciliationError, match="exact predicate proof"):
+        module.load_owner_links(path, atom_ids={"pa-done"})
+
+    complete = _owner_links(
+        tmp_path / "complete.json",
+        [
+            _owner_link(
+                "pa-done",
+                disposition="verified_done",
+                predicate_result={"passed": True},
+                predicate_checked_at="2026-07-19T15:00:00Z",
+                receipt_head_sha="a" * 40,
+            )
+        ],
+    )
+    loaded, _digest = module.load_owner_links(complete, atom_ids={"pa-done"})
+    assert loaded["pa-done"]["disposition"] == "verified_done"
 
 
 def test_projection_requires_hash_matched_private_core_check(tmp_path: Path):

@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-07-19T14:42:58.228648Z",
+  "generated_utc": "2026-07-20T01:40:39Z",
   "receipts": [
     {
       "branch": "pr-110-branch",
@@ -4665,6 +4665,24 @@
       "root": "codex-runaway-prevention-20260717",
       "status": "active_process_owned",
       "worktree": "/Users/4jp/Workspace/limen/.worktrees/codex-runaway-prevention-20260717"
+    },
+    {
+      "archive_readback_verified": true,
+      "archive_receipt": "archive://worktree-preserve/2026-07-20T014039Z-session-scope-boundary-closeout",
+      "archive_status": "verified",
+      "branch": "codex/session-scope-boundary-closeout",
+      "classification": "dirty worktree privately preserved; owner decision required",
+      "dirty_patch_bytes": 3228,
+      "dirty_paths_count": 2,
+      "evidence_updated_utc": "2026-07-20T01:40:39Z",
+      "head_prefix": "c4bace4cb9d4",
+      "lane": "owner-blocker",
+      "next_action": "Do not delete, reclaim, force-push, or auto-port this worktree from lifecycle cleanup. A private patch/status receipt exists; create a narrow owner packet to review, push, supersede, or retire this preserved dirty state.",
+      "private_receipt": "private://worktree-preserve/2026-07-20T014039Z-session-scope-boundary-closeout",
+      "repo": "organvm/limen",
+      "root": "session-scope-boundary-closeout",
+      "status": "private_patch_preserved",
+      "untracked_paths_count": 0
     }
   ],
   "schema": 1

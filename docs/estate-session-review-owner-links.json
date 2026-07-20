@@ -1,0 +1,7 @@
+{
+  "schema": "limen.estate_session_review_owner_links.v1",
+  "status": "pending_exact_prompt_authority",
+  "source_projection_digest": null,
+  "source_authority_seal_hash": null,
+  "links": []
+}

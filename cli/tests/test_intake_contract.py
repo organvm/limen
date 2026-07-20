@@ -61,7 +61,7 @@ def test_legacy_board_remains_loadable_without_typed_fields() -> None:
 
 def test_cli_and_mcp_task_models_expose_optional_typed_fields() -> None:
     cli_fields = Task.model_fields
-    for field in ("predicate", "receipt_target"):
+    for field in ("predicate", "receipt_target", "source_atom_ids"):
         assert field in cli_fields
         assert cli_fields[field].is_required() is False
     assert "execution_requirements" in cli_fields
@@ -81,6 +81,8 @@ def test_cli_and_mcp_task_models_expose_optional_typed_fields() -> None:
         assert field in mcp_fields
         assert isinstance(mcp_fields[field].value, ast.Constant)
         assert mcp_fields[field].value.value is None
+    assert "source_atom_ids" in mcp_fields
+    assert isinstance(mcp_fields["source_atom_ids"].value, ast.Call)
     assert "execution_requirements" in mcp_fields
     assert isinstance(mcp_fields["execution_requirements"].value, ast.Constant)
     assert mcp_fields["execution_requirements"].value.value is None
@@ -110,6 +112,15 @@ def test_new_and_open_tasks_require_executable_predicate_and_durable_receipt() -
     with pytest.raises(IntakeContractError, match="receipt_target"):
         validate_intake_contract(_task(receipt_target="/tmp/result.json"), is_new=True)
     assert validate_intake_contract(_task(), is_new=True) is not None
+
+
+def test_source_atom_ids_are_optional_for_legacy_rows_but_strict_when_present() -> None:
+    assert Task.model_validate(_task(source_atom_ids=[])).source_atom_ids == []
+    assert Task.model_validate(_task(source_atom_ids=["pa-exact-one"])).source_atom_ids == ["pa-exact-one"]
+    with pytest.raises(ValueError, match="unique"):
+        Task.model_validate(_task(source_atom_ids=["pa-exact-one", "pa-exact-one"]))
+    with pytest.raises(ValueError, match="safe opaque"):
+        Task.model_validate(_task(source_atom_ids=["/Users/private"]))
 
 
 def test_contract_accepts_environment_prefixed_commands_and_safe_repository_paths() -> None:

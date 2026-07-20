@@ -1,0 +1,81 @@
+{
+  "schema": "limen.storage_recovery_receipt.v2",
+  "observed_at": "2026-07-19T23:12:40Z",
+  "status": "partial_host_red_operator_pause_required",
+  "host_admission": {
+    "allowed": false,
+    "internal_free_gib": 15.2,
+    "backblaze_cpu_percent": 97.6,
+    "backblaze_rss_bytes": 529104896,
+    "swap_used_bytes": 8901487493,
+    "swap_fraction": 0.5181347656180151,
+    "disk_mib_per_second_samples": [
+      78.72,
+      86.24
+    ],
+    "reasons": [
+      "backblaze-cpu",
+      "swap-fraction"
+    ]
+  },
+  "storage_pressure_contract": {
+    "schema": "limen.substrate_storage_pressure.v2",
+    "status": "partial",
+    "scope_status": "partial",
+    "inventory_mode": "cheap",
+    "inventory_fresh": false,
+    "previous_generated_at": "2026-07-10T14:28:13Z",
+    "free_space_delta_gib": -99.9,
+    "shortfall_gib": 184.8,
+    "measured_bucket_count": 0,
+    "cached_bucket_count": 8,
+    "unknown_bucket_count": 3,
+    "broad_du_or_worktree_scan_performed": false,
+    "tracked_receipt": "docs/substrate-storage-pressure.md",
+    "private_receipt": ".limen-private/session-corpus/lifecycle/substrate-storage-pressure.json"
+  },
+  "accepted_reaper": {
+    "command_contract": "LIMEN_RECLAIM_MAX=6 LIMEN_RECLAIM_GENERATED=0 reclaim-worktrees.py --apply --force --json",
+    "removed": [
+      "lane-fitness-beat-wiring",
+      "omega-ask-lineage-live",
+      "archive-account-resolution",
+      "archive-bounded-scan",
+      "modular-continuation-20260714"
+    ],
+    "refused": [
+      {
+        "root": "codex-prompt-corpus-control-20260711",
+        "reason": "locked active prompt-corpus control-plane correction"
+      }
+    ],
+    "generated_payload_cleanup": false,
+    "dirty_or_unpushed_roots_removed": 0
+  },
+  "worktree_inventory_after_reap": {
+    "total": 386,
+    "debt": 186,
+    "reapable": 1,
+    "dirty": 61,
+    "unpushed": 43,
+    "not_merged_to_default": 80
+  },
+  "backblaze_cutover": {
+    "owner": "organvm/domus-genoma#306",
+    "exact_head": "0a1584da8b34876b70cd0047983493c31ed26b1d",
+    "exact_head_ci": "green",
+    "receipt": "docs/backblaze-cutover-receipt-20260719.json",
+    "missing_exclusions": [
+      "/users/4jp/workspace/limen/.worktrees/",
+      "/users/4jp/workspace/limen/.codex/worktrees/"
+    ],
+    "unknown_internal_worktree_pools": [],
+    "live_apply_performed": false
+  },
+  "report_pipeline": {
+    "prompt_all_all_scan_started": false,
+    "reason": "Machine-wide host admission is red; heavy scans remain frozen.",
+    "pr": "organvm/limen#1311",
+    "site_v2_published": false
+  }
+}

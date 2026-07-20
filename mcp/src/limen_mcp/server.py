@@ -88,6 +88,11 @@ class DispatchLogEntry(BaseModel):
     selected_model: Optional[str] = None
     selection_source: Optional[str] = None
     catalog_hash: Optional[str] = None
+    remote_receipt: Optional[str] = None
+    predicate_result: Optional[Dict[str, Any]] = None
+    predicate_checked_at: Optional[datetime] = None
+    receipt_head_sha: Optional[str] = None
+    executor_role: Optional[Literal["executor", "verifier", "integrator", "lander"]] = None
     output: Optional[str] = None
 
     @field_validator("status")
@@ -131,6 +136,7 @@ class Task(BaseModel):
     context: Optional[str] = None
     predicate: Optional[str] = None
     receipt_target: Optional[str] = None
+    source_atom_ids: List[str] = Field(default_factory=list)
     execution_requirements: Optional[List[ExecutionRequirement]] = None
     claude_tier: Optional[str] = None
     depends_on: List[str] = Field(default_factory=list)

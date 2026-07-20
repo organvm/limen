@@ -9,6 +9,7 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -17,11 +18,136 @@ sys.path.insert(0, str(ROOT / "cli" / "src"))
 from limen.cli import main  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _isolated_worktree_root(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("LIMEN_WORKTREE_ROOT", str(tmp_path / "worktrees"))
+
+
+def _worktree(slug: str) -> Path:
+    return Path(os.environ["LIMEN_WORKTREE_ROOT"]) / slug
+
+
 def _git(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(["git", *args], cwd=cwd, text=True, capture_output=True)
     if result.returncode != 0:
         raise AssertionError(f"git {' '.join(args)} failed\n{result.stdout}\n{result.stderr}")
     return result
+
+
+def _init_repo(path: Path) -> Path:
+    path.mkdir()
+    _git("init", "-q", "-b", "main", cwd=path)
+    _git("config", "user.email", "test@example.invalid", cwd=path)
+    _git("config", "user.name", "Test User", cwd=path)
+    (path / "README.md").write_text("demo\n", encoding="utf-8")
+    _git("add", "README.md", cwd=path)
+    _git("commit", "-qm", "init", cwd=path)
+    return path
+
+
+def _tree_bytes(root: Path) -> dict[str, bytes | None]:
+    return {
+        str(path.relative_to(root)): path.read_bytes() if path.is_file() else None for path in sorted(root.rglob("*"))
+    }
+
+
+def test_workstream_launcher_routes_to_scratch_by_default(tmp_path: Path, monkeypatch) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    scratch = tmp_path / "Scratch"
+    scratch.mkdir()
+    monkeypatch.delenv("LIMEN_WORKTREE_ROOT")
+    monkeypatch.setenv("LIMEN_SCRATCH_ROOT", str(scratch))
+    monkeypatch.setenv("LIMEN_ROOT", str(ROOT))
+
+    result = CliRunner().invoke(main, ["workstream", "--no-readme", str(repo), "scratch-first"])
+
+    assert result.exit_code == 0, result.output
+    assert (scratch / "limen-worktrees" / "scratch-first").is_dir()
+    assert not (repo / ".worktrees").exists()
+
+
+def test_workstream_launcher_accepts_explicit_internal_fallback(tmp_path: Path, monkeypatch) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    internal = repo / ".worktrees"
+    monkeypatch.setenv("LIMEN_ROOT", str(ROOT))
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "workstream",
+            "--no-readme",
+            "--worktree-root",
+            str(internal),
+            str(repo),
+            "explicit-fallback",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (internal / "explicit-fallback").is_dir()
+
+
+def test_workstream_launcher_rejects_cross_repo_slug_collision(tmp_path: Path, monkeypatch) -> None:
+    first = _init_repo(tmp_path / "first")
+    second = _init_repo(tmp_path / "second")
+    shared = tmp_path / "shared-worktrees"
+    monkeypatch.setenv("LIMEN_ROOT", str(ROOT))
+
+    created = CliRunner().invoke(
+        main,
+        [
+            "workstream",
+            "--no-readme",
+            "--worktree-root",
+            str(shared),
+            str(first),
+            "same-slug",
+        ],
+    )
+    collided = CliRunner().invoke(
+        main,
+        [
+            "workstream",
+            "--no-readme",
+            "--worktree-root",
+            str(shared),
+            str(second),
+            "same-slug",
+        ],
+    )
+
+    assert created.exit_code == 0, created.output
+    assert collided.exit_code != 0
+    assert "belongs to a different repository" in collided.output
+
+
+def test_workstream_launcher_help_and_check_are_byte_preserving(tmp_path: Path, monkeypatch) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    root = tmp_path / "not-created-worktrees"
+    script = ROOT / "scripts" / "start-worktree-session.sh"
+    monkeypatch.setenv("LIMEN_ROOT", str(ROOT))
+    before = _tree_bytes(tmp_path)
+
+    helped = subprocess.run(["bash", str(script), "--help"], text=True, capture_output=True)
+    checked = subprocess.run(
+        [
+            "bash",
+            str(script),
+            "--check",
+            "--worktree-root",
+            str(root),
+            str(repo),
+            "check-only",
+        ],
+        text=True,
+        capture_output=True,
+    )
+
+    assert helped.returncode == 0, helped.stderr
+    assert checked.returncode == 0, checked.stderr
+    assert "check ok (zero writes)" in checked.stdout
+    assert not root.exists()
+    assert _tree_bytes(tmp_path) == before
 
 
 def test_workstream_command_writes_private_kickstart_packet(tmp_path: Path, monkeypatch) -> None:
@@ -47,7 +173,7 @@ def test_workstream_command_writes_private_kickstart_packet(tmp_path: Path, monk
     )
 
     assert result.exit_code == 0, result.output
-    wt = repo / ".worktrees" / "demo-packet"
+    wt = _worktree("demo-packet")
     readme = wt / ".limen-workstream" / "README.md"
     intent = wt / ".limen-workstream" / "intent.md"
     kickstart = wt / ".limen-workstream" / "kickstart.sh"
@@ -102,7 +228,7 @@ def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(
     missing = CliRunner().invoke(main, ["workstream", "--autonomous", str(repo), "No Prompt"])
     assert missing.exit_code == 2
     assert "requires --prompt or --prompt-file" in missing.output
-    assert not (repo / ".worktrees" / "no-prompt").exists()
+    assert not _worktree("no-prompt").exists()
 
     unbounded = CliRunner().invoke(
         main,
@@ -118,7 +244,7 @@ def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(
     )
     assert unbounded.exit_code == 2
     assert "invalid workstream contract" in unbounded.output
-    assert not (repo / ".worktrees" / "unbounded").exists()
+    assert not _worktree("unbounded").exists()
 
     no_readme = CliRunner().invoke(
         main,
@@ -134,7 +260,7 @@ def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(
     )
     assert no_readme.exit_code == 2
     assert "cannot be combined with --no-readme" in no_readme.output
-    assert not (repo / ".worktrees" / "no-readme").exists()
+    assert not _worktree("no-readme").exists()
 
     result = CliRunner().invoke(
         main,
@@ -153,7 +279,7 @@ def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(
     )
 
     assert result.exit_code == 0, result.output
-    wt = repo / ".worktrees" / "next-epoch"
+    wt = _worktree("next-epoch")
     capsule = wt / ".limen-workstream"
     readme = capsule / "README.md"
     manifest = capsule / "manifest.md"
@@ -211,6 +337,8 @@ def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(
     }
     assert ".capsule.lock" in kickstart_text
     assert "validate_capsule_receipt" in kickstart_text
+    assert 'case "${1:-}" in' in kickstart_text
+    assert "capsule check: PASS" in kickstart_text
     assert receipt_data["schema"] == "limen.workstream.receipt.v1"
     assert receipt_data["slug"] == "next-epoch"
     assert receipt_data["branch"] == "work/next-epoch"
@@ -243,6 +371,34 @@ def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(
         check=False,
     )
     assert ignored_receipt.returncode != 0
+
+    immutable_paths = (contract, identity, receipt)
+    immutable_before = {path: path.read_bytes() for path in immutable_paths}
+    provider_marker = tmp_path / "provider-launched"
+    no_launch_bin = tmp_path / "no-launch-bin"
+    no_launch_bin.mkdir()
+    fake_codex = no_launch_bin / "codex"
+    fake_codex.write_text(
+        '#!/usr/bin/env bash\n: > "$PROVIDER_MARKER"\n',
+        encoding="utf-8",
+    )
+    fake_codex.chmod(0o755)
+    check_env = {
+        **os.environ,
+        "PATH": f"{no_launch_bin}:{os.environ['PATH']}",
+        "PROVIDER_MARKER": str(provider_marker),
+    }
+    for option in ("--help", "--check"):
+        result = subprocess.run(
+            ["bash", str(kickstart), option],
+            cwd=wt,
+            env=check_env,
+            text=True,
+            capture_output=True,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert {path: path.read_bytes() for path in immutable_paths} == immutable_before
+        assert not provider_marker.exists()
 
     capsule_files = (
         readme,
@@ -643,7 +799,7 @@ def test_workstream_rejects_symlinked_private_root_before_writing_prompt(tmp_pat
 
     created = CliRunner().invoke(main, ["workstream", "--no-readme", str(repo), "Symlink Root"])
     assert created.exit_code == 0, created.output
-    wt = repo / ".worktrees" / "symlink-root"
+    wt = _worktree("symlink-root")
     tracked_target = wt / "tracked-capsule-leak"
     tracked_target.mkdir()
     (wt / ".limen-workstream").symlink_to(tracked_target, target_is_directory=True)
@@ -763,7 +919,7 @@ def test_concurrent_capsule_render_keeps_partial_kickstart_unlaunchable(tmp_path
             time.sleep(0.01)
         assert sync_entered.exists(), rendering.stderr.read() if rendering.stderr else ""
 
-        wt = repo / ".worktrees" / "race-capsule"
+        wt = _worktree("race-capsule")
         capsule = wt / ".limen-workstream"
         kickstart = capsule / "kickstart.sh"
         identity = capsule / "capsule.identity"
@@ -810,7 +966,7 @@ def test_concurrent_capsule_render_keeps_partial_kickstart_unlaunchable(tmp_path
             render_stdout, render_stderr = rendering.communicate()
 
     assert rendering.returncode == 0, render_stdout + render_stderr
-    wt = repo / ".worktrees" / "race-capsule"
+    wt = _worktree("race-capsule")
     capsule = wt / ".limen-workstream"
     kickstart = capsule / "kickstart.sh"
     assert (capsule / "capsule.identity").exists()

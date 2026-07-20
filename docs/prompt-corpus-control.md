@@ -158,8 +158,19 @@ Raw bodies, source paths, session references, full hashes, and journals live und
 `.limen-private/session-corpus/prompt-atoms/` root. Exact bodies are gzip-compressed,
 content-addressed private objects; each append-only event row contains its occurrence and all of its
 atoms as one transaction. The compact private checkpoint does not duplicate the raw corpus. The
-tracked JSON and Markdown projections contain only opaque IDs, aggregate counts, numeric dimensions,
-dispositions, owner routes, and canonical receipt references.
+default JSON projection is now a compact `limen.prompt_atom_chunk_manifest.v1` manifest. Its
+day-addressable chunks live only under the configured canonical private corpus root at
+`prompt-atoms/projection-chunks/`; they contain redacted join fields, never prompt bodies or source
+coordinates. The tracked Markdown projection and authority seal contain only bounded aggregate
+material. An isolated worktree must point `LIMEN_PRIVATE_SESSION_CORPUS` at the canonical external
+root; it must not materialize a second corpus or chunk estate inside the worktree.
+
+The monolithic ignored `docs/prompt-atom-ledger.json` row projection is compatibility output only.
+It is produced only when `--legacy-full-projection` is explicit. Normal writes publish the small
+manifest, whose digest covers every chunk name, byte count, row count, time boundary, and SHA-256.
+Window consumers verify and read only intersecting chunks. The estate-review path rejects a legacy
+full projection unless its separate `--legacy-full-prompt-projection` compatibility flag is
+explicit, so the report cannot silently regress to reading the whole atom estate.
 
 `docs/prompt-authority-seal.json` is the bounded publication receipt for source-corpus authority. Its
 schema is `limen.prompt-authority-seal.v1`; it contains only fixed numeric aggregates, safe family and
@@ -173,14 +184,15 @@ writer refuses any receipt over 64 KiB. `--require-scope all` requires the seal'
 `authority_ready` verdict, not only the textual scope labels. A zero-change rerun must leave its bytes
 and modification time unchanged.
 
-An exclusive writer lock serializes updates; journal appends are flushed before atomic projection
-replacement, and the compact checkpoint is written last. Stable occurrence and atom IDs plus a
+An exclusive writer lock serializes updates; journal appends are flushed before atomic chunk and
+manifest replacement, and the compact checkpoint is written last. Stable occurrence and atom IDs plus a
 monotonic cursor merge make concurrent or repeated drains idempotent. The cursor digest is embedded
 in the projection, so a cursor advance without a matching projection fails closed. Before the
 zero-input fast path adopts existing public bytes, it re-derives the full seal inputs from the private
 checkpoint and current cursor; coherently rehashed projection/seal references that disagree with that
-custody are rebuilt. Verification rebuilds the public JSON and Markdown byte-for-byte from the private
-journals and detects missing, malformed, or altered raw objects.
+custody are rebuilt. Verification rebuilds the manifest, chunks, public JSON, and Markdown
+byte-for-byte from the private journals and detects missing, malformed, altered, duplicated, or
+digest-mismatched projection rows and raw objects.
 
 The priority map additionally binds the projection to the currently loaded runtime-policy digest.
 A projection and private receipt that agree with each other but carry stale weights, authority bands,
@@ -205,6 +217,9 @@ python3 scripts/prompt-atom-ledger.py --scan --write
 
 # Bounded all-history drain. Continue until pending/errors are zero; explicit gaps remain owner-routed.
 python3 scripts/prompt-atom-ledger.py --scan --all --write
+
+# Explicit compatibility only; never use this for the normal report path.
+python3 scripts/prompt-atom-ledger.py --scan --all --write --legacy-full-projection
 
 # Verify journals, cursor, evidence rules, redaction projection, semantic digest, and full scope.
 python3 scripts/prompt-atom-ledger.py --check --require-scope all

@@ -29,6 +29,14 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator, Sequence
 from urllib.parse import urlsplit
 
+from limen.prompt_projection import (
+    PROJECTION_FORM as CHUNKED_PROJECTION_FORM,
+    apply_manifest,
+    build_chunks,
+    descriptor_files_present,
+    validate_manifest,
+)
+
 DISPOSITIONS = {
     "unassessed",
     "not_done",
@@ -137,6 +145,7 @@ class LedgerPaths:
     cursor: Path
     lock: Path
     private_snapshot: Path
+    projection_chunks: Path
     public_snapshot: Path
     public_markdown: Path
     public_seal: Path
@@ -168,6 +177,7 @@ class LedgerPaths:
             cursor=private_dir / "source-cursor.json",
             lock=private_dir / "writer.lock",
             private_snapshot=private_dir / "prompt-atom-ledger.json",
+            projection_chunks=private_dir / "projection-chunks",
             public_snapshot=public_snapshot or root / "docs" / "prompt-atom-ledger.json",
             public_markdown=public_markdown or root / "docs" / "prompt-atom-ledger.md",
             public_seal=public_seal or root / "docs" / "prompt-authority-seal.json",
@@ -3493,6 +3503,27 @@ def public_projection(snapshot: dict[str, Any], *, limit: int | None = None) -> 
     return public
 
 
+def compact_public_projection(
+    snapshot: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, bytes]]:
+    """Build the default small manifest and complete private redacted chunks."""
+
+    descriptors, chunks = build_chunks(snapshot.get("atoms") or [])
+    manifest = apply_manifest(public_projection(snapshot, limit=0), descriptors)
+    manifest["projection_digest"] = digest(manifest)
+    return manifest, chunks
+
+
+def projection_for_mode(
+    snapshot: dict[str, Any],
+    *,
+    legacy_full_projection: bool,
+) -> tuple[dict[str, Any], dict[str, bytes]]:
+    if legacy_full_projection:
+        return public_projection(snapshot), {}
+    return compact_public_projection(snapshot)
+
+
 def _render_counts(values: dict[str, int]) -> str:
     return ", ".join(f"`{key}` {value}" for key, value in values.items()) or "none"
 
@@ -3522,6 +3553,12 @@ def render_markdown(public: dict[str, Any], policy: dict[str, Any]) -> str:
         f"- Dispositions: {_render_counts(counts.get('dispositions') or {})}.",
         f"- Speech acts: {_render_counts(counts.get('kinds') or {})}.",
         f"- Validation: `{'PASS' if (public.get('validation') or {}).get('ok') else 'FAIL'}`.",
+        "",
+        (
+            f"- Projection form: `{public.get('projection_form') or 'legacy_full'}`; "
+            f"window-addressable chunks: `{public.get('chunk_count', 0)}`; "
+            f"indexed redacted atoms: `{public.get('atom_rows_indexed', len(rows))}`."
+        ),
         "",
         "## Dynamic Priority Contract",
         "",
@@ -3719,7 +3756,15 @@ def _prompt_authority_fast_path_valid(
     public_rows = public.get("unresolved_atoms")
     public_truncated = public.get("unresolved_atoms_truncated")
     current_unresolved = (expected_snapshot.get("coverage") or {}).get("current_unresolved_atoms")
-    if (
+    if public.get("projection_form") == CHUNKED_PROJECTION_FORM:
+        if (
+            public_rows != []
+            or public_truncated != 0
+            or not _nonnegative_exact_int(current_unresolved)
+            or public.get("current_unresolved_atoms_indexed") != _int_or_zero(current_unresolved)
+        ):
+            return False
+    elif (
         not isinstance(public_rows, list)
         or not _nonnegative_exact_int(public_truncated)
         or not _nonnegative_exact_int(current_unresolved)
@@ -3943,6 +3988,7 @@ def update_ledger(
     events: Sequence[dict[str, Any]] = (),
     outcomes: Sequence[dict[str, Any]] = (),
     cursor: dict[str, Any] | None = None,
+    legacy_full_projection: bool = False,
 ) -> dict[str, Any]:
     """Idempotently append new input and atomically refresh both projections."""
 
@@ -4003,6 +4049,7 @@ def update_ledger(
         marker = load_json(paths.private_snapshot)
         existing_public = load_json(paths.public_snapshot)
         existing_seal = load_json(paths.public_seal)
+        existing_is_chunked = existing_public.get("projection_form") == CHUNKED_PROJECTION_FORM
         fast_public_ok = bool(
             marker
             and existing_public
@@ -4029,6 +4076,8 @@ def update_ledger(
                 seal=existing_seal,
                 current_cursor=current_cursor,
             )
+            and existing_is_chunked is (not legacy_full_projection)
+            and (not existing_is_chunked or descriptor_files_present(existing_public, paths.projection_chunks))
             and paths.public_snapshot.exists()
             and paths.public_snapshot.read_bytes() == _json_bytes(existing_public)
             and paths.public_seal.exists()
@@ -4320,7 +4369,10 @@ def update_ledger(
             journal_errors=raw_errors,
             evidence_root=paths.root,
         )
-        public = public_projection(snapshot)
+        public, chunks = projection_for_mode(
+            snapshot,
+            legacy_full_projection=legacy_full_projection,
+        )
         seal = prompt_authority_seal(snapshot, public=public)
         markdown = render_markdown(public, policy)
         next_marker = private_marker(snapshot, public, seal, paths=paths)
@@ -4331,6 +4383,14 @@ def update_ledger(
         markdown_bytes = markdown.encode("utf-8")
         marker_bytes = _json_bytes(next_marker)
         changed = False
+        if chunks:
+            paths.projection_chunks.mkdir(parents=True, exist_ok=True)
+            os.chmod(paths.projection_chunks, 0o700)
+            for filename, chunk_bytes in sorted(chunks.items()):
+                chunk_path = paths.projection_chunks / filename
+                if not chunk_path.exists() or chunk_path.read_bytes() != chunk_bytes:
+                    atomic_write_bytes(chunk_path, chunk_bytes, mode=0o600)
+                    changed = True
         if not paths.public_snapshot.exists() or paths.public_snapshot.read_bytes() != public_bytes:
             atomic_write_bytes(paths.public_snapshot, public_bytes, mode=0o644)
             changed = True
@@ -4365,6 +4425,8 @@ def check_ledger(paths: LedgerPaths, *, require_scope: str | None = None) -> lis
         errors.append("public prompt projection is malformed")
     if paths.public_seal.exists() and not seal:
         errors.append("public prompt authority seal is malformed")
+    if public.get("projection_form") == CHUNKED_PROJECTION_FORM:
+        errors.extend(validate_manifest(public, paths.projection_chunks))
     private_artifacts_exist = any(
         path.exists()
         for path in (
@@ -4415,7 +4477,10 @@ def check_ledger(paths: LedgerPaths, *, require_scope: str | None = None) -> lis
         )
         if not (rebuilt.get("validation") or {}).get("ok"):
             errors.extend(str(value) for value in (rebuilt.get("validation") or {}).get("errors") or [])
-        rebuilt_public = public_projection(rebuilt)
+        rebuilt_public, rebuilt_chunks = projection_for_mode(
+            rebuilt,
+            legacy_full_projection=public.get("projection_form") != CHUNKED_PROJECTION_FORM,
+        )
         rebuilt_seal = prompt_authority_seal(rebuilt, public=rebuilt_public)
         rebuilt_marker = private_marker(rebuilt, rebuilt_public, rebuilt_seal, paths=paths)
         if private != rebuilt_marker:
@@ -4424,6 +4489,16 @@ def check_ledger(paths: LedgerPaths, *, require_scope: str | None = None) -> lis
             errors.append("public prompt projection is missing")
         elif paths.public_snapshot.read_bytes() != _json_bytes(rebuilt_public):
             errors.append("public prompt projection does not match the private journals")
+        if public.get("projection_form") == CHUNKED_PROJECTION_FORM:
+            for filename, expected in sorted(rebuilt_chunks.items()):
+                path = paths.projection_chunks / filename
+                try:
+                    actual = path.read_bytes()
+                except OSError:
+                    errors.append(f"prompt projection chunk is missing: {filename}")
+                    continue
+                if actual != expected:
+                    errors.append(f"prompt projection chunk does not match private journals: {filename}")
         if seal and paths.public_seal.read_bytes() != _json_bytes(rebuilt_seal):
             errors.append("public prompt authority seal does not match the private journals")
         expected_markdown = render_markdown(rebuilt_public, load_policy(paths.policy))

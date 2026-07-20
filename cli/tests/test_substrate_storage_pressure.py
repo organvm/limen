@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -16,6 +17,36 @@ def _load(name: str):
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
+
+
+def _green_external_sensors(mod, monkeypatch):
+    monkeypatch.setattr(
+        mod,
+        "host_pressure_summary",
+        lambda: {
+            "present": True,
+            "known": True,
+            "allowed": True,
+            "reasons": [],
+            "pressure": {
+                "backblaze_cpu_percent": 1.0,
+                "backblaze_rss_bytes": 1024,
+                "swap_fraction": 0.1,
+            },
+        },
+    )
+    monkeypatch.setattr(
+        mod,
+        "backblaze_exclusion_coverage",
+        lambda: {
+            "present": True,
+            "known": True,
+            "complete": True,
+            "status": "ok",
+            "missing_exclusions": [],
+            "unknown_internal_worktree_pools": [],
+        },
+    )
 
 
 def test_reclaim_summary_sums_total_and_reclaimed_keys(tmp_path):
@@ -37,8 +68,17 @@ def test_reclaim_summary_sums_total_and_reclaimed_keys(tmp_path):
     assert summary["latest_generated_at"] == "t2"
 
 
+def test_auto_mode_uses_only_cheap_inventory_under_host_pressure():
+    mod = _load("substrate_storage_pressure_mode_uut")
+
+    assert mod.select_inventory_mode("auto", {"allowed": False}) == "cheap"
+    assert mod.select_inventory_mode("auto", {"allowed": True}) == "inventory"
+    assert mod.select_inventory_mode("cheap", {"allowed": True}) == "cheap"
+
+
 def test_build_snapshot_classifies_configured_bucket(monkeypatch, tmp_path):
     mod = _load("substrate_storage_pressure_build_uut")
+    _green_external_sensors(mod, monkeypatch)
     bucket = tmp_path / "bucket"
     bucket.mkdir()
     (bucket / "payload").write_text("x" * 4096, encoding="utf-8")
@@ -88,6 +128,7 @@ def test_build_snapshot_classifies_configured_bucket(monkeypatch, tmp_path):
 
 def test_opencode_bucket_reflects_verified_intake(monkeypatch, tmp_path):
     mod = _load("substrate_storage_pressure_opencode_uut")
+    _green_external_sensors(mod, monkeypatch)
     root = tmp_path / "limen"
     db = tmp_path / "opencode.db"
     db.write_text("db", encoding="utf-8")
@@ -140,6 +181,150 @@ def test_opencode_bucket_reflects_verified_intake(monkeypatch, tmp_path):
         "external archive and private intake verified; local retention decision remains; never delete outright"
     )
     assert snapshot["buckets"][0]["evidence"]["opencode_intake"]["status"] == "archived_private_intake"
+
+
+def test_stale_cheap_inventory_is_partial_and_never_green(monkeypatch, tmp_path):
+    mod = _load("substrate_storage_pressure_stale_uut")
+    _green_external_sensors(mod, monkeypatch)
+    monkeypatch.setattr(mod, "HOME", tmp_path)
+    monkeypatch.setattr(mod, "ROOT", tmp_path / "limen")
+    monkeypatch.setattr(mod, "RECLAIM_LOGS", {})
+    monkeypatch.setattr(mod, "disk_free_gib", lambda: 250.0)
+    monkeypatch.setattr(mod, "TARGET_FREE_GIB", 200.0)
+    monkeypatch.setattr(
+        mod,
+        "BUCKETS",
+        (
+            {
+                "id": "cached",
+                "path": str(tmp_path / "cached"),
+                "class": "cache",
+                "owner": "owner",
+                "gate": "gate",
+            },
+        ),
+    )
+    previous = {
+        "generated_at": "2026-07-19T00:00:00Z",
+        "internal_free_gib": 260.0,
+        "worktree_lifecycle": {"ok": True, "debt": 0, "reapable": 0},
+        "buckets": [{"id": "cached", "size_kib": 1024}],
+    }
+
+    snapshot = mod.build_snapshot(
+        mode="cheap",
+        previous=previous,
+        now=datetime(2026, 7, 19, 7, 0, tzinfo=timezone.utc),
+    )
+
+    assert snapshot["status"] == "partial"
+    assert snapshot["scope_status"] == "partial"
+    assert "storage-inventory-stale" in snapshot["scope_issues"]
+    assert snapshot["buckets"][0]["size_source"] == "cached"
+    assert snapshot["worktree_lifecycle"]["fresh"] is False
+    assert snapshot["worktree_lifecycle"]["complete"] is True
+    assert "Cached stale summary" in mod.render(snapshot)
+
+
+def test_free_space_decline_and_exclusion_drift_are_visible(monkeypatch, tmp_path):
+    mod = _load("substrate_storage_pressure_trend_uut")
+    _green_external_sensors(mod, monkeypatch)
+    monkeypatch.setattr(mod, "HOME", tmp_path)
+    monkeypatch.setattr(mod, "ROOT", tmp_path / "limen")
+    monkeypatch.setattr(mod, "RECLAIM_LOGS", {})
+    monkeypatch.setattr(mod, "BUCKETS", ())
+    monkeypatch.setattr(mod, "disk_free_gib", lambda: 220.0)
+    monkeypatch.setattr(mod, "TARGET_FREE_GIB", 200.0)
+    monkeypatch.setattr(
+        mod,
+        "worktree_lifecycle_summary",
+        lambda: {"present": True, "ok": True, "debt": 0, "reapable": 0},
+    )
+    monkeypatch.setattr(
+        mod,
+        "backblaze_exclusion_coverage",
+        lambda: {
+            "present": True,
+            "known": True,
+            "complete": False,
+            "status": "missing",
+            "missing_exclusions": ["/internal/worktrees/"],
+            "unknown_internal_worktree_pools": [],
+        },
+    )
+
+    snapshot = mod.build_snapshot(
+        previous={"generated_at": "2026-07-19T06:00:00Z", "internal_free_gib": 250.0},
+        now=datetime(2026, 7, 19, 7, 0, tzinfo=timezone.utc),
+    )
+
+    assert snapshot["scope_status"] == "complete"
+    assert snapshot["status"] == "needs-owner-gates"
+    assert snapshot["free_space_trend"]["direction"] == "falling"
+    assert snapshot["free_space_trend"]["delta_gib"] == -30.0
+    assert snapshot["backblaze_exclusion_coverage"]["missing_exclusions"] == ["/internal/worktrees/"]
+
+
+def test_bucket_scan_budget_exhaustion_is_explicitly_partial(monkeypatch, tmp_path):
+    mod = _load("substrate_storage_pressure_budget_uut")
+    _green_external_sensors(mod, monkeypatch)
+    monkeypatch.setattr(mod, "HOME", tmp_path)
+    monkeypatch.setattr(mod, "ROOT", tmp_path / "limen")
+    monkeypatch.setattr(mod, "RECLAIM_LOGS", {})
+    monkeypatch.setattr(mod, "BUCKET_SCAN_BUDGET_SECONDS", 0)
+    monkeypatch.setattr(mod, "disk_free_gib", lambda: 250.0)
+    monkeypatch.setattr(mod, "TARGET_FREE_GIB", 200.0)
+    monkeypatch.setattr(
+        mod,
+        "worktree_lifecycle_summary",
+        lambda: {"present": True, "ok": True, "debt": 0, "reapable": 0},
+    )
+    monkeypatch.setattr(
+        mod,
+        "BUCKETS",
+        (
+            {
+                "id": "bounded",
+                "path": str(tmp_path / "bounded"),
+                "class": "cache",
+                "owner": "owner",
+                "gate": "gate",
+            },
+        ),
+    )
+
+    snapshot = mod.build_snapshot()
+
+    assert snapshot["status"] == "partial"
+    assert snapshot["inventory"]["truncated"] is True
+    assert snapshot["inventory"]["unknown_bucket_count"] == 1
+    assert snapshot["buckets"][0]["size"] == "unknown"
+
+
+def test_write_can_target_canonical_private_receipt(monkeypatch, tmp_path):
+    mod = _load("substrate_storage_pressure_write_uut")
+    doc = tmp_path / "worktree" / "docs" / "storage.md"
+    canonical_private = tmp_path / "canonical" / "storage.json"
+    accidental_private = tmp_path / "worktree" / ".limen-private" / "storage.json"
+    monkeypatch.setattr(mod, "DOC_PATH", doc)
+    snapshot = {
+        "schema": "limen.substrate_storage_pressure.v2",
+        "generated_at": "2026-07-19T00:00:00Z",
+        "status": "partial",
+        "scope_status": "partial",
+        "internal_free_gib": 10.0,
+        "target_free_gib": 200.0,
+        "shortfall_gib": 190.0,
+        "safe_reclaim": {},
+        "worktree_lifecycle": {},
+        "buckets": [],
+    }
+
+    mod.write(snapshot, private_path=canonical_private)
+
+    assert doc.exists()
+    assert json.loads(canonical_private.read_text(encoding="utf-8"))["schema"].endswith(".v2")
+    assert not accidental_private.exists()
 
 
 def test_worktree_lifecycle_summary_parses_worktree_debt(monkeypatch, tmp_path):

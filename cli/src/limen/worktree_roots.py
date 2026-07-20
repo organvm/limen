@@ -89,6 +89,24 @@ def effective_worktree_root() -> Path:
     return default_worktrees_root()
 
 
+def workstream_worktree_root(explicit: str | Path | None = None) -> Path:
+    """Scratch-first root for manually launched continuation capsules.
+
+    An explicit CLI path or ``LIMEN_WORKTREE_ROOT`` is the admission for an
+    internal fallback. Without one, a mounted writable Scratch volume is
+    required; the launcher never silently recreates ``<repo>/.worktrees``.
+    ``LIMEN_SCRATCH_ROOT`` is a fixture/host-cartridge override of the mounted
+    volume root, not a second worktree-root registry.
+    """
+    selected = explicit or os.environ.get("LIMEN_WORKTREE_ROOT")
+    if selected:
+        return Path(selected).expanduser().absolute()
+    scratch = Path(os.environ.get("LIMEN_SCRATCH_ROOT", "/Volumes/Scratch")).expanduser()
+    if scratch.is_dir() and os.access(scratch, os.W_OK):
+        return (scratch / "limen-worktrees").absolute()
+    raise RuntimeError("Scratch is unavailable; pass --worktree-root PATH to explicitly admit a fallback")
+
+
 def _existing_ancestor(path: Path) -> Path | None:
     probe = path.expanduser()
     for _ in range(64):

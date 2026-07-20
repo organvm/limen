@@ -379,6 +379,28 @@ expected_slug=$q_slug
 expected_branch=$q_branch
 expected_workstream=$q_workstream
 expected_invocation_sha256=$q_input_digest
+check_only=0
+case "\${1:-}" in
+  -h|--help)
+    printf 'usage: %s [--check]\\n' "\$0"
+    printf '  --check  validate capsule identity, receipt, and branch without admission or launch\\n'
+    exit 0
+    ;;
+  --check)
+    check_only=1
+    shift
+    ;;
+  "")
+    ;;
+  *)
+    printf 'unknown capsule option: %s\\n' "\$1" >&2
+    exit 2
+    ;;
+esac
+if [[ "\$#" -ne 0 ]]; then
+  printf 'capsule launcher accepts no positional arguments\\n' >&2
+  exit 2
+fi
 if [[ -L "\$capsule_dir" || ! -d "\$capsule_dir" \
   || "\$(cd "\$capsule_dir" && pwd -P)" != "\$capsule_dir" ]]; then
   printf 'invalid capsule: private root is not the expected real directory\n' >&2
@@ -496,6 +518,11 @@ if receipt != expected:
 PY
 }
 validate_capsule_receipt
+if [[ "\$check_only" -eq 1 ]]; then
+  printf 'capsule check: PASS\\n'
+  exec 9>&-
+  exit 0
+fi
 refresh_workstream_runway() {
   local runway_fields=""
   if runway_fields="\$(python3 "\$contract_helper" admit-identity \
