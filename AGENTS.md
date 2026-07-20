@@ -291,8 +291,9 @@ source of truth. A local checkout is a disposable cache or staging area; it is n
   receipt before trusting a local clone.
 - If local work is required, create it in an isolated worktree or scratch lane, push/open the remote
   receipt, then reap the local cache once lifecycle custody is proven.
-- Reaping local caches requires merged or patch-equivalent remote custody. A pushed branch or open PR
-  is not enough to delete the local checkout; merge it first, or solve the reason it cannot merge.
+- Reap a local worktree once it is clean, inactive, and its exact HEAD is reachable from a remote
+  ref. A pushed branch or open PR is durable custody for the disposable checkout; the unresolved
+  delivery lifecycle remains owned by that remote receipt until it merges or closes.
 - Do not fall back to local files when the canonical object is remote and queryable.
 - Do not let local clone presence, local profile copies, or stale generated artifacts define public
   truth. If a remote cannot be updated, record the owner repo, missing gate, and next command.
@@ -336,9 +337,9 @@ operating order, not motivation text.
   watch time is not value; each parallel packet still needs its own predicate and durable receipt.
 - If disk pressure is part of the correction, dry-run proof is not enough. Run the accepted reclaim
   path until it reaches a fixed point, deleting only roots the reclaim script classifies as clean,
-  merged or patch-equivalent, idle, and remote-preserved. Anything left must be owner-routed by its
-  concrete reason (`dirty`, `unpushed`, `not-merged-to-default`, `active`, `not-a-git-dir`), not
-  explained away in chat.
+  inactive, and exact-HEAD remote-preserved (pushed, merged, or patch-equivalent). Anything left must
+  be owner-routed by its concrete reason (`dirty`, `unpushed`, `active-process-cwd`, `locked`,
+  `not-a-git-dir`), not explained away in chat.
 - A zero-launch dispatch command is not progress. If a lane filter launches nothing, inspect the board
   and usage telemetry, then dispatch the actual eligible lanes or record the exact blocker.
 
@@ -370,10 +371,11 @@ Valid closure forms are:
 - preservation receipt proving custody plus a concrete next owner/action;
 - explicit blocker naming the external gate and next command.
 
-Do not delete, reap, archive-away, or mark closed merely because a lane timed out, produced no diff,
-lost context, looked stale, or was merely pushed to a remote branch. If a worktree produced no usable
-code, emit the plan/owner task that captures the prompt's intent, then close the worktree only after
-the work is merged or proven patch-equivalent to the remote default branch.
+Do not mark a lane closed merely because it timed out, produced no diff, lost context, looked stale,
+or was pushed to a remote branch. Once a clean, inactive exact HEAD is pushed, reap the disposable
+local checkout; the branch, PR, plan, task, or blocker remains the durable lifecycle owner. If a
+worktree produced no usable code, emit and push the plan/owner task that captures the prompt's intent
+before reaping it.
 
 ## Continuation Capsules
 
