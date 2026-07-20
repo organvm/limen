@@ -13,19 +13,30 @@ import argparse
 import datetime as dt
 import hashlib
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1])).expanduser().resolve()
 sys.path.insert(0, str(ROOT / "cli" / "src"))
 
 from limen.worktree_debt import worktree_debt_report  # noqa: E402
 
 PRESERVATION_RECEIPTS = ROOT / "docs" / "worktree-preservation-receipts.json"
-PRIVATE_ROOT = ROOT / ".limen-private" / "session-corpus" / "lifecycle" / "worktree-preserve"
+PRIVATE_SESSION_CORPUS = Path(
+    os.environ.get("LIMEN_PRIVATE_SESSION_CORPUS", ROOT / ".limen-private" / "session-corpus")
+).expanduser()
+PRIVATE_ROOT = PRIVATE_SESSION_CORPUS / "lifecycle" / "worktree-preserve"
+ARCHIVE_ROOT = Path(
+    os.environ.get(
+        "LIMEN_WORKTREE_PRESERVE_ARCHIVE",
+        "/Volumes/Archive4T/limen-private/worktree-preserve",
+    )
+).expanduser()
 REMOTE_RE = re.compile(r"(?:github\.com[:/])([^/\s]+)/([^/\s]+?)(?:\.git)?$")
 SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
@@ -88,14 +99,76 @@ def load_receipts() -> dict[str, Any]:
     return data
 
 
-def rel_to_root(path: Path) -> str:
+def recorded_private_path(path: Path) -> str:
     try:
-        return str(path.resolve().relative_to(ROOT))
+        relative = path.resolve().relative_to(PRIVATE_SESSION_CORPUS.resolve())
     except (OSError, ValueError):
         return str(path)
+    return str(Path(".limen-private") / "session-corpus" / relative)
 
 
-def preserve_item(item: dict[str, Any], stamp: str, apply: bool) -> dict[str, Any]:
+def tree_payload_digest(path: Path, *, exclude: set[str] | None = None) -> str:
+    excluded = exclude or set()
+    digest = hashlib.sha256()
+    for child in sorted(candidate for candidate in path.rglob("*") if candidate.is_file()):
+        relative = child.relative_to(path).as_posix()
+        if relative in excluded:
+            continue
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(bytes.fromhex(file_sha256(child)))
+    return digest.hexdigest()
+
+
+def trees_match(source: Path, destination: Path) -> bool:
+    source_files = {
+        child.relative_to(source).as_posix(): file_sha256(child) for child in source.rglob("*") if child.is_file()
+    }
+    destination_files = {
+        child.relative_to(destination).as_posix(): file_sha256(child)
+        for child in destination.rglob("*")
+        if child.is_file()
+    }
+    return bool(source_files) and source_files == destination_files
+
+
+def archive_private_dir(private_dir: Path, archive_root: Path) -> tuple[Path, bool]:
+    archive_dir = archive_root / private_dir.name
+    archive_root.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(private_dir, archive_dir, dirs_exist_ok=True, copy_function=shutil.copy2)
+    return archive_dir, trees_match(private_dir, archive_dir)
+
+
+def public_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
+    receipt_id = Path(str(receipt["private_receipt"])).parent.name
+    return {
+        "archive_readback_verified": receipt.get("archive_readback_verified") is True,
+        "archive_receipt": f"archive://worktree-preserve/{receipt_id}",
+        "archive_status": receipt.get("archive_status"),
+        "branch": receipt.get("branch"),
+        "classification": receipt.get("classification"),
+        "dirty_patch_bytes": receipt.get("dirty_patch_bytes"),
+        "dirty_paths_count": receipt.get("dirty_paths_count"),
+        "evidence_updated_utc": receipt.get("evidence_updated_utc"),
+        "head_prefix": str(receipt.get("head") or "")[:12],
+        "lane": receipt.get("lane"),
+        "next_action": receipt.get("next_action"),
+        "private_receipt": f"private://worktree-preserve/{receipt_id}",
+        "repo": receipt.get("repo"),
+        "root": receipt.get("root"),
+        "status": receipt.get("status"),
+        "untracked_paths_count": receipt.get("untracked_paths_count"),
+    }
+
+
+def preserve_item(
+    item: dict[str, Any],
+    stamp: str,
+    apply: bool,
+    *,
+    archive_root: Path = ARCHIVE_ROOT,
+    require_archive: bool = False,
+) -> dict[str, Any]:
     path = Path(str(item["path"]))
     root = str(item.get("name") or path.name)
     branch = run_git(path, ["rev-parse", "--abbrev-ref", "HEAD"]).stdout.strip()
@@ -134,9 +207,9 @@ def preserve_item(item: dict[str, Any], stamp: str, apply: bool) -> dict[str, An
             "A private patch/status receipt exists; create a narrow owner packet to review, push, "
             "supersede, or retire this preserved dirty state."
         ),
-        "private_patch": rel_to_root(private_patch),
+        "private_patch": recorded_private_path(private_patch),
         "private_patch_sha256": patch_sha,
-        "private_receipt": rel_to_root(private_receipt),
+        "private_receipt": recorded_private_path(private_receipt),
         "repo": repo_slug(remote) or remote,
         "root": root,
         "status": "private_patch_preserved",
@@ -147,8 +220,68 @@ def preserve_item(item: dict[str, Any], stamp: str, apply: bool) -> dict[str, An
         "worktree_status": status_branch.splitlines(),
     }
     if apply:
+        archive_dir = archive_root / private_dir.name
+        receipt.update(
+            {
+                "archive_path": str(archive_dir),
+                "archive_payload_sha256": tree_payload_digest(private_dir),
+                "archive_readback_verified": False,
+                "archive_status": "pending",
+            }
+        )
         private_receipt.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        try:
+            archive_dir, first_readback_ok = archive_private_dir(private_dir, archive_root)
+            receipt["archive_readback_verified"] = first_readback_ok
+            receipt["archive_status"] = "verified" if first_readback_ok else "readback_mismatch"
+        except OSError as exc:
+            receipt["archive_status"] = f"error:{exc.__class__.__name__}"
+            first_readback_ok = False
+        private_receipt.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        final_readback_ok = False
+        if first_readback_ok:
+            try:
+                _, final_readback_ok = archive_private_dir(private_dir, archive_root)
+            except OSError:
+                final_readback_ok = False
+        if not final_readback_ok:
+            receipt["archive_readback_verified"] = False
+            receipt["archive_status"] = "readback_mismatch"
+            private_receipt.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            try:
+                archive_private_dir(private_dir, archive_root)
+            except OSError:
+                pass
+        if require_archive and not final_readback_ok:
+            raise RuntimeError(f"Archive4T readback failed for {root}")
     return receipt
+
+
+def select_dirty_items(
+    report: dict[str, Any],
+    requested_roots: list[str],
+    *,
+    limit: int,
+    dirty_checker: Callable[[dict[str, Any]], bool] | None = None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    def live_dirty(item: dict[str, Any]) -> bool:
+        path = Path(str(item.get("path") or ""))
+        status = run_git(path, ["status", "--porcelain=v1"])
+        return status.returncode == 0 and bool(status.stdout.strip())
+
+    check_dirty = dirty_checker or live_dirty
+    items = [item for item in report.get("items", []) if isinstance(item, dict)]
+    if requested_roots:
+        requested = set(requested_roots)
+        selected = [item for item in items if str(item.get("name")) in requested and check_dirty(item)]
+        found = {str(item.get("name")) for item in selected}
+        missing = sorted(requested - found)
+    else:
+        selected = [item for item in items if item.get("reason") == "dirty" and item.get("debt")]
+        missing = []
+    if limit > 0:
+        selected = selected[:limit]
+    return selected, missing
 
 
 def main() -> int:
@@ -156,26 +289,56 @@ def main() -> int:
     parser.add_argument("--apply", action="store_true", help="write private receipts and update preservation ledger")
     parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     parser.add_argument("--limit", type=int, default=0, help="maximum dirty roots to preserve; 0 means all")
+    parser.add_argument(
+        "--root",
+        action="append",
+        default=[],
+        help="preserve one exact dirty worktree root name; repeat for multiple roots",
+    )
+    parser.add_argument(
+        "--archive-root",
+        type=Path,
+        default=ARCHIVE_ROOT,
+        help="external additive archive for private patch receipts",
+    )
+    parser.add_argument(
+        "--require-archive",
+        action="store_true",
+        help="fail unless the private receipt is copied to and read back from the external archive",
+    )
     args = parser.parse_args()
+    if args.require_archive and not args.apply:
+        parser.error("--require-archive requires --apply")
 
     report = worktree_debt_report(ROOT)
-    dirty = [item for item in report.get("items", []) if item.get("reason") == "dirty" and item.get("debt")]
-    if args.limit > 0:
-        dirty = dirty[: args.limit]
+    dirty, missing = select_dirty_items(report, args.root, limit=args.limit)
+    if missing:
+        parser.error(f"requested root is not currently dirty: {', '.join(missing)}")
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H%M%SZ")
-    receipts = [preserve_item(item, stamp, args.apply) for item in dirty]
+    receipts = [
+        preserve_item(
+            item,
+            stamp,
+            args.apply,
+            archive_root=args.archive_root.expanduser(),
+            require_archive=args.require_archive,
+        )
+        for item in dirty
+    ]
     updated = 0
     if args.apply and receipts:
         data = load_receipts()
         receipt_rows = data.setdefault("receipts", [])
         by_root = {str(row.get("root")): row for row in receipt_rows if isinstance(row, dict)}
         for receipt in receipts:
-            existing = by_root.get(str(receipt.get("root")))
+            tracked_receipt = public_receipt(receipt)
+            existing = by_root.get(str(tracked_receipt.get("root")))
             if existing is None:
-                receipt_rows.append(receipt)
+                receipt_rows.append(tracked_receipt)
                 updated += 1
-            elif any(existing.get(key) != value for key, value in receipt.items()):
-                existing.update(receipt)
+            elif existing != tracked_receipt:
+                existing.clear()
+                existing.update(tracked_receipt)
                 updated += 1
         data["generated_utc"] = utc_now()
         PRESERVATION_RECEIPTS.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
