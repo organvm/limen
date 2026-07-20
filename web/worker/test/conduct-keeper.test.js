@@ -350,6 +350,95 @@ test("atomic graph submission rolls back partial reservations and is idempotent"
   assert.deepEqual(store.snapshot(), before);
 });
 
+test("fanout graph serializes dependency claims and settles its keeper root", async () => {
+  const codex = session("codex", { concurrency: 3 });
+  const { service, store } = await serviceWith([codex]);
+  const rootTemplate = await packet({
+    workId: "fanout-root",
+    conductor: codex.identity,
+    resource: "task/fanout-root",
+    effect: "read",
+    spendLimit: 2,
+  });
+  const root = await validateWorkPacket({
+    ...rootTemplate,
+    intent: { kind: "fanout-root" },
+    execution: { adapter: "fanout-keeper" },
+    intent_hash: "",
+    execution_hash: "",
+  });
+  const rootRunId = `run-${(await canonicalHash({
+    work_id: root.work_id,
+    intent_hash: root.intent_hash,
+    execution_hash: root.execution_hash,
+  })).slice(0, 32)}`;
+  const first = await packet({
+    workId: "fanout-first",
+    conductor: codex.identity,
+    resource: "task/fanout-shared",
+    parentRunId: rootRunId,
+    rootRunId,
+    depth: 1,
+    spendLimit: 1,
+  });
+  const secondTemplate = await packet({
+    workId: "fanout-second",
+    conductor: codex.identity,
+    resource: "task/fanout-shared",
+    parentRunId: rootRunId,
+    rootRunId,
+    depth: 1,
+    spendLimit: 1,
+  });
+  const second = await validateWorkPacket({
+    ...secondTemplate,
+    execution: {
+      ...secondTemplate.execution,
+      dependencies: ["fanout-first"],
+    },
+    execution_hash: "",
+  });
+  const submitted = await service.call("submit_graph", { packets: [root, first, second] });
+  assert.deepEqual(submitted.runs.map((run) => run.status), ["reserved", "reserved", "waiting"]);
+  const repeat = await service.call("submit_graph", { packets: [root, first, second] });
+  assert.deepEqual(repeat.runs.map((run) => run.status), ["duplicate", "duplicate", "duplicate"]);
+
+  const reportLeaf = async (workId) => {
+    const graph = await service.call("graph", { run_id: rootRunId });
+    const node = graph.nodes.find((candidate) => candidate.packet.work_id === workId);
+    const lease = store.snapshot().leases[node.lease_id];
+    const token = await leaseCapability(service, { lease });
+    return service.call("report", {
+      lease_id: lease.lease_id,
+      capability_token: token,
+      generation: lease.generation,
+      receipt: validateReceipt({
+        receipt_id: `receipt-${workId}`,
+        run_id: node.run_id,
+        lease_id: lease.lease_id,
+        lease_generation: lease.generation,
+        executor: codex.identity,
+        observed_heads_before: { pr: "abc123" },
+        predicate: { command: "pytest -q", exit_code: 0 },
+        spend: { runs: 1 },
+        child_runs: [],
+        outcome: "succeeded",
+      }, NOW),
+    });
+  };
+  await reportLeaf("fanout-first");
+  assert.equal(
+    (await service.call("graph", { run_id: rootRunId }))
+      .nodes.find((node) => node.packet.work_id === "fanout-second").status,
+    "reserved",
+  );
+  await reportLeaf("fanout-second");
+  const terminal = await service.call("harvest", { run_id: rootRunId });
+  assert.deepEqual(terminal.by_status, { succeeded: 3 });
+  assert.deepEqual(terminal.unharvested, []);
+  assert.equal(terminal.receipt_count, 3);
+});
+
 test("registration timestamps are server-owned while protection and healthy worktree ownership are sticky", async () => {
   const store = new MemoryConductStore();
   const service = new SerializedConductService(store, { clock: () => NOW });

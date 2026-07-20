@@ -17,6 +17,7 @@ from limen.conduct.models import (  # noqa: E402
     RunReceiptV1,
     WorkPacketV1,
 )
+from limen.fanout import FanoutManifestV1  # noqa: E402
 
 
 MODELS = {
@@ -24,6 +25,7 @@ MODELS = {
     "work-packet-v1.schema.json": WorkPacketV1,
     "lease-v1.schema.json": LeaseV1,
     "run-receipt-v1.schema.json": RunReceiptV1,
+    "fanout-manifest-v1.schema.json": FanoutManifestV1,
 }
 
 

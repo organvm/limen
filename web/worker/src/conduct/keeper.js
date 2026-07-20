@@ -343,11 +343,19 @@ export class ConductKernel {
     if (!conductor.capabilities.includes(neededCapability)) {
       throw new ConductError(`packet conductor lacks required ${neededCapability} capability`);
     }
-    const parent = this.validateLineage(packet, enforced ? principal.principal_id : null);
     const byId = this.state.work_index[packet.work_id];
     const byKey = this.state.work_key_index[packet.work_key];
     if (byId && byKey && byId !== byKey) {
       throw new ConductError("work id/key indexes disagree");
+    }
+    if (packet.parent_run_id && byKey) {
+      let cursor = this.state.runs[packet.parent_run_id];
+      while (cursor) {
+        if (packet.work_key === cursor.packet.work_key) {
+          throw new ConductError("repeated ancestry work_key/cycle rejected");
+        }
+        cursor = cursor.parent_run_id ? this.state.runs[cursor.parent_run_id] : null;
+      }
     }
     const duplicateRunId = byId || byKey;
     if (duplicateRunId) {
@@ -375,6 +383,7 @@ export class ConductKernel {
       }
       return this.submitResult(run, true);
     }
+    const parent = this.validateLineage(packet, enforced ? principal.principal_id : null);
     const executor = this.selectExecutor(packet);
     const claims = this.effectiveClaims(packet);
     const conflicts = [];
@@ -528,8 +537,11 @@ export class ConductKernel {
     const originalMutated = this.mutated;
     const results = [];
     try {
-      for (const packet of packets) {
-        const result = await this.submit(packet, principal);
+      for (const [index, packet] of packets.entries()) {
+        const dependencies = packet.execution?.dependencies || [];
+        const result = dependencies.length
+          ? await this.deferDependencyPacket(packet, principal)
+          : await this.submit(packet, principal);
         if (result.status === "busy") {
           this.state = originalState;
           this.projectionEvents = originalEvents;
@@ -542,6 +554,16 @@ export class ConductKernel {
           };
         }
         results.push(result);
+        if (index === 0 && packet.intent?.kind === "fanout-root" && result.status !== "duplicate") {
+          const run = this.state.runs[result.run_id];
+          const lease = this.state.leases[run.lease_id];
+          lease.state = "released";
+          lease.heartbeat_at = this.timestamp;
+          run.status = "running";
+          run.executor_session_id = null;
+          run.updated_at = this.timestamp;
+          this.recordEvent("fanout.campaign_started", { run_id: run.run_id });
+        }
       }
     } catch (error) {
       this.state = originalState;
@@ -554,6 +576,94 @@ export class ConductKernel {
       status: "reserved",
       root_run_id: results[0].root_run_id,
       runs: results,
+    };
+  }
+
+  async deferDependencyPacket(packet, principal) {
+    if (asDate(packet.deadline) <= this.now) {
+      throw new ConductError("work packet deadline has already passed", 422);
+    }
+    const dependencies = packet.execution?.dependencies || [];
+    if (!dependencies.length) throw new ConductError("dependency deferral requires dependencies", 422);
+    const conductor = this.state.sessions[packet.conductor.session_id];
+    if (!conductor || !identitiesEqual(conductor.identity, packet.conductor)) {
+      throw new ConductError("packet conductor must be its registered session");
+    }
+    if (this.state.session_principals[conductor.session_id] !== principal.principal_id) {
+      throw new ConductError("packet conductor is not bound to the authenticated principal", 403);
+    }
+    const duplicateRunId = this.state.work_index[packet.work_id]
+      || this.state.work_key_index[packet.work_key];
+    if (duplicateRunId) {
+      const duplicate = this.state.runs[duplicateRunId];
+      if (duplicate.packet.intent_hash !== packet.intent_hash
+          || duplicate.packet.execution_hash !== packet.execution_hash
+          || duplicate.packet.work_key !== packet.work_key) {
+        throw new ConductError("work id/key was reused with different immutable hashes");
+      }
+      return {
+        schema_version: "limen.conduct_submit_result.v1",
+        status: "duplicate",
+        duplicate: true,
+        work_id: packet.work_id,
+        run_id: duplicate.run_id,
+        root_run_id: duplicate.root_run_id,
+        executor_session_id: duplicate.executor_session_id,
+        lease: null,
+      };
+    }
+    const parent = this.validateLineage(packet, principal.principal_id);
+    const dependencyRunIds = dependencies.map((workId) => {
+      const runId = this.state.work_index[workId];
+      if (!runId) throw new ConductError(`fanout dependency is not registered: ${workId}`);
+      if (this.state.runs[runId].root_run_id !== parent.root_run_id) {
+        throw new ConductError("fanout dependency belongs to another graph");
+      }
+      return runId;
+    });
+    const digest = await canonicalHash({
+      work_id: packet.work_id,
+      intent_hash: packet.intent_hash,
+      execution_hash: packet.execution_hash,
+    });
+    const runId = `run-${digest.slice(0, 32)}`;
+    const run = {
+      run_id: runId,
+      root_run_id: parent.root_run_id,
+      parent_run_id: packet.parent_run_id,
+      packet: clone(packet),
+      conductor_session_id: packet.conductor.session_id,
+      conductor_principal_id: principal.principal_id,
+      executor_session_id: null,
+      lease_id: null,
+      status: "waiting",
+      children: [],
+      receipts: [],
+      projection_receipts: [],
+      compatibility_projection: false,
+      dependency_run_ids: dependencyRunIds,
+      created_at: this.timestamp,
+      updated_at: this.timestamp,
+    };
+    this.state.runs[runId] = run;
+    this.state.work_index[packet.work_id] = runId;
+    this.state.work_key_index[packet.work_key] = runId;
+    parent.children.push(runId);
+    parent.updated_at = this.timestamp;
+    this.recordEvent("fanout.run_waiting", {
+      run_id: runId,
+      root_run_id: parent.root_run_id,
+      dependencies: dependencyRunIds,
+    });
+    return {
+      schema_version: "limen.conduct_submit_result.v1",
+      status: "waiting",
+      duplicate: false,
+      work_id: packet.work_id,
+      run_id: runId,
+      root_run_id: parent.root_run_id,
+      executor_session_id: null,
+      lease: null,
     };
   }
 
@@ -749,6 +859,7 @@ export class ConductKernel {
         outcome: receipt.outcome,
         receipt_id: receipt.receipt_id,
       });
+      await this.advanceFanoutGraph(run.root_run_id);
       const taskStatus = {
         succeeded: "done",
         failed: "failed",
@@ -785,6 +896,83 @@ export class ConductKernel {
     return result;
   }
 
+  async advanceFanoutGraph(rootRunId) {
+    let progress = true;
+    while (progress) {
+      progress = false;
+      const waiting = Object.values(this.state.runs)
+        .filter((run) => run.root_run_id === rootRunId && run.status === "waiting")
+        .map((run) => clone(run));
+      for (const waitingRun of waiting) {
+        const dependencyStates = (waitingRun.dependency_run_ids || [])
+          .map((runId) => this.state.runs[runId].status);
+        if (dependencyStates.some((status) =>
+          ["failed", "blocked", "cancelled", "fenced"].includes(status))) {
+          const current = this.state.runs[waitingRun.run_id];
+          current.status = "blocked";
+          current.updated_at = this.timestamp;
+          current.receipts.push({
+            schema_version: "limen.fanout_dependency_receipt.v1",
+            receipt_id: `dependency-${current.run_id}`,
+            run_id: current.run_id,
+            outcome: "blocked",
+            mutation_authorized: true,
+            accepted_at: this.timestamp,
+          });
+          this.recordEvent("fanout.run_dependency_blocked", { run_id: current.run_id });
+          progress = true;
+          continue;
+        }
+        if (!dependencyStates.length || dependencyStates.some((status) => status !== "succeeded")) continue;
+        const original = clone(this.state);
+        const packet = waitingRun.packet;
+        delete this.state.runs[waitingRun.run_id];
+        delete this.state.work_index[packet.work_id];
+        delete this.state.work_key_index[packet.work_key];
+        const parent = this.state.runs[packet.parent_run_id];
+        parent.children = parent.children.filter((child) => child !== waitingRun.run_id);
+        const session = this.state.sessions[packet.conductor.session_id];
+        const principal = {
+          schema_version: "limen.conduct_principal.v1",
+          principal_id: waitingRun.conductor_principal_id,
+          agent: session.identity.agent,
+          surface: session.identity.surface,
+          roles: ["conductor"],
+        };
+        try {
+          const promoted = await this.submit(packet, principal);
+          if (promoted.status === "busy") {
+            this.state = original;
+            continue;
+          }
+        } catch {
+          this.state = original;
+          continue;
+        }
+        this.recordEvent("fanout.run_promoted", { run_id: waitingRun.run_id });
+        progress = true;
+      }
+    }
+    const root = this.state.runs[rootRunId];
+    if (!root || root.packet?.intent?.kind !== "fanout-root") return;
+    const children = root.children.map((runId) => this.state.runs[runId]);
+    if (!children.length || children.some((child) =>
+      ["waiting", "reserved", "running", "stop_requested"].includes(child.status))) return;
+    const outcome = children.every((child) => child.status === "succeeded") ? "succeeded" : "blocked";
+    root.status = outcome;
+    root.updated_at = this.timestamp;
+    root.receipts = [{
+      schema_version: "limen.fanout_campaign_receipt.v1",
+      receipt_id: `campaign-${rootRunId}`,
+      run_id: rootRunId,
+      outcome,
+      child_runs: [...root.children],
+      mutation_authorized: true,
+      accepted_at: this.timestamp,
+    }];
+    this.recordEvent("fanout.campaign_settled", { run_id: rootRunId, outcome });
+  }
+
   harvest(runId) {
     const graph = this.graph(runId);
     const byStatus = {};
@@ -799,7 +987,9 @@ export class ConductKernel {
       run_count: graph.nodes.length,
       receipt_count: receiptCount,
       by_status: Object.fromEntries(Object.entries(byStatus).sort(([left], [right]) => left.localeCompare(right))),
-      unharvested: graph.nodes.filter((node) => ACTIVE_RUN_STATES.has(node.status)).map((node) => node.run_id),
+      unharvested: graph.nodes
+        .filter((node) => node.status === "waiting" || ACTIVE_RUN_STATES.has(node.status))
+        .map((node) => node.run_id),
       nodes: graph.nodes,
     };
   }
@@ -991,7 +1181,11 @@ export class ConductKernel {
     const load = this.activeLoad();
     const candidates = Object.values(this.state.sessions).filter((session) => {
       if (!session.accepting_work || this.now - asDate(session.heartbeat_at) > this.sessionTtlMs) return false;
+      if (session.quota_remaining === 0) return false;
       if (packet.required_capabilities.some((capability) => !session.capabilities.includes(capability))) return false;
+      if (packet.execution?.local_heavy_allowed === false
+          && (session.capabilities.includes("local-heavy")
+            || session.capabilities.includes("local-worktree"))) return false;
       if (session.human_protected && session.session_id !== packet.conductor.session_id) return false;
       return (load[session.session_id] || 0) < session.concurrency;
     });
@@ -1002,6 +1196,9 @@ export class ConductKernel {
       const leftPreferred = packet.preferred_agent && left.identity.agent === packet.preferred_agent ? 0 : 1;
       const rightPreferred = packet.preferred_agent && right.identity.agent === packet.preferred_agent ? 0 : 1;
       return leftPreferred - rightPreferred
+        || Number(right.receipt_quality || 0) - Number(left.receipt_quality || 0)
+        || Number(left.cost_per_run ?? Number.POSITIVE_INFINITY)
+          - Number(right.cost_per_run ?? Number.POSITIVE_INFINITY)
         || (load[left.session_id] || 0) / left.concurrency - (load[right.session_id] || 0) / right.concurrency
         || left.identity.agent.localeCompare(right.identity.agent)
         || left.session_id.localeCompare(right.session_id);

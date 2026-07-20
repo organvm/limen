@@ -211,15 +211,17 @@ class ConductBroker:
             needed_capability = "task-submit" if adapter == "tabularius" else "conduct"
             if needed_capability not in conductor.capabilities:
                 raise ConductConflict(f"packet conductor lacks required {needed_capability} capability")
-            parent = self._validate_lineage(
-                state,
-                packet,
-                principal_id=principal.principal_id if principal_enforced else None,
-            )
             by_id = state["work_index"].get(packet.work_id)
             by_key = state["work_key_index"].get(packet.work_key)
             if by_id and by_key and by_id != by_key:
                 raise ConductConflict("work id/key indexes disagree")
+            if packet.parent_run_id and by_key:
+                cursor = state["runs"].get(packet.parent_run_id)
+                while cursor:
+                    ancestor = WorkPacketV1.model_validate(cursor["packet"])
+                    if packet.work_key == ancestor.work_key:
+                        raise ConductConflict("repeated ancestry work_key/cycle rejected")
+                    cursor = state["runs"].get(cursor.get("parent_run_id"))
             duplicate = by_id or by_key
             if duplicate:
                 run = state["runs"][duplicate]
@@ -239,6 +241,11 @@ class ConductBroker:
                 state["work_index"][packet.work_id] = duplicate
                 return self._submit_result(state, run, duplicate=True)
 
+            parent = self._validate_lineage(
+                state,
+                packet,
+                principal_id=principal.principal_id if principal_enforced else None,
+            )
             executor = self._select_executor(state, packet, now)
             claims = self._effective_claims(packet)
             conflicts: list[dict[str, Any]] = []
@@ -412,8 +419,16 @@ class ConductBroker:
                 capability_secret=self.capability_secret,
             )
             results = []
-            for packet in packets:
-                result = staged.submit(packet, principal=resolved, now=now)
+            for index, packet in enumerate(packets):
+                dependencies = packet.execution.get("dependencies") or []
+                if dependencies:
+                    result = staged._defer_dependency_packet(
+                        packet,
+                        principal=resolved,
+                        now=now,
+                    )
+                else:
+                    result = staged.submit(packet, principal=resolved, now=now)
                 if result["status"] == "busy":
                     return {
                         "schema_version": "limen.conduct_graph_submit_result.v1",
@@ -422,6 +437,12 @@ class ConductBroker:
                         "conflicts": result["conflicts"],
                     }
                 results.append(result)
+                if (
+                    index == 0
+                    and packet.intent.get("kind") == "fanout-root"
+                    and result["status"] != "duplicate"
+                ):
+                    staged._start_fanout_root(result["run_id"], now=now)
             committed = staged_store.snapshot()
             state.clear()
             state.update(committed)
@@ -430,6 +451,119 @@ class ConductBroker:
                 "status": "reserved",
                 "root_run_id": results[0]["root_run_id"],
                 "runs": results,
+            }
+
+    def _start_fanout_root(self, run_id: str, *, now: datetime) -> None:
+        """Turn a fanout root into a keeper-owned campaign, not an executor job."""
+
+        with self.store.transaction() as state:
+            run = state["runs"][run_id]
+            lease = LeaseV1.model_validate(state["leases"][run["lease_id"]])
+            state["leases"][lease.lease_id] = _dump(
+                lease.model_copy(update={"state": "released", "heartbeat_at": now})
+            )
+            run["status"] = "running"
+            run["executor_session_id"] = None
+            run["updated_at"] = now.isoformat()
+            _event(state, "fanout.campaign_started", run_id=run_id)
+
+    def _defer_dependency_packet(
+        self,
+        packet: WorkPacketV1,
+        *,
+        principal: ConductPrincipalV1,
+        now: datetime,
+    ) -> dict[str, Any]:
+        """Atomically register a dependent node without leasing its resources early."""
+
+        if packet.deadline <= now:
+            raise ConductError("work packet deadline has already passed")
+        dependencies = tuple(str(item) for item in packet.execution.get("dependencies") or ())
+        if not dependencies:
+            raise ConductError("dependency deferral requires at least one dependency")
+        with self.store.transaction() as state:
+            conductor_raw = state["sessions"].get(packet.conductor.session_id)
+            if not conductor_raw:
+                raise ConductConflict("packet conductor must be a registered session")
+            conductor = ConductorSessionV1.model_validate(conductor_raw)
+            if conductor.identity != packet.conductor:
+                raise ConductConflict("packet conductor identity does not match its registered session")
+            if state["session_principals"].get(conductor.session_id) != principal.principal_id:
+                raise ConductConflict("packet conductor is not bound to the authenticated principal")
+            by_id = state["work_index"].get(packet.work_id)
+            by_key = state["work_key_index"].get(packet.work_key)
+            if by_id or by_key:
+                duplicate = by_id or by_key
+                run = state["runs"][duplicate]
+                stored = WorkPacketV1.model_validate(run["packet"])
+                if (
+                    stored.intent_hash != packet.intent_hash
+                    or stored.execution_hash != packet.execution_hash
+                    or stored.work_key != packet.work_key
+                ):
+                    raise ConductConflict("work id/key was reused with different immutable hashes")
+                if run["status"] == "waiting":
+                    return {
+                        "schema_version": "limen.conduct_submit_result.v1",
+                        "status": "duplicate",
+                        "duplicate": True,
+                        "work_id": packet.work_id,
+                        "run_id": run["run_id"],
+                        "root_run_id": run["root_run_id"],
+                        "executor_session_id": None,
+                        "lease": None,
+                    }
+                return self._submit_result(state, run, duplicate=True)
+            parent = self._validate_lineage(state, packet, principal_id=principal.principal_id)
+            dependency_runs = []
+            for dependency in dependencies:
+                dependency_id = state["work_index"].get(dependency)
+                if not dependency_id:
+                    raise ConductConflict(f"fanout dependency is not registered: {dependency}")
+                dependency_run = state["runs"][dependency_id]
+                if dependency_run["root_run_id"] != parent["root_run_id"]:
+                    raise ConductConflict("fanout dependency belongs to another graph")
+                dependency_runs.append(dependency_id)
+            run_id = self._run_id(packet)
+            run = {
+                "run_id": run_id,
+                "root_run_id": parent["root_run_id"],
+                "parent_run_id": packet.parent_run_id,
+                "packet": _dump(packet),
+                "conductor_session_id": packet.conductor.session_id,
+                "conductor_principal_id": principal.principal_id,
+                "executor_session_id": None,
+                "lease_id": None,
+                "status": "waiting",
+                "children": [],
+                "receipts": [],
+                "projection_receipts": [],
+                "compatibility_projection": False,
+                "dependency_run_ids": dependency_runs,
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+            }
+            state["runs"][run_id] = run
+            state["work_index"][packet.work_id] = run_id
+            state["work_key_index"][packet.work_key] = run_id
+            parent["children"].append(run_id)
+            parent["updated_at"] = now.isoformat()
+            _event(
+                state,
+                "fanout.run_waiting",
+                run_id=run_id,
+                root_run_id=parent["root_run_id"],
+                dependencies=dependency_runs,
+            )
+            return {
+                "schema_version": "limen.conduct_submit_result.v1",
+                "status": "waiting",
+                "duplicate": False,
+                "work_id": packet.work_id,
+                "run_id": run_id,
+                "root_run_id": parent["root_run_id"],
+                "executor_session_id": None,
+                "lease": None,
             }
 
     def split(
@@ -650,6 +784,7 @@ class ConductBroker:
                 _event(
                     state, "run.reported", run_id=lease.run_id, outcome=receipt.outcome, receipt_id=receipt.receipt_id
                 )
+                self._advance_fanout_graph(state, run["root_run_id"], now=now)
             else:
                 _event(
                     state,
@@ -672,6 +807,98 @@ class ConductBroker:
             }
             return result
 
+    def _advance_fanout_graph(self, state: dict[str, Any], root_run_id: str, *, now: datetime) -> None:
+        """Promote dependency-ready leaves and settle the keeper-owned root."""
+
+        progress = True
+        while progress:
+            progress = False
+            waiting = [
+                copy.deepcopy(run)
+                for run in state["runs"].values()
+                if run["root_run_id"] == root_run_id and run["status"] == "waiting"
+            ]
+            for waiting_run in waiting:
+                dependency_states = [
+                    state["runs"][run_id]["status"] for run_id in waiting_run.get("dependency_run_ids", [])
+                ]
+                if any(status in {"failed", "blocked", "cancelled", "fenced"} for status in dependency_states):
+                    current = state["runs"][waiting_run["run_id"]]
+                    current["status"] = "blocked"
+                    current["updated_at"] = now.isoformat()
+                    current["receipts"].append(
+                        {
+                            "schema_version": "limen.fanout_dependency_receipt.v1",
+                            "receipt_id": f"dependency-{current['run_id']}",
+                            "run_id": current["run_id"],
+                            "outcome": "blocked",
+                            "mutation_authorized": True,
+                            "accepted_at": now.isoformat(),
+                        }
+                    )
+                    _event(state, "fanout.run_dependency_blocked", run_id=current["run_id"])
+                    progress = True
+                    continue
+                if not dependency_states or any(status != "succeeded" for status in dependency_states):
+                    continue
+                trial = copy.deepcopy(state)
+                run_id = waiting_run["run_id"]
+                packet = WorkPacketV1.model_validate(waiting_run["packet"])
+                trial["runs"].pop(run_id)
+                trial["work_index"].pop(packet.work_id, None)
+                trial["work_key_index"].pop(packet.work_key, None)
+                parent = trial["runs"][packet.parent_run_id]
+                parent["children"] = [child for child in parent["children"] if child != run_id]
+                session = ConductorSessionV1.model_validate(trial["sessions"][packet.conductor.session_id])
+                principal = ConductPrincipalV1(
+                    principal_id=waiting_run["conductor_principal_id"],
+                    agent=session.identity.agent,
+                    surface=session.identity.surface,
+                    roles=frozenset({"conductor"}),
+                )
+                staged_store = MemoryStateStore(trial)
+                staged = ConductBroker(
+                    staged_store,
+                    session_ttl=self.session_ttl,
+                    adoption_after=self.adoption_after,
+                    lease_ttl=self.lease_ttl,
+                    capability_secret=self.capability_secret,
+                )
+                try:
+                    promoted = staged.submit(packet, principal=principal, now=now)
+                except ConductError:
+                    continue
+                if promoted["status"] == "busy":
+                    continue
+                committed = staged_store.snapshot()
+                state.clear()
+                state.update(committed)
+                _event(state, "fanout.run_promoted", run_id=run_id)
+                progress = True
+        root = state["runs"].get(root_run_id)
+        if not root or root["packet"].get("intent", {}).get("kind") != "fanout-root":
+            return
+        children = [state["runs"][child] for child in root["children"]]
+        if not children or any(
+            child["status"] in {"waiting", "reserved", "running", "stop_requested"} for child in children
+        ):
+            return
+        outcome = "succeeded" if all(child["status"] == "succeeded" for child in children) else "blocked"
+        root["status"] = outcome
+        root["updated_at"] = now.isoformat()
+        root["receipts"] = [
+            {
+                "schema_version": "limen.fanout_campaign_receipt.v1",
+                "receipt_id": f"campaign-{root_run_id}",
+                "run_id": root_run_id,
+                "outcome": outcome,
+                "child_runs": list(root["children"]),
+                "mutation_authorized": True,
+                "accepted_at": now.isoformat(),
+            }
+        ]
+        _event(state, "fanout.campaign_settled", run_id=root_run_id, outcome=outcome)
+
     def harvest(self, root_run_id: str) -> dict[str, Any]:
         graph = self.graph(root_run_id)
         by_status: dict[str, int] = {}
@@ -686,7 +913,9 @@ class ConductBroker:
             "receipt_count": receipts,
             "by_status": dict(sorted(by_status.items())),
             "unharvested": [
-                node["run_id"] for node in graph["nodes"] if node["status"] in {"reserved", "running", "stop_requested"}
+                node["run_id"]
+                for node in graph["nodes"]
+                if node["status"] in {"waiting", "reserved", "running", "stop_requested"}
             ],
             "nodes": graph["nodes"],
         }
@@ -891,7 +1120,14 @@ class ConductBroker:
             session = ConductorSessionV1.model_validate(raw)
             if not session.accepting_work or now - session.heartbeat_at > self.session_ttl:
                 continue
+            if session.quota_remaining == 0:
+                continue
             if packet.required_capabilities - session.capabilities:
+                continue
+            if (
+                packet.execution.get("local_heavy_allowed") is False
+                and {"local-heavy", "local-worktree"} & session.capabilities
+            ):
                 continue
             if session.human_protected and session.session_id != packet.conductor.session_id:
                 continue
@@ -903,6 +1139,8 @@ class ConductBroker:
         candidates.sort(
             key=lambda session: (
                 0 if packet.preferred_agent and session.identity.agent == packet.preferred_agent else 1,
+                -session.receipt_quality,
+                session.cost_per_run if session.cost_per_run is not None else float("inf"),
                 active_load.get(session.session_id, 0) / session.concurrency,
                 session.identity.agent,
                 session.session_id,

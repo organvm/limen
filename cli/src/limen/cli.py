@@ -15,6 +15,7 @@ from limen.doctor import (
 )
 from limen.conduct.cli import conduct_group
 from limen.dispatch import dispatch_tasks, release_stale_tasks
+from limen.fanout_cli import fanout_group
 from limen.harvest import harvest_results
 from limen.io import load_limen_file, load_limen_text, save_derived_limen_projection
 from limen.progress import build_progress_snapshot, render_progress
@@ -59,6 +60,7 @@ def main():
 
 
 main.add_command(conduct_group)
+main.add_command(fanout_group)
 
 
 @main.command()

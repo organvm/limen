@@ -84,6 +84,9 @@ class ConductorSessionV1(ProtocolModel):
     harvest_method: str = "receipt"
     concurrency: int = Field(default=1, ge=1, le=1024)
     meter: str | None = None
+    quota_remaining: float | None = Field(default=None, ge=0)
+    cost_per_run: float | None = Field(default=None, ge=0)
+    receipt_quality: float = Field(default=0, ge=0, le=1)
     registered_at: datetime = Field(default_factory=utc_now)
     heartbeat_at: datetime = Field(default_factory=utc_now)
     human_protected: bool = False
