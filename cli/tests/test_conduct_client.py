@@ -30,10 +30,6 @@ def test_http_client_sends_stable_user_agent(monkeypatch):
         timeout=17,
     )
 
-    assert client.capabilities()["schema_version"] == (
-        "limen.conduct_capabilities.v1"
-    )
-    assert captured["request"].get_header("User-agent") == (
-        "limen-conduct-client/1"
-    )
+    assert client.capabilities()["schema_version"] == ("limen.conduct_capabilities.v1")
+    assert captured["request"].get_header("User-agent") == ("limen-conduct-client/1")
     assert captured["timeout"] == 17
