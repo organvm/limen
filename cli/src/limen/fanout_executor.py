@@ -18,7 +18,7 @@ import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol, cast
 
 from limen.conduct.models import (
     CheckEvidenceV1,
@@ -175,7 +175,7 @@ def _attempt_from(
     *,
     attempt_id: str,
     adapter: str,
-    status: str,
+    status: Literal["launching", "submitted", "running", "succeeded", "failed", "blocked"],
     provider_run_id: str | None = None,
     provider_run_url: str | None = None,
     submitted_at: datetime | str | None = None,
@@ -934,7 +934,7 @@ def discover_execution_adapters(repositories: frozenset[str]) -> tuple[Execution
         JulesExecutionAdapter.discover(repositories),
     ):
         if candidate is not None:
-            adapters.append(candidate)
+            adapters.append(cast(ExecutionAdapter, candidate))
     try:
         entries = importlib.metadata.entry_points(group="limen.fanout_execution")
     except TypeError:  # pragma: no cover - Python compatibility
