@@ -16,7 +16,9 @@ Use this protocol in the right mode:
 - **Direct-session mode:** if the human gives an explicit request in the current session, satisfy
   that request first. Do not claim unrelated queue work or reserve budget. If the requested work
   requires a task transition, submit it through the conduct broker; never edit the `tasks.yaml`
-  projection.
+  projection. A correction or safety lane is additive unless the human explicitly cancels or
+  replaces the active request: keep driving the original deliverable while resolving the added lane
+  within its own safety and ownership boundary.
 - **Dispatch mode:** if launched by the scheduler, `limen dispatch`, MCP task tooling, or an
   explicit "take the next task" request, follow the startup checklist and session rituals below.
 
