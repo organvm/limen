@@ -12,7 +12,7 @@ from typing import Any, Literal, Protocol
 import yaml
 from pydantic import Field, field_validator, model_validator
 
-from limen.conduct.client import LocalConductClient, client_from_env
+from limen.conduct.client import HttpConductClient, LocalConductClient, client_from_env
 from limen.conduct.models import (
     AgentIdentityV1,
     AuthorityEnvelopeV1,
@@ -49,6 +49,14 @@ _CODE_RECEIPT_CAPABILITIES = frozenset(
         "exact-head-receipt",
         "predicate-receipt",
         "pull-request-receipt",
+    }
+)
+_READ_RECEIPT_CAPABILITIES = frozenset(
+    {
+        "exact-base-receipt",
+        "exact-head-receipt",
+        "predicate-receipt",
+        "read-verifier",
     }
 )
 
@@ -159,6 +167,10 @@ class FanoutLeafV1(ProtocolModel):
             raise ValueError("resource claims may not exceed the owner repository")
         if self.effect == "write" and self.owner_repository not in claimed_repositories:
             raise ValueError("write leaves require a repository-bound resource claim")
+        if self.spend.unit != "runs":
+            raise ValueError("fanout execution spend must use the runs unit")
+        if self.spend.limit < self.retry.max_attempts:
+            raise ValueError("fanout spend limit must cover every permitted attempt")
         return self
 
 
@@ -307,6 +319,10 @@ def _is_local(session: dict[str, Any]) -> bool:
     return transport.startswith("local") or "local-heavy" in capabilities or "local-worktree" in capabilities
 
 
+def _repository_capability(repository: str) -> str:
+    return f"repository:{canonical_hash(repository)[:32]}"
+
+
 def _metric(value: Any, default: float) -> float:
     if value is None or isinstance(value, bool):
         return default
@@ -340,12 +356,22 @@ def route_manifest(
         and int(row.get("active_leases", 0)) < int(row.get("concurrency", 1))
     ]
     local_used = 0
+    provisional_load = {str(row.get("session_id", "")): int(row.get("active_leases", 0)) for row in sessions}
     routes: list[dict[str, Any]] = []
     for leaf in manifest.leaves:
+        dependency_deferred = bool(leaf.dependencies)
         required = set(leaf.required_capabilities)
         if leaf.effect == "write":
             required.update(_CODE_RECEIPT_CAPABILITIES)
-        candidates = [row for row in sessions if required <= set(row.get("capabilities") or ())]
+        else:
+            required.update(_READ_RECEIPT_CAPABILITIES)
+        repository_capability = _repository_capability(leaf.owner_repository)
+        candidates = []
+        for row in sessions:
+            advertised = set(row.get("capabilities") or ())
+            repository_scopes = {value for value in advertised if str(value).startswith("repository:")}
+            if required <= advertised and (not repository_scopes or repository_capability in repository_scopes):
+                candidates.append(row)
         candidates.sort(
             key=lambda row: (
                 _is_local(row) if remote_first else False,
@@ -357,10 +383,14 @@ def route_manifest(
         )
         selected = None
         for row in candidates:
+            session_id = str(row.get("session_id", ""))
+            if not dependency_deferred and provisional_load.get(session_id, 0) >= int(row.get("concurrency", 1)):
+                continue
             if _is_local(row):
-                if local_used >= local_max:
+                if not dependency_deferred and local_used >= local_max:
                     continue
-                local_used += 1
+                if not dependency_deferred:
+                    local_used += 1
             selected = row
             break
         if selected is None:
@@ -379,6 +409,8 @@ def route_manifest(
                 }
             )
             continue
+        if not dependency_deferred:
+            provisional_load[str(selected["session_id"])] = provisional_load.get(str(selected["session_id"]), 0) + 1
         identity = selected.get("identity") or {}
         routes.append(
             {
@@ -388,6 +420,7 @@ def route_manifest(
                 "agent": identity.get("agent"),
                 "transport": selected.get("transport"),
                 "local_heavy": _is_local(selected),
+                "repository_capability": repository_capability,
                 "required_capabilities": sorted(required),
             }
         )
@@ -445,7 +478,7 @@ def plan_manifest(
                     "work_id": leaf.work_id,
                     "required_capabilities": sorted(
                         set(leaf.required_capabilities)
-                        | (_CODE_RECEIPT_CAPABILITIES if leaf.effect == "write" else set())
+                        | (_CODE_RECEIPT_CAPABILITIES if leaf.effect == "write" else _READ_RECEIPT_CAPABILITIES)
                     ),
                 }
                 for leaf in canonical.leaves
@@ -515,8 +548,11 @@ def compile_packets(
     for leaf in canonical.leaves:
         route = route_by_work[leaf.work_id]
         required = set(leaf.required_capabilities)
+        required.add(f"campaign:{canonical.manifest_hash}")
         if leaf.effect == "write":
             required.update(_CODE_RECEIPT_CAPABILITIES)
+        else:
+            required.update(_READ_RECEIPT_CAPABILITIES)
         packets.append(
             WorkPacketV1(
                 root_run_id=root_run_id,
@@ -536,6 +572,8 @@ def compile_packets(
                     "topic_branch": leaf.topic_branch,
                     "dependencies": list(leaf.dependencies),
                     "local_heavy_allowed": route["local_heavy"],
+                    # Dependency leaves are routed again by the keeper when promoted.
+                    "executor_session_id": route["session_id"] if not leaf.dependencies else None,
                     "manifest_hash": canonical.manifest_hash,
                     "observed_heads": {leaf.owner_repository: leaf.exact_base},
                 },
@@ -569,31 +607,77 @@ def start_manifest(
     remote_first: bool = True,
     local_max: int = 1,
     allow_development_keeper: bool = False,
+    execution_adapters: tuple[Any, ...] | None = None,
 ) -> dict[str, Any]:
+    from limen.fanout_executor import (
+        discover_execution_adapters,
+        launch_ready_nodes,
+        register_execution_sessions,
+        wake_executor_workers,
+    )
+
     keeper = client or client_from_env()
     if isinstance(keeper, LocalConductClient) and not allow_development_keeper:
         raise FanoutError("production fanout start requires the authenticated remote keeper")
     canonical = serialize_resource_conflicts(manifest)
+    repositories = frozenset(leaf.owner_repository for leaf in canonical.leaves)
+    executors = execution_adapters if execution_adapters is not None else discover_execution_adapters(repositories)
+    if not executors:
+        raise FanoutError("no live execution adapter can launch this manifest")
+    adapter_sessions = register_execution_sessions(canonical, keeper, executors)
     capabilities = keeper.capabilities()
     routing = route_manifest(canonical, capabilities, remote_first=remote_first, local_max=local_max)
     result = keeper.submit_graph(compile_packets(canonical, routing))
     if result.get("status") not in {"reserved", "duplicate"}:
         raise FanoutError(f"atomic graph was not reserved: {result}")
+    if isinstance(keeper, HttpConductClient):
+        attempts: list[dict[str, Any]] = []
+        wakes = wake_executor_workers(result["root_run_id"], adapter_sessions)
+    else:
+        attempts = launch_ready_nodes(
+            result["root_run_id"],
+            client=keeper,
+            adapters_by_session=adapter_sessions,
+        )
+        wakes = []
     return {
         "schema_version": "limen.fanout_start.v1",
         "root_run_id": result["root_run_id"],
         "manifest_hash": canonical.manifest_hash,
         "idempotent": any(run.get("duplicate") or run.get("status") == "duplicate" for run in result.get("runs", [])),
         "routing": routing,
+        "attempts": attempts,
+        "executor_wakes": wakes,
     }
 
 
-def status_root(root_run_id: str, *, client: Any | None = None) -> dict[str, Any]:
-    graph = (client or client_from_env()).graph(root_run_id)
+def status_root(
+    root_run_id: str,
+    *,
+    client: Any | None = None,
+    execution_adapters: tuple[Any, ...] | None = None,
+) -> dict[str, Any]:
+    from limen.fanout_executor import (
+        discover_execution_adapters,
+        resume_execution_sessions,
+        wake_executor_workers,
+    )
+
+    keeper = client or client_from_env()
+    graph = keeper.graph(root_run_id)
+    repositories = frozenset(
+        str(node.get("packet", {}).get("execution", {}).get("owner_repository"))
+        for node in graph.get("nodes", [])
+        if node.get("packet", {}).get("intent", {}).get("kind") == "fanout-leaf"
+    )
+    executors = execution_adapters if execution_adapters is not None else discover_execution_adapters(repositories)
+    lanes = resume_execution_sessions(graph, keeper, executors) if executors else {}
+    wakes = wake_executor_workers(root_run_id, lanes)
     return {
         "schema_version": "limen.fanout_status.v1",
         "root_run_id": graph["root_run_id"],
         "nodes": graph["nodes"],
+        "executor_wakes": wakes,
     }
 
 
@@ -683,7 +767,9 @@ def _validate_code_receipt(node: dict[str, Any], receipt: dict[str, Any]) -> Non
         raise FanoutError(f"{node['run_id']} PR head does not match the exact head receipt")
     allowed = tuple(packet["authority"]["path_prefixes"])
     for changed in receipt.get("changed_paths", []):
-        if not any(changed == prefix or changed.startswith(prefix.rstrip("/") + "/") for prefix in allowed):
+        if not any(
+            prefix == "." or changed == prefix or changed.startswith(prefix.rstrip("/") + "/") for prefix in allowed
+        ):
             raise FanoutError(f"{node['run_id']} changed unauthorized path {changed}")
 
 
@@ -693,12 +779,60 @@ def harvest_root(
     client: Any | None = None,
     merge: bool = False,
     adapters: tuple[LandingAdapter, ...] | None = None,
+    execution_adapters: tuple[Any, ...] | None = None,
 ) -> dict[str, Any]:
     """Validate keeper receipts and land each code result independently."""
 
-    harvest = (client or client_from_env()).harvest(root_run_id)
+    from limen.fanout_executor import (
+        discover_execution_adapters,
+        land_succeeded_attempts,
+        launch_ready_nodes,
+        refresh_provider_attempts,
+        resume_execution_sessions,
+        wake_executor_workers,
+    )
+
+    keeper = client or client_from_env()
+    graph = keeper.graph(root_run_id)
+    repositories = frozenset(
+        str(node.get("packet", {}).get("execution", {}).get("owner_repository"))
+        for node in graph.get("nodes", [])
+        if node.get("packet", {}).get("intent", {}).get("kind") == "fanout-leaf"
+    )
+    executors = execution_adapters if execution_adapters is not None else discover_execution_adapters(repositories)
+    executor_sessions = resume_execution_sessions(graph, keeper, executors) if executors else {}
+    if isinstance(keeper, HttpConductClient):
+        refreshed: list[dict[str, Any]] = []
+        provider_landed: list[dict[str, Any]] = []
+        launched: list[dict[str, Any]] = []
+        wakes = wake_executor_workers(root_run_id, executor_sessions)
+    else:
+        refreshed = refresh_provider_attempts(root_run_id, client=keeper, adapters=executors) if executors else []
+        provider_landed = land_succeeded_attempts(root_run_id, client=keeper, adapters=executors) if executors else []
+        launched = (
+            launch_ready_nodes(
+                root_run_id,
+                client=keeper,
+                adapters_by_session=executor_sessions,
+            )
+            if executor_sessions
+            else []
+        )
+        wakes = []
+    harvest = keeper.harvest(root_run_id)
     if harvest.get("unharvested"):
-        raise FanoutError(f"campaign is not terminal: {harvest['unharvested']}")
+        return {
+            "schema_version": "limen.fanout_harvest.v1",
+            "root_run_id": root_run_id,
+            "terminal": False,
+            "unharvested": harvest["unharvested"],
+            "refreshed_attempts": refreshed,
+            "provider_landed": provider_landed,
+            "launched": launched,
+            "executor_wakes": wakes,
+            "landed": [],
+            "merge_requested": merge,
+        }
     landed: list[dict[str, Any]] = []
     available = adapters or landing_adapters()
     for node in harvest.get("nodes", []):
@@ -709,7 +843,55 @@ def harvest_root(
         if len(receipts) != 1:
             raise FanoutError(f"{node['run_id']} must have exactly one terminal receipt")
         receipt = receipts[0]
+        internal_schema = receipt.get("schema_version")
+        if internal_schema in {
+            "limen.fanout_fence_receipt.v1",
+            "limen.fanout_expiry_receipt.v1",
+            "limen.fanout_dependency_receipt.v1",
+        }:
+            if (
+                receipt.get("outcome") != "blocked"
+                or not receipt.get("mutation_authorized")
+                or receipt.get("run_id") != node["run_id"]
+            ):
+                raise FanoutError(f"{node['run_id']} internal terminal receipt is not authorized")
+            expected = packet.get("execution", {}).get("observed_heads") or {}
+            if internal_schema != "limen.fanout_dependency_receipt.v1":
+                if (receipt.get("expected_heads") or {}) != expected:
+                    raise FanoutError(f"{node['run_id']} terminal receipt has the wrong expected heads")
+                observed = receipt.get("observed_heads")
+                if not isinstance(observed, dict):
+                    raise FanoutError(f"{node['run_id']} terminal receipt has no observed-head evidence")
+                if internal_schema == "limen.fanout_fence_receipt.v1" and observed == expected:
+                    raise FanoutError(f"{node['run_id']} fence receipt did not observe a moved or omitted head")
+                if internal_schema == "limen.fanout_expiry_receipt.v1" and observed:
+                    raise FanoutError(f"{node['run_id']} expiry receipt unexpectedly claims observed heads")
+            landed.append(
+                {
+                    "run_id": node["run_id"],
+                    "receipt_id": receipt["receipt_id"],
+                    "outcome": "blocked",
+                    "merged": False,
+                }
+            )
+            continue
         if packet.get("effect") == "write":
+            if receipt.get("outcome") != "succeeded":
+                if (
+                    not receipt.get("mutation_authorized")
+                    or receipt.get("changed_paths")
+                    or (receipt.get("observed_heads_before") or {}) != (receipt.get("observed_heads_after") or {})
+                ):
+                    raise FanoutError(f"{node['run_id']} terminal failure receipt is not exact")
+                landed.append(
+                    {
+                        "run_id": node["run_id"],
+                        "receipt_id": receipt["receipt_id"],
+                        "outcome": receipt.get("outcome"),
+                        "merged": False,
+                    }
+                )
+                continue
             _validate_code_receipt(node, receipt)
             adapter = next((candidate for candidate in available if candidate.can_land(node, receipt)), None)
             if adapter is None:
@@ -721,12 +903,25 @@ def harvest_root(
                     **adapter.land(node, receipt, merge=merge),
                 }
             )
-        elif not receipt.get("mutation_authorized") or receipt.get("outcome") != "succeeded":
-            raise FanoutError(f"{node['run_id']} read/verification receipt is not exact and successful")
+        else:
+            before = receipt.get("observed_heads_before") or {}
+            after = receipt.get("observed_heads_after") or {}
+            if (
+                not receipt.get("mutation_authorized")
+                or receipt.get("outcome") != "succeeded"
+                or receipt.get("changed_paths")
+                or before != after
+            ):
+                raise FanoutError(f"{node['run_id']} read/verification receipt is not exact and successful")
     return {
         "schema_version": "limen.fanout_harvest.v1",
         "root_run_id": root_run_id,
+        "terminal": True,
         "receipt_count": harvest.get("receipt_count", 0),
+        "refreshed_attempts": refreshed,
+        "provider_landed": provider_landed,
+        "launched": launched,
+        "executor_wakes": wakes,
         "landed": landed,
         "merge_requested": merge,
     }

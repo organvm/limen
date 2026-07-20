@@ -19,6 +19,7 @@ import {
 import {
   canonicalHash,
   stableStringify,
+  validateExecutorAttempt,
   validateReceipt,
   validateSession,
   validateWorkPacket,
@@ -157,6 +158,7 @@ function serviceWith(sessions, options = {}) {
   const service = new SerializedConductService(store, {
     clock: options.clock || (() => NOW),
     projectTaskEvent: options.projectTaskEvent,
+    capabilitySecret: options.capabilitySecret,
   });
   return Promise.all(sessions.map((item) => service.call("register", { session: item })))
     .then(() => ({ service, store }));
@@ -274,6 +276,246 @@ test("principal-bound executor claims are recoverable and secret from conductors
     principal: executorPrincipal,
   });
   assert.equal(first.capability_token, second.capability_token);
+});
+
+test("executor attempts are capability-bound, durable, idempotent, and token-free", async () => {
+  const codex = session("codex");
+  const { service } = await serviceWith([codex], {
+    capabilitySecret: "worker-attempt-capability-secret",
+  });
+  const reserved = await service.call("submit", {
+    packet: await packet({
+      workId: "attempt-bound-worker",
+      conductor: codex.identity,
+    }),
+  });
+  const capabilityToken = await leaseCapability(service, reserved);
+  const launching = validateExecutorAttempt({
+    attempt_id: "attempt-bound-worker-1",
+    run_id: reserved.run_id,
+    lease_id: reserved.lease.lease_id,
+    lease_generation: reserved.lease.generation,
+    executor: codex.identity,
+    adapter: "fixture-remote",
+    status: "launching",
+    submitted_at: NOW.toISOString(),
+    updated_at: NOW.toISOString(),
+  }, NOW);
+  const created = await service.call("heartbeat", {
+    lease_id: reserved.lease.lease_id,
+    capability_token: capabilityToken,
+    generation: reserved.lease.generation,
+    observed_heads: { pr: "abc123" },
+    attempt: launching,
+  });
+  assert.equal(created.attempt_created, true);
+  const submitted = validateExecutorAttempt({
+    ...launching,
+    provider_run_id: "provider-run-1",
+    provider_run_url: "https://executor.example/runs/1",
+    status: "submitted",
+  }, NOW);
+  const updated = await service.call("heartbeat", {
+    lease_id: reserved.lease.lease_id,
+    capability_token: capabilityToken,
+    generation: reserved.lease.generation,
+    observed_heads: { pr: "abc123" },
+    attempt: submitted,
+  });
+  assert.equal(updated.attempt_created, false);
+  const graph = await service.call("graph", { run_id: reserved.run_id });
+  assert.deepEqual(graph.nodes[0].attempts, [submitted]);
+  assert.equal("capability_token" in graph.nodes[0], false);
+  assert.equal("capability_token_hash" in graph.nodes[0].lease, false);
+  await assert.rejects(service.call("heartbeat", {
+    lease_id: reserved.lease.lease_id,
+    capability_token: capabilityToken,
+    generation: reserved.lease.generation,
+    observed_heads: { pr: "abc123" },
+    attempt: { ...submitted, provider_run_id: "provider-run-2" },
+  }), /provider receipt identity changed/);
+});
+
+test("executor attempt limits are keeper-enforced", async () => {
+  const codex = session("codex");
+  const { service } = await serviceWith([codex]);
+  const reserved = await service.call("submit", {
+    packet: await packet({ workId: "attempt-limit", conductor: codex.identity }),
+  });
+  const capabilityToken = await leaseCapability(service, reserved);
+  for (const number of [1, 2]) {
+    await service.call("heartbeat", {
+      lease_id: reserved.lease.lease_id,
+      capability_token: capabilityToken,
+      generation: reserved.lease.generation,
+      observed_heads: { pr: "abc123" },
+      attempt: validateExecutorAttempt({
+        attempt_id: `attempt-limit-${number}`,
+        run_id: reserved.run_id,
+        lease_id: reserved.lease.lease_id,
+        lease_generation: reserved.lease.generation,
+        executor: codex.identity,
+        adapter: `fixture-${number}`,
+        status: "failed",
+        submitted_at: NOW.toISOString(),
+        updated_at: NOW.toISOString(),
+      }, NOW),
+    });
+  }
+  await assert.rejects(service.call("heartbeat", {
+    lease_id: reserved.lease.lease_id,
+    capability_token: capabilityToken,
+    generation: reserved.lease.generation,
+    observed_heads: { pr: "abc123" },
+    attempt: validateExecutorAttempt({
+      attempt_id: "attempt-limit-3",
+      run_id: reserved.run_id,
+      lease_id: reserved.lease.lease_id,
+      lease_generation: reserved.lease.generation,
+      executor: codex.identity,
+      adapter: "fixture-3",
+      status: "failed",
+      submitted_at: NOW.toISOString(),
+      updated_at: NOW.toISOString(),
+    }, NOW),
+  }), /attempt limit exhausted/);
+});
+
+test("transient attempts reroute to a separately authenticated executor", async () => {
+  const service = new SerializedConductService(new MemoryConductStore(), {
+    clock: () => NOW,
+    capabilitySecret: "worker-reroute-capability-secret",
+  });
+  const conductorPrincipal = principalMeta(
+    "reroute-conductor",
+    "codex",
+    ["observer", "conductor"],
+  );
+  const firstPrincipal = principalMeta(
+    "reroute-first",
+    "claude",
+    ["observer", "executor"],
+  );
+  const secondPrincipal = principalMeta(
+    "reroute-second",
+    "jules",
+    ["observer", "executor"],
+  );
+  const conductor = await service.call("register", {
+    session: session("spoofed", {
+      sessionId: "reroute-conductor-session",
+      capabilities: ["conduct"],
+    }),
+    principal: conductorPrincipal,
+  });
+  await service.call("register", {
+    session: session("spoofed", {
+      sessionId: "reroute-first-session",
+      capabilities: ["code"],
+    }),
+    principal: firstPrincipal,
+  });
+  await service.call("register", {
+    session: session("spoofed", {
+      sessionId: "reroute-second-session",
+      capabilities: ["code"],
+    }),
+    principal: secondPrincipal,
+  });
+  const reserved = await service.call("submit", {
+    packet: await packet({
+      workId: "attempt-reroute-worker",
+      conductor: conductor.identity,
+      preferredAgent: "claude",
+    }),
+    principal: conductorPrincipal,
+  });
+  const oldClaim = await service.call("claim", {
+    lease_id: reserved.lease.lease_id,
+    generation: reserved.lease.generation,
+    principal: firstPrincipal,
+  });
+  const failed = validateExecutorAttempt({
+    attempt_id: "attempt-reroute-worker-1",
+    run_id: reserved.run_id,
+    lease_id: reserved.lease.lease_id,
+    lease_generation: reserved.lease.generation,
+    executor: reserved.lease.executor,
+    adapter: "fixture-first",
+    status: "failed",
+    failure_class: "transient",
+    submitted_at: NOW.toISOString(),
+    updated_at: NOW.toISOString(),
+  }, NOW);
+  const rerouted = await service.call("heartbeat", {
+    lease_id: reserved.lease.lease_id,
+    capability_token: oldClaim.capability_token,
+    generation: reserved.lease.generation,
+    principal: firstPrincipal,
+    observed_heads: { pr: "abc123" },
+    attempt: failed,
+  });
+  assert.equal(rerouted.status, "rerouted");
+  assert.equal(rerouted.lease.executor.agent, "jules");
+  assert.ok(rerouted.lease.generation > reserved.lease.generation);
+  await assert.rejects(service.call("claim", {
+    lease_id: rerouted.lease.lease_id,
+    generation: rerouted.lease.generation,
+    principal: firstPrincipal,
+  }), /another executor principal/);
+  await service.call("claim", {
+    lease_id: rerouted.lease.lease_id,
+    generation: rerouted.lease.generation,
+    principal: secondPrincipal,
+  });
+  const graph = await service.call("graph", { run_id: reserved.run_id });
+  assert.deepEqual(graph.nodes[0].attempts, [failed]);
+  assert.equal("capability_token_hash" in graph.nodes[0].lease, false);
+});
+
+test("spend limits and permanent failure classifications stop retries", async () => {
+  const codex = session("codex");
+  const { service } = await serviceWith([codex]);
+  const reserved = await service.call("submit", {
+    packet: await packet({
+      workId: "attempt-spend-worker",
+      conductor: codex.identity,
+      spendLimit: 1,
+      maxAttempts: 2,
+      transientOnly: true,
+    }),
+  });
+  const capabilityToken = await leaseCapability(service, reserved);
+  const failed = validateExecutorAttempt({
+    attempt_id: "attempt-spend-worker-1",
+    run_id: reserved.run_id,
+    lease_id: reserved.lease.lease_id,
+    lease_generation: reserved.lease.generation,
+    executor: reserved.lease.executor,
+    adapter: "fixture",
+    status: "failed",
+    failure_class: "permanent",
+    submitted_at: NOW.toISOString(),
+    updated_at: NOW.toISOString(),
+  }, NOW);
+  const heartbeat = await service.call("heartbeat", {
+    lease_id: reserved.lease.lease_id,
+    capability_token: capabilityToken,
+    generation: reserved.lease.generation,
+    observed_heads: { pr: "abc123" },
+    attempt: failed,
+  });
+  assert.equal(heartbeat.status, "active");
+  await assert.rejects(service.call("heartbeat", {
+    lease_id: reserved.lease.lease_id,
+    capability_token: capabilityToken,
+    generation: reserved.lease.generation,
+    observed_heads: { pr: "abc123" },
+    attempt: validateExecutorAttempt({
+      ...failed,
+      attempt_id: "attempt-spend-worker-2",
+    }, NOW),
+  }), /spend limit exhausted/);
 });
 
 test("atomic graph submission rolls back partial reservations and is idempotent", async () => {
@@ -1149,6 +1391,38 @@ test("receipts authorize mutation only with exact predicates, scoped paths, boun
     child_runs: ["run-forged-child"],
   })).mutation_authorized, false);
   assert.equal((await report("receipt-contract-valid")).mutation_authorized, true);
+});
+
+test("read receipts cannot change paths or observed heads", async () => {
+  const codex = session("codex");
+  const { service } = await serviceWith([codex]);
+  const reserved = await service.call("submit", {
+    packet: await packet({
+      workId: "read-no-mutation",
+      conductor: codex.identity,
+      effect: "read",
+    }),
+  });
+  const token = await leaseCapability(service, reserved);
+  const result = await service.call("report", {
+    lease_id: reserved.lease.lease_id,
+    capability_token: token,
+    generation: reserved.lease.generation,
+    receipt: validateReceipt({
+      receipt_id: "receipt-read-mutated",
+      run_id: reserved.run_id,
+      lease_id: reserved.lease.lease_id,
+      lease_generation: reserved.lease.generation,
+      executor: codex.identity,
+      observed_heads_before: { pr: "abc123" },
+      observed_heads_after: { pr: "different" },
+      changed_paths: ["cli/changed.js"],
+      predicate: { command: "pytest -q", exit_code: 0 },
+      spend: { runs: 1 },
+      outcome: "succeeded",
+    }, NOW),
+  });
+  assert.equal(result.mutation_authorized, false);
 });
 
 test("heartbeat, cooperative stop, report idempotency, cancel, and hard deadlines are serialized", async () => {

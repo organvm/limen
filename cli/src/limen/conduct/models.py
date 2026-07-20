@@ -269,6 +269,42 @@ class LeaseV1(ProtocolModel):
         return _identifier(value, "executor_principal_id") if value else None
 
 
+class ExecutorAttemptV1(ProtocolModel):
+    """Keeper-owned identity and lifecycle for one provider launch attempt."""
+
+    schema_version: Literal["limen.executor_attempt.v1"] = "limen.executor_attempt.v1"
+    attempt_id: str
+    run_id: str
+    lease_id: str
+    lease_generation: int = Field(ge=1)
+    executor: AgentIdentityV1
+    adapter: str
+    provider_run_id: str | None = None
+    provider_run_url: str | None = None
+    status: Literal["launching", "submitted", "running", "succeeded", "failed", "blocked"]
+    failure_class: Literal["transient", "permanent"] | None = None
+    submitted_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+    detail: str = ""
+
+    @field_validator("attempt_id", "run_id", "lease_id", "adapter")
+    @classmethod
+    def validate_identifiers(cls, value: str, info) -> str:
+        return _identifier(value, info.field_name)
+
+    @field_validator("provider_run_id")
+    @classmethod
+    def validate_provider_run_id(cls, value: str | None) -> str | None:
+        return _identifier(value, "provider_run_id") if value else None
+
+    @field_validator("provider_run_url", "detail")
+    @classmethod
+    def validate_bounded_text(cls, value: str | None, info) -> str | None:
+        if value is not None and ("\x00" in value or len(value) > 4096):
+            raise ValueError(f"{info.field_name} must be bounded and contain no NUL")
+        return value
+
+
 class PredicateEvidenceV1(ProtocolModel):
     command: str
     exit_code: int
