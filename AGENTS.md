@@ -435,14 +435,17 @@ is a valid verification strategy.
 
 Every heavy local Codex, Claude, OpenCode, Agy, or Limen surface must enter through the shared host
 admission boundary documented in [`docs/host-work-admission.md`](docs/host-work-admission.md).
-Admission is machine-wide across worktrees: at most one non-plan Codex root turn and at most one
-heavy local surface. New heavy work is denied under declared Backblaze, swap, disk, or VITALS
-pressure; existing work is never killed, restarted, or retuned and may perform bounded closeout.
+Codex roots may plan, inspect, and coordinate concurrently. Source mutations require a linked
+worktree and one scoped writer lease per worktree; distinct worktrees may have concurrent writers.
+At most one heavy local surface remains machine-wide. New heavy work is denied under declared
+Backblaze, swap, disk, or VITALS pressure; existing work is never killed, restarted, or retuned and
+may perform bounded closeout.
 
-Hooks are an early control layer, not sole enforcement. Codex `PreToolUse` cannot reliably block a
-tool and `SubagentStart` cannot prevent creation, so heavy entrypoints must acquire the same atomic
-lease internally. Leases bind PID plus process-start identity, refresh finitely, and clean up only
-dead, reused, or stale owners. Never delete the lease store or signal a peer to seize capacity.
+The installed Codex client's structured `PreToolUse` denial is the action boundary. A startup
+feature probe retains the legacy one-root lock when stable hook denial is unavailable. Guarded
+heavy entrypoints still acquire the same atomic heavy lease internally, and `SubagentStart` remains
+advisory. Leases bind PID plus process-start identity, refresh finitely, and clean up only dead,
+reused, or stale owners. Never delete the lease store or signal a peer to seize capacity.
 
 Project Codex families are capped at three threads and depth one. Global hook deployment and the
 verified non-backed scratch root belong to the Domus cartridge; Limen must not patch home-directory

@@ -195,6 +195,18 @@ parameters:
     self_update: none
     owner: vitals
     note: "Finite lease TTL for execution and heavy-surface admission. Bounded entrypoints refresh live leases; dead PID, PID-start mismatch, and TTL cleanup never signal or restart peers."
+  LIMEN_HOST_ADMISSION_OWNER:
+    default: ""
+    env: LIMEN_HOST_ADMISSION_OWNER
+    self_update: none
+    owner: vitals
+    note: "Optional stable caller label for the public host-admission CLI. Blank derives a private label from the parent process-start identity; the persisted label never contains a checkout path."
+  LIMEN_CODEX_PRETOOL_DENIAL_SUPPORTED:
+    default: "auto"
+    env: LIMEN_CODEX_PRETOOL_DENIAL_SUPPORTED
+    self_update: none
+    owner: vitals
+    note: "Startup compatibility escape hatch for Codex action admission. Auto probes the installed client's stable-hooks capability; true enables action-level PreToolUse denial and false retains the legacy one-root lock."
   LIMEN_HOST_ADMISSION_PROBE_TIMEOUT:
     default: 5
     env: LIMEN_HOST_ADMISSION_PROBE_TIMEOUT
