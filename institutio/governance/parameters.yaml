@@ -129,12 +129,12 @@ parameters:
     self_update: none
     owner: dispatch
     note: "Seconds allowed for a directly owned probe server to exit after TERM before its isolated process group receives KILL."
-  LIMEN_PROBE_CONDUCT_TOKEN:
-    default: "conduct-probe-token"
-    env: LIMEN_PROBE_CONDUCT_TOKEN
+  LIMEN_PROBE_CAPABILITY_SECRET:
+    default: "probe-capability-secret-at-least-24-chars"
+    env: LIMEN_PROBE_CAPABILITY_SECRET
     self_update: none
     owner: dispatch
-    note: "Disposable local-only bearer used by the Worker runtime probe to exercise authenticated conduct routes. It is written only to the private temporary probe environment and is never a production credential."
+    note: "Disposable local-only HMAC secret used by the Worker runtime probe to mint executor capabilities. It is written only to the private temporary probe environment and is never a production credential."
 
   LIMEN_LOCAL_FLOOR:
     default: 0
