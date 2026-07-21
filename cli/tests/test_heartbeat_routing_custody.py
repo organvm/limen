@@ -22,7 +22,9 @@ def test_route_plan_leaves_board_byte_identical(tmp_path: Path) -> None:
         yaml.safe_dump(
             {
                 "version": "1.0",
-                "portal": {"budget": {"daily": 10, "per_agent": {}, "track": {"date": "", "spent": 0, "per_agent": {}}}},
+                "portal": {
+                    "budget": {"daily": 10, "per_agent": {}, "track": {"date": "", "spent": 0, "per_agent": {}}}
+                },
                 "tasks": [],
             },
             sort_keys=False,
