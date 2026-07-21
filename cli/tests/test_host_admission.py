@@ -477,7 +477,7 @@ def _concurrent_acquire(root: str, owner: str, ready, start, results) -> None:
     results.put((owner, decision["allowed"]))
 
 
-def test_concurrent_roots_admit_only_one_execution_owner(tmp_path: Path) -> None:
+def test_legacy_unscoped_execution_kind_admits_only_one_owner(tmp_path: Path) -> None:
     context = multiprocessing.get_context("fork")
     ready = context.Queue()
     results = context.Queue()
@@ -504,6 +504,80 @@ def test_state_file_is_private_and_versioned(tmp_path: Path) -> None:
     payload = json.loads(service.state_path.read_text(encoding="utf-8"))
     assert payload["schema"] == "limen.host_admission_state.v1"
     assert stat.S_IMODE(service.state_path.stat().st_mode) == 0o600
+
+
+def test_scoped_leases_live_only_in_the_sibling_store(tmp_path: Path) -> None:
+    _main, first, _second = make_linked_worktrees(tmp_path)
+    service = controller(tmp_path / "state")
+    scope = worktree_scope(first)
+
+    service.acquire(scope.lease_kind, owner="codex", surface="write", pid=101)
+
+    legacy = json.loads(service.state_path.read_text(encoding="utf-8"))
+    scoped = json.loads(service.scoped_state_path.read_text(encoding="utf-8"))
+    assert legacy["schema"] == "limen.host_admission_state.v1"
+    assert legacy["leases"] == []
+    assert scoped["schema"] == "limen.host_admission_scoped_state.v1"
+    assert [lease["kind"] for lease in scoped["leases"]] == [scope.lease_kind]
+    assert [lease["kind"] for lease in service.status(probe=False)["leases"]] == [scope.lease_kind]
+
+
+def test_current_reader_migrates_valid_scoped_records_out_of_legacy_store(tmp_path: Path) -> None:
+    _main, first, _second = make_linked_worktrees(tmp_path)
+    service = controller(tmp_path / "state")
+    scope = worktree_scope(first)
+    service.acquire(scope.lease_kind, owner="codex", surface="write", pid=101)
+    scoped = json.loads(service.scoped_state_path.read_text(encoding="utf-8"))
+    service.state_path.write_text(
+        json.dumps({"schema": "limen.host_admission_state.v1", "leases": scoped["leases"], "pressure": None}),
+        encoding="utf-8",
+    )
+    service.scoped_state_path.unlink()
+
+    service.status(probe=False)
+
+    legacy_after = json.loads(service.state_path.read_text(encoding="utf-8"))
+    scoped_after = json.loads(service.scoped_state_path.read_text(encoding="utf-8"))
+    assert legacy_after["leases"] == []
+    assert [lease["kind"] for lease in scoped_after["leases"]] == [scope.lease_kind]
+
+
+def test_malformed_scoped_store_is_preserved_with_protocol_diagnostic(tmp_path: Path) -> None:
+    root = tmp_path / "state"
+    root.mkdir(mode=0o700)
+    malformed = root / "scoped-state.json"
+    malformed.write_text(
+        json.dumps(
+            {
+                "schema": "limen.host_admission_scoped_state.v1",
+                "leases": [{"lease_id": "broken", "kind": "execution:not-a-sha"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    service = controller(root)
+
+    with pytest.raises(AdmissionStateError) as caught:
+        service.status(probe=False)
+
+    assert caught.value.invalid_field == "leases[0].owner"
+    assert caught.value.writer_protocol == "limen.host_admission_scoped_state.v1"
+    assert malformed.exists()
+    diagnostic = service.diagnose()
+    assert diagnostic["valid"] is False
+    assert diagnostic["safe_next_command"].endswith("host-work-admission.py diagnose")
+
+
+def test_host_admission_capabilities_are_versioned_and_protocol_complete() -> None:
+    payload = host_admission.host_admission_capabilities()
+    assert payload["schema"] == "limen.codex_host_admission_capabilities.v1"
+    assert payload["state_schemas"] == {
+        "legacy": "limen.host_admission_state.v1",
+        "scoped": "limen.host_admission_scoped_state.v1",
+    }
+    assert payload["lease_kinds"] == ["execution", "heavy", "execution:<sha256>"]
+    assert payload["stable_action_denial"] is True
+    assert payload["single_rejection_channel"] is True
 
 
 def test_json_cli_status_is_report_only_and_release_is_exact(tmp_path: Path) -> None:

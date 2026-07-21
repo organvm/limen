@@ -1,15 +1,21 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
+import os
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
+
+import pytest
 
 from limen.host_admission import AdmissionController
 
 ROOT = Path(__file__).resolve().parents[2]
 HOOK_PATH = ROOT / "scripts" / "hooks" / "codex-host-admission.py"
+FIXTURE_ROOT = ROOT / "cli" / "tests" / "fixtures" / "codex-hooks" / "0.144.6"
 
 
 def load_hook():
@@ -66,6 +72,10 @@ def payload(event: str, session: str = "session-a", **extra):
     }
 
 
+def fixture(name: str) -> dict:
+    return json.loads((FIXTURE_ROOT / name).read_text(encoding="utf-8"))
+
+
 def linked_worktrees(tmp_path: Path) -> tuple[Path, Path, Path]:
     main = tmp_path / "repo"
     first = tmp_path / "first"
@@ -86,60 +96,40 @@ def linked_worktrees(tmp_path: Path) -> tuple[Path, Path, Path]:
     return main, first, second
 
 
-def test_user_prompt_submit_allows_concurrent_roots_when_action_denial_is_supported(tmp_path: Path) -> None:
+def test_user_prompt_submit_never_acquires_global_execution_lease(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
     hook = load_hook()
     service = controller(tmp_path)
-    assert (
-        hook.handle(
-            payload("UserPromptSubmit"),
-            controller=service,
-            owner_pid=101,
-            feature_probe=lambda: True,
-        )
-        is None
+    monkeypatch.setattr(
+        hook,
+        "codex_owner_pid",
+        lambda: (_ for _ in ()).throw(AssertionError("session start must not resolve a lease owner")),
     )
-    assert (
-        hook.handle(
-            payload("UserPromptSubmit", session="session-b"),
-            controller=service,
-            owner_pid=202,
-            feature_probe=lambda: True,
-        )
-        is None
-    )
+    requests = [
+        payload("UserPromptSubmit"),
+        payload("UserPromptSubmit", session="session-b"),
+        payload("UserPromptSubmit", permission_mode="plan"),
+        {"hook_event_name": "UserPromptSubmit", "permission_mode": "default"},
+    ]
+    assert all(hook.handle(request, controller=service) is None for request in requests)
     assert service.status(probe=False)["leases"] == []
 
 
-def test_feature_probe_fallback_retains_legacy_root_lock(tmp_path: Path) -> None:
+def test_installed_client_fixtures_all_admit_session_start(tmp_path: Path) -> None:
     hook = load_hook()
     service = controller(tmp_path)
-    assert (
-        hook.handle(
-            payload("UserPromptSubmit"),
-            controller=service,
-            owner_pid=101,
-            feature_probe=lambda: False,
-        )
-        is None
-    )
+    requests = [
+        fixture("user-prompt-submit-plan.json"),
+        fixture("user-prompt-submit-default.json"),
+        fixture("user-prompt-submit-bypass-boundary.json"),
+    ]
+    missing_mode = fixture("user-prompt-submit-default.json")
+    missing_mode.pop("permission_mode")
+    requests.append(missing_mode)
 
-    denied = hook.handle(
-        payload("UserPromptSubmit", session="session-b"),
-        controller=service,
-        owner_pid=202,
-        feature_probe=lambda: False,
-    )
-    assert denied["continue"] is False
-    assert "execution-lease-held" in denied["stopReason"]
-    assert "systemMessage" not in denied
-    assert len(service.status(probe=False)["leases"]) == 1
-
-
-def test_plan_mode_never_acquires_execution_lease(tmp_path: Path) -> None:
-    hook = load_hook()
-    service = controller(tmp_path)
-    request = payload("UserPromptSubmit", permission_mode="plan")
-    assert hook.handle(request, controller=service, owner_pid=101, feature_probe=lambda: False) is None
+    assert all(hook.handle(request, controller=service, owner_pid=101) is None for request in requests)
     assert service.status(probe=False)["leases"] == []
 
 
@@ -373,6 +363,123 @@ def test_project_config_caps_threads_and_depth() -> None:
     assert config["agents"] == {"max_threads": 3, "max_depth": 1}
 
 
+def test_capabilities_cli_is_fast_versioned_json_without_hook_input() -> None:
+    result = subprocess.run(
+        [sys.executable, str(HOOK_PATH), "--capabilities"],
+        capture_output=True,
+        text=True,
+        timeout=2,
+        check=True,
+    )
+    capabilities = json.loads(result.stdout)
+    assert set(capabilities) == {
+        "schema",
+        "reader_protocol",
+        "policy_revision",
+        "state_schemas",
+        "lease_kinds",
+        "stable_action_denial",
+        "single_rejection_channel",
+        "migration",
+    }
+    assert capabilities["schema"] == "limen.codex_host_admission_capabilities.v1"
+    assert capabilities["state_schemas"]["scoped"] == "limen.host_admission_scoped_state.v1"
+    assert capabilities["stable_action_denial"] is True
+
+
+def test_project_delegate_requires_compatible_immutable_runtime(tmp_path: Path) -> None:
+    hook = load_hook()
+    incompatible = tmp_path / "incompatible.py"
+    incompatible.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json,sys\n"
+        "if sys.argv[1:] == ['--capabilities']:\n"
+        "    print(json.dumps({'schema': 'old'}))\n"
+        "else:\n"
+        "    print(json.dumps({'systemMessage': 'must not run'}))\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(hook.ImmutableRuntimeError, match="runtime-capabilities-incompatible"):
+        hook.delegate_immutable(incompatible, json.dumps(fixture("user-prompt-submit-default.json")))
+
+
+def test_project_delegate_uses_compatible_immutable_runtime(tmp_path: Path) -> None:
+    hook = load_hook()
+    target = tmp_path / "immutable.py"
+    capabilities = json.dumps(hook.host_admission_capabilities(), sort_keys=True)
+    target.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json,sys\n"
+        f"CAPABILITIES = {capabilities!r}\n"
+        "if sys.argv[1:] == ['--capabilities']:\n"
+        "    print(CAPABILITIES)\n"
+        "else:\n"
+        "    payload = json.load(sys.stdin)\n"
+        "    print(json.dumps({'systemMessage': 'immutable:' + payload['hook_event_name']}))\n",
+        encoding="utf-8",
+    )
+
+    output = hook.delegate_immutable(
+        target,
+        json.dumps(fixture("user-prompt-submit-default.json")),
+    )
+
+    assert output == {"systemMessage": "immutable:UserPromptSubmit"}
+
+
+def test_incompatible_runtime_never_blocks_session_start_and_denies_mutation_once() -> None:
+    hook = load_hook()
+    error = hook.ImmutableRuntimeError("runtime-capabilities-timeout")
+
+    prompt = hook._runtime_unavailable(fixture("user-prompt-submit-default.json"), error)
+    tool = hook._runtime_unavailable(
+        payload("PreToolUse", tool_input={"command": "git checkout -b topic"}),
+        error,
+    )
+    observe = hook._runtime_unavailable(
+        payload("PreToolUse", tool_input={"command": "git status --short"}),
+        error,
+    )
+
+    assert prompt is None
+    assert set(tool) == {"hookSpecificOutput"}
+    assert observe is None
+    assert "domus-limen-runtime status" in tool["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_malformed_store_emits_exactly_one_redacted_rejection_channel(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    root = tmp_path / "state"
+    root.mkdir(mode=0o700)
+    (root / "state.json").write_text(
+        json.dumps({"schema": "limen.host_admission_state.v0", "leases": [], "pressure": None}),
+        encoding="utf-8",
+    )
+    request = payload(
+        "PreToolUse",
+        tool_input={"command": "git checkout -b topic"},
+    )
+    hook = load_hook()
+    monkeypatch.setenv("LIMEN_HOST_ADMISSION_ROOT", str(root))
+    monkeypatch.setattr(hook, "codex_owner_pid", lambda: os.getpid())
+    monkeypatch.setattr(hook.sys, "stdin", io.StringIO(json.dumps(request)))
+    assert hook.main() == 0
+    output = json.loads(capsys.readouterr().out)
+    assert set(output) == {"hookSpecificOutput"}
+    reason = output["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "invalid_field=schema" in reason
+    assert "reader_protocol=limen.host_admission_reader.v2" in reason
+    assert "writer_protocol=limen.host_admission_state.v0" in reason
+    assert "pid_identity=" in reason
+    assert "host-work-admission.py diagnose" in reason
+    assert "systemMessage" not in output and "stopReason" not in output
+
+
 def test_hook_runner_prefers_codex_project_root() -> None:
     runner = (ROOT / "scripts" / "hooks" / "codex-hook-runner.sh").read_text(encoding="utf-8")
     assert runner.index('"${CODEX_PROJECT_DIR:-}"') < runner.index('"${CLAUDE_PROJECT_DIR:-}"')
+    assert "--delegate-immutable" not in runner

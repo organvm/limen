@@ -95,7 +95,7 @@ class Action:
 
 
 def action_denial_supported() -> bool:
-    """Probe the installed client; retain the legacy root lock if hooks are not stable."""
+    """Probe installed structured action denial without gating session startup."""
 
     override = os.environ.get("LIMEN_CODEX_PRETOOL_DENIAL_SUPPORTED")
     if override is not None and override.strip().lower() != "auto":
