@@ -75,6 +75,7 @@ def _slug(value: Any) -> str | None:
     normalized = re.sub(r"[^a-z0-9]+", "_", str(value).strip().lower()).strip("_")
     return normalized or None
 
+
 def _percent(numerator: int, denominator: int) -> float:
     if denominator <= 0:
         return 0.0
@@ -151,9 +152,7 @@ def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     verified_receipt_claims = sum(bool(row["receipt_verified"]) for row in rows)
     verified_receipt_debt = complete - verified_receipt_claims
     underwriting_denial_counts = Counter(
-        str(row["underwriting_denial"])
-        for row in rows
-        if not row["complete"] and row.get("underwriting_denial")
+        str(row["underwriting_denial"]) for row in rows if not row["complete"] and row.get("underwriting_denial")
     )
     return {
         "total": total,

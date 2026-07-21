@@ -237,9 +237,7 @@ class FanoutManifestV1(ProtocolModel):
                 raise ValueError(f"{leaf.work_id} has unknown dependencies: {sorted(missing)}")
             if leaf.deadline > self.deadline:
                 raise ValueError(f"{leaf.work_id} exceeds the manifest deadline")
-        if self.work_loan is not None and self.work_loan.budget_cost != sum(
-            leaf.spend.limit for leaf in self.leaves
-        ):
+        if self.work_loan is not None and self.work_loan.budget_cost != sum(leaf.spend.limit for leaf in self.leaves):
             raise ValueError("manifest work-loan budget must equal aggregate leaf spend")
         _topological_order(self.leaves)
         return self
