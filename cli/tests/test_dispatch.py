@@ -1935,6 +1935,29 @@ def test_pr_open_receipt_blocks_duplicate_dispatch_and_noop_demotion() -> None:
     assert task.dispatch_log[-1].session_id == "result-lifecycle-guard"
 
 
+def test_dispatchable_requires_explicit_work_loan_underwriting() -> None:
+    task = Task(
+        id="WORK-LOAN-DISPATCH",
+        title="Dispatch only underwritten work",
+        repo="organvm/limen",
+        target_agent="codex",
+        status="open",
+        created=date(2026, 7, 21),
+        predicate="pytest -q cli/tests/test_dispatch.py",
+        receipt_target="github:organvm/limen:pull-request:WORK-LOAN-DISPATCH",
+    )
+
+    assert D._dispatchable(task) is False
+
+    task.origin = "human_prompt"
+    task.horizon = "present"
+    task.value_case = "Spend one bounded run on the declared dispatch predicate"
+    task.owner_surface = "organvm/limen"
+    task.budget_cost = 1
+
+    assert D._dispatchable(task) is True
+
+
 def test_pr_open_receipt_wins_over_concurrent_successor_result() -> None:
     import datetime
 

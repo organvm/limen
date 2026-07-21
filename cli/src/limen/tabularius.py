@@ -281,6 +281,8 @@ def submit_task_upsert(
     underwriting = task_work_loan_readiness(validated)
     if not underwriting.ready:
         raise ValueError(underwriting.reason_code)
+    if validated.receipt_verified is True:
+        raise ValueError(f"task {validated.id} receipt credit requires an evidence-bound status transition")
     fields = validated.model_dump(mode="json", exclude_none=True)
     tid = fields.get("id")
     if not tid:
@@ -858,8 +860,6 @@ def _project_local_task_event(board: LimenFile, event: dict[str, Any]) -> tuple[
             task["dispatch_log"] = history
             if created is not None:
                 task["created"] = created
-        else:
-            tasks.append(task)
         task["updated"] = str(event["timestamp"])
         task.setdefault("dispatch_log", [])
         task["dispatch_log"].append(
@@ -875,6 +875,7 @@ def _project_local_task_event(board: LimenFile, event: dict[str, Any]) -> tuple[
             underwriting = task_work_loan_readiness(validated)
             if not underwriting.ready:
                 raise ValueError(underwriting.reason_code)
+            tasks.append(task)
     else:
         if kind not in {"task.status", "task.claim", "task.mutate"}:
             raise ValueError(f"unsupported task compatibility intent: {kind}")
@@ -1365,12 +1366,16 @@ def _apply(ticket: Ticket, tasks: OrderedDict[str, dict[str, Any]], meta: dict[s
         merged["updated"] = ticket.timestamp.isoformat()
         if ticket.log:
             status = ticket.log.get("status") or merged.get("status")
+            structured = {
+                key: value for key, value in ticket.log.items() if key in _STRUCTURED_LOG_FIELDS and value is not None
+            }
             entry = {
                 "timestamp": ticket.timestamp.isoformat(),
                 "agent": ticket.agent,
                 "session_id": ticket.session_id,
                 "status": status,
                 "output": ticket.log.get("output"),
+                **structured,
             }
             merged["dispatch_log"] = list(base.get("dispatch_log", [])) + [entry]
             # a task.status ticket carries the transition in its log payload; honor it as the status
@@ -1392,6 +1397,8 @@ def _apply(ticket: Ticket, tasks: OrderedDict[str, dict[str, Any]], meta: dict[s
         # alone while valid siblings still land.
         validate_intake_contract(validated, is_new=is_new)
         if is_new:
+            if merged.get("receipt_verified") is True:
+                raise ValueError(f"task {ticket.task_id} receipt credit requires an evidence-bound status transition")
             underwriting = task_work_loan_readiness(validated)
             if not underwriting.ready:
                 raise ValueError(underwriting.reason_code)

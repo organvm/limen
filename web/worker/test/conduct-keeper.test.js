@@ -2067,6 +2067,70 @@ test("task projection rejects ununderwritten discoveries and legacy claims witho
   assert.deepEqual(board, before);
 });
 
+test("task projection grants completion credit only with durable predicate evidence", () => {
+  const board = {
+    tasks: [{
+      id: "CREDIT-TASK",
+      title: "Credit only durable work",
+      repo: "organvm/limen",
+      target_agent: "codex",
+      priority: "high",
+      budget_cost: 1,
+      status: "in_progress",
+      created: "2026-07-18",
+      predicate: "npm test",
+      receipt_target: "git:organvm/limen:tasks.yaml#CREDIT-TASK",
+      origin: "human_prompt",
+      horizon: "present",
+      value_case: "Book credit only after the declared predicate and receipt exist",
+      owner_surface: "organvm/limen",
+      dispatch_log: [],
+    }],
+  };
+  const event = {
+    schema_version: "limen.task_packet_projection_event.v1",
+    event_id: "conduct:credit:1:compatibility",
+    timestamp: NOW.toISOString(),
+    task_id: "CREDIT-TASK",
+    run_id: "run-credit",
+    lease_id: "lease-credit",
+    generation: 1,
+    agent: "codex",
+    session_id: "codex-session",
+    intent: {
+      kind: "task.status",
+      task_id: "CREDIT-TASK",
+      expected_status: "in_progress",
+      patch: { status: "done", receipt_verified: true },
+      log: { status: "done" },
+    },
+  };
+  const before = structuredClone(board);
+
+  assert.throws(
+    () => applyTaskPacketProjectionEvent(board, event),
+    /completion-not-verified:predicate/,
+  );
+  assert.deepEqual(board, before);
+
+  event.event_id = "conduct:credit:2:compatibility";
+  event.intent.log = {
+    status: "done",
+    predicate_exit_code: 0,
+    remote_receipt: "git:organvm/limen:tasks.yaml#CREDIT-TASK",
+    verification_context_digest: "a".repeat(64),
+  };
+  const projected = applyTaskPacketProjectionEvent(board, event);
+
+  assert.equal(projected.task.receipt_verified, true);
+  assert.equal(projected.task.dispatch_log.at(-1).predicate_exit_code, 0);
+  assert.equal(
+    projected.task.dispatch_log.at(-1).remote_receipt,
+    "git:organvm/limen:tasks.yaml#CREDIT-TASK",
+  );
+  assert.equal(projected.task.dispatch_log.at(-1).verification_context_digest, "a".repeat(64));
+});
+
 test("MCP-compatible task packets execute in the keeper without a board-write lane", async () => {
   const env = {
     LIMEN_INLINE_TASKS_YAML: `
