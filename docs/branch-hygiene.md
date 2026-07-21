@@ -9,21 +9,25 @@ They are *unfulfilled intentions* (memory: empty-branch-is-a-todo), so they are 
 auto-deleted** — this is their git-tracked location instead of hanging invisibly.
 Resolve each: open a PR and land it, or delete the branch by hand if the intention is abandoned.
 
-## Merged-but-advanced (5) — has commits ADDED after the PR merged
+## Merged-but-advanced (7) — has commits ADDED after the PR merged
 
 These heads had a MERGED PR but the local branch has newer commits not on `main`.
 Push them as a follow-up PR, or delete if the extra commits are throwaway.
 
 - `chore/mail-keyed-path` — 132602a5 fix(mail): make the required Gmail credential fail LOUD + wire the Gmail IMAP archiver into the beat
 - `chore/pii-containment-limen-scrub` — 59a109c8 chore(security): correct PII-containment doctrine — surgical-by-default, no unique work deleted
+- `codex/epoch-closeout-20260714` — ddcb5006 refactor(session): compose bounded continuation modules
 - `docs/pii-doctrine-correction` — 24efc964 chore(security): record PII-containment as EXECUTED (process-and-redact)
+- `work/concurrency-closeout-reap-20260719` — ae107552 docs: admit concurrency closeout runway
 - `worktree-fix-macos-fork-oslog-crash` — 414ded13 heal(tests): fix 3 non-hermetic/mismatched cli tests breaking main pr-gate
 - `worktree-linear-conjuring-bear` — 92c21f2e chore(gitignore): ignore .wrangler/ cache at any depth, not just web/worker
 
-## Live-work branches (286) — decide each
+## Live-work branches (314) — decide each
 
 - `_pr198` — 4cd0dbaa fix(ci): heal main CI-poison — remove dead `import time` in dispatch.py (F401)
 - `agent/codex-sessions-adapter-0713` — 4f56aa95 fix(prompt): adapt Codex session records exactly
+- `agent/handoff-runtime-readiness-0713` — 2b434e2e fix(dispatch): close runtime readiness claim seams
+- `agent/opencode-db-prompt-adapter-20260713` — e267e576 fix(prompt-corpus): adapt OpenCode task prompts
 - `capture/main-2026-07-02T01-03-35Z` — 71b48852 capture: off-disk sync 2026-07-02T01:03:35Z (main behind origin → side ref, HEAD untouched)
 - `capture/main-2026-07-02T18-41-47Z` — eaca4510 capture: off-disk sync 2026-07-02T18:41:47Z (main behind origin → side ref, HEAD untouched)
 - `capture/main-2026-07-03T18-23-54Z` — b53f0abc capture: off-disk sync 2026-07-03T18:23:54Z (main behind origin → side ref, HEAD untouched)
@@ -32,14 +36,20 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `capture/main-2026-07-08T21-07-28Z` — 672c21c1 capture: off-disk sync 2026-07-08T21:07:28Z (main behind origin → side ref, HEAD untouched)
 - `capture/main-2026-07-16T04-48-58Z` — a0bdb559 capture: off-disk sync 2026-07-16T04:48:58Z (main behind origin → side ref, HEAD untouched)
 - `chore/ruff-format-cli-tests` — bbd9874a heal(tests): fix 3 non-hermetic/mismatched cli tests breaking main pr-gate
+- `codex/agent-checkout-guard-20260709` — 95b47a63 limen: guard worktree session launches
 - `codex/claude-permission-preflight-0713` — 2597ad48 fix(claude): preflight unattended permission conflicts
+- `codex/claude-projects-adapter-20260713` — b0c3676a fix(prompt-corpus): narrow alias target type for mypy
 - `codex/codex-attachments-gap-0713` — c33b9a4f fix(prompt): admit exact Codex attachment parents
 - `codex/progress-universe-0713` — 45a7aa40 docs(cli): document progress ledger command
+- `codex/resource-safe-closeout` — d682600e limen: format lifecycle pressure tests
+- `codex/student-email-doctrine-cleanup-20260709` — 00e05587 Merge remote-tracking branch 'origin/main' into codex/student-email-doctrine-cleanup-20260709
+- `corpus-verify` — d45b030d photos: extend duplicate proof batch
 - `deepen/tao-te-ching-ch6-10` — 6bbd51f7 limen: promote organvm/domus-genoma to ranked value tier
 - `discover-carrier-wave-zeitgeist-thesis-value` — fe4f7633 limen: discover corpus-mythicum, promote to ranked tier
 - `discover-limen-value-2026-06-22` — 7ad100f0 capture: autonomic off-disk sync 2026-06-23T13:19:40Z
 - `discover-organvm-browser-state` — 7fb6478b docs: preserve gens discovery thesis
 - `discovery-organvm-palimpsest` — 73808950 feat: discover organvm/palimpsest and add to value-repos
+- `docs/covenant-agent-docs` — dc7ecd51 docs(covenant): keeper law on every agent surface — AGENTS/GEMINI clauses + parity assertions + IF entry
 - `docs/quicken-residue` — 1890688b docs: QUICKEN residue — irreducible human atoms (daemon capture)
 - `docs/reap-acceptance-0709-final-20260709115323` — 00cd21ce docs: accept reap of final aged straggler (4th in-session round, standing grant noted) — operator in-session
 - `docs/reap-acceptance-0709-final2-20260709115636` — cdef6573 docs: accept reap of final aged straggler (4th in-session round, standing grant noted) — operator in-session
@@ -69,10 +79,13 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `fix-branch` — 70689bf3 fix: resolve ruff format failure and remove mypy_cache artifacts
 - `fix-pr-680` — b8b2ea40 fix failing CI on organvm/limen#432
 - `fix/616-format` — e020757c style: ruff format test_corpus_command_center.py (CI format-check gate)
+- `fix/autonomy-timegate-throughput-correction-v2` — 41ab3e91 fix: disable generated cleanup in reclaim tranche
 - `fix/dispatch-admission-ci-768` — 96f6c10b Merge remote-tracking branch 'origin/main' into fix/dispatch-admission-ci-768
 - `fix/fork-safety-predicate` — 09b6eb0c style(fork-safety): ruff format the predicate + its test
 - `fix/heartbeat-refresh-web-wedge` — 0a512024 fix(heartbeat): stop refresh-web piping into tail — it wedges the daemon (regression reintroduced in loop refactor)
 - `fix/ianva-secret-redaction` — c67b9889 fix(ianva): write enableBearerAuth explicitly — loopback /mcp was 401ing every agent
+- `fix/needs-human-truth` — ed62e484 feat(board): beat-wire the needs_human reclassify pass (0g6) — visibility + FLIP valve
+- `fix/pubpolicy-doc-secret-false-positive` — 63901080 fix(publish): documentation-about-secrets is not a secret — kill the sweep false-positive class
 - `heal-pr-621` — af456827 Build the first working vertical slice of the health organ
 - `heal/608-declare-param` — a63e6db7 chore(governance): declare LIMEN_WORKSPACE_UNIT_TIMEOUT_SEC for preserve_workspace()
 - `heal/aw-tabvlarivs-846-rebase` — dfeb06ed Finish single-writer status/result mutation conversion
@@ -83,8 +96,12 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `heal/dispatch-admission` — 0681e396 limen: gate dispatch admission
 - `heal/health-office-staged-0625` — ff43850e health office — the executive health office (autopoietic; PII strictly off-repo)
 - `heal/marker-and-tcc-registry-2026-06-24` — e6248bdd heal: swallow Claude Code's benign install_failed update marker (false ⚠ on /doctor)
+- `heal/revert-opencode-lane-truth-932` — 6dcaf0a5 Revert "heal(opencode): land surviving lane pieces — auth lever + census/doc truth (#932)"
+- `heal/trunk-green-censor-armed-valves` — a709336d heal(vigilia): green the trunk — classify + home the two dark censor armed-valves
 - `limen/aw-credential-wall-token-hygiene-e729c093` — 5552f173 docs(credentials): add token tombstone audit receipt
 - `limen/capfill-agy-20260629-11-a3b7` — 15b3ab83 Agy daily capacity-fill packet 11
+- `limen/capfill-agy-20260629-13-cf80` — a5bb3adc Agy daily capacity-fill packet 13
+- `limen/capfill-claude-20260629-01-278a` — 37091108 ruff format: wrap long decorator lines in cli.py
 - `limen/capfill-claude-20260629-13-2b0f` — 69e10c5a fix: add CapacityFill TypedDicts and correct mypy type annotations
 - `limen/capfill-opencode-20260629-01-0afd` — 24f367f9 OpenCode daily capacity-fill packet 01
 - `limen/csf-caeb31d8-plan-10-b131e64c-38bd` — 705fcee4 limen: record current-session private boundary packet
@@ -124,12 +141,15 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `limen/heal-cifix-organvm-limen-410-a19bea30` — 15b3ab83 Agy daily capacity-fill packet 11
 - `limen/heal-cifix-organvm-limen-411-4910c5ab` — 52fe67ba Claude daily capacity-fill packet 06
 - `limen/heal-cifix-organvm-limen-411-d93c565b` — 52fe67ba Claude daily capacity-fill packet 06
+- `limen/heal-cifix-organvm-limen-412-2d0dda2c` — 179b2e4f fix: ruff format in cli.py workstream command options
 - `limen/heal-cifix-organvm-limen-412-2e191c19` — 6ceb44ed Gemini daily capacity-fill packet 04
 - `limen/heal-cifix-organvm-limen-415-7db396da` — 20cd1a3f OpenCode daily capacity-fill packet 01
 - `limen/heal-cifix-organvm-limen-416-2dce14dc` — 04f14e28 Agy daily capacity-fill packet 02
+- `limen/heal-cifix-organvm-limen-416-5de40a1c` — b5c28a30 heal-cifix-416: fix mypy type errors in _task_agent/_task_status/_task_cost_int
 - `limen/heal-cifix-organvm-limen-419-3fb355e2` — 199ec2ac Jules daily capacity-fill packet 02
 - `limen/heal-cifix-organvm-limen-419-68eb0e65` — 199ec2ac Jules daily capacity-fill packet 02
 - `limen/heal-cifix-organvm-limen-419-7595de98` — 199ec2ac Jules daily capacity-fill packet 02
+- `limen/heal-cifix-organvm-limen-420-6d674400` — 8da3918e ruff format: fix formatting in capacity.py and cli.py
 - `limen/heal-cifix-organvm-limen-425-0597e483` — 2f47ab18 fix failing CI on organvm/limen#425
 - `limen/heal-cifix-organvm-limen-427-5f8bb97d` — fc744034 fix failing CI on organvm/limen#427
 - `limen/heal-cifix-organvm-limen-428-2ae62246` — e4fa19a8 fix(ci): repair PR 428 gate failures
@@ -140,10 +160,12 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `limen/heal-cifix-organvm-limen-439-b17fd83a` — b13ba0f0 fix(ci): repair PR 439 gates
 - `limen/heal-cifix-organvm-limen-442-1b11af92` — 2beac417 fix(ci): format async dispatch test
 - `limen/heal-cifix-organvm-limen-443-4e67ed4e` — ad12cd64 fix(ci): repair PR 443 gate failures
+- `limen/heal-cifix-organvm-limen-447-11a30c5e` — 520b2001 fix: restore capacity.py to main's version with select_lanes
 - `limen/heal-cifix-organvm-limen-447-c5187efb` — d7caf8ff Gemini daily capacity-fill packet 10
 - `limen/heal-cifix-organvm-limen-447-cef5ffb6` — d7caf8ff Gemini daily capacity-fill packet 10
 - `limen/heal-cifix-organvm-limen-448-cfa0209f` — 25725515 OpenCode daily capacity-fill packet 17
 - `limen/heal-cifix-organvm-limen-450-db7e9c49` — a4790df5 Agy daily capacity-fill packet 07
+- `limen/heal-cifix-organvm-limen-451-7e697fef` — 6c1f3c48 ruff format: wrap long @click.option decorator lines in cli.py
 - `limen/heal-cifix-organvm-limen-452-1091876d` — 793e4afe Make organvm/limen CI green
 - `limen/heal-cifix-organvm-limen-453-f04fb243` — d0d94768 Gemini daily capacity-fill packet 05
 - `limen/heal-cifix-organvm-limen-456-2d8d8026` — 917357bd Jules daily capacity-fill packet 13
@@ -156,6 +178,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `limen/heal-cifix-organvm-limen-624-9ad64703` — 6014b920 Deepen the financial organ toward a usable institution
 - `limen/heal-cifix-organvm-limen-630-6bb2c8d1` — 51bfc3fa Make the financial organ's macro + micro face excellent
 - `limen/heal-cifix-organvm-limen-630-8039270a` — 51bfc3fa Make the financial organ's macro + micro face excellent
+- `limen/heal-cifix-organvm-limen-678-98d08306` — 308ec256 fix: ruff format test_dispatch.py and declare 4 missing LIMEN_* params
 - `limen/heal-cifix-organvm-limen-684-14d57417` — 97aff27a Deepen the contributions organ toward a usable institution
 - `limen/heal-cifix-organvm-limen-684-ccd3d442` — 97aff27a Deepen the contributions organ toward a usable institution
 - `limen/heal-cifix-organvm-limen-846-0b86dfb8` — 9346893c Finish single-writer status/result mutation conversion
@@ -287,7 +310,9 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `pr-680` — b8b2ea40 fix failing CI on organvm/limen#432
 - `pr-682` — 9410ebc8 docs: add organvm/sovereign--ground--4444j99 to value-repos
 - `pr-703-temp` — f3c7605f handoff-relay.py: cross-session/cross-vendor warm-resume packet
+- `pr-744` — 037f6063 capture: autonomic off-disk sync 2026-07-19T21:55:15Z
 - `pr-757` — 136fad36 docs(financial): correct spend audit — vendor subs are capacity pools, not overlap (operator feedback)
+- `pr-767` — e489b285 test: isolate test_load_upstreams from host config environment
 - `promote-domus-genoma` — 6bbd51f7 limen: promote organvm/domus-genoma to ranked value tier
 - `rebase-630` — 51bfc3fa Make the financial organ's macro + micro face excellent
 - `rebase-814` — 94246f98 limen: guard worktree session launches
@@ -301,11 +326,16 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `studium-film-canterbury-tales` — d7fcab07 feat(studium): add Canterbury Tales film companion
 - `task-conference-of-birds-batch-1` — e1facc15 feat(studium): author Conference of the Birds arcs 2-4
 - `tmp-rebase-394` — 05596a46 Deepen the financial organ toward a usable institution
+- `work/governance-organ-recovery-next` — 261ad252 fix(governance): expire Scratch authority receipts
+- `work/next-autonomous-epoch-20260714` — 9335337b docs(session): record restart capsule fixed point
+- `work/photos-universe-20260629-182431` — d45b030d photos: extend duplicate proof batch
 - `work/runaway-prevention-recovery-20260718-120912` — 0aa219ad Merge remote-tracking branch 'origin/main' into work/runaway-prevention-recovery-20260718-120912
 - `work/workstream-agent-launcher-20260629` — a66424e0 chore: execute dynamic-substrate fanout executor packet
 - `worktree-feat+opencode-tier-ladder` — bf7f2091 feat(dispatch): opencode multi-model tier ladder (free floor / Zen subscription rung)
+- `worktree-feat-host-pressure-loop` — 1864ea38 feat: close the host-pressure loop — swap axis, host-relief effector, loud escalation (IF-HOST-PRESSURE form 4)
 - `worktree-fluttering-twirling-abelson` — c2c54884 Redact circle-personal business intel from public consulting organ
 - `worktree-ianva-doorway` — f4c0c076 fix(ianva): never echo bearer to stdout; untrack generated/ golden files
 - `worktree-jolly-knitting-lovelace` — 1e239934 feat(hooks): arm the session-orientation organ in committed project settings
 - `worktree-parsed-finding-fern` — 6f171f83 docs(hishand): register L-STUDIO-GOLIVE — clip studio go-live atoms to the durable registry (#538)
+- `worktree-wf_0bb9c0d7-dc1-12` — c677f71a fix(covenant): scope Check O keeper-line assertion to Agent-Specific Notes section
 
