@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-import rfc8785
+import rfc8785  # type: ignore[import-not-found]
 
 from limen.work_loan import WorkLoanV1
 

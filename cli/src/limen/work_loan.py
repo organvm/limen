@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from limen.intake import is_durable_receipt_target, is_executable_predicate
 
 
-WORK_LOAN_SCHEMA = "limen.work_loan.v1"
+WORK_LOAN_SCHEMA: Literal["limen.work_loan.v1"] = "limen.work_loan.v1"
 WORK_LOAN_MISSING_ORDER = (
     "source_origin",
     "horizon",
@@ -311,14 +311,16 @@ def task_work_loan_readiness(task: Mapping[str, Any] | object) -> WorkLoanReadin
     if ordered:
         return WorkLoanReadiness(loan=None, missing_fields=ordered)
     try:
-        loan = WorkLoanV1(
-            source_origin=origin,
-            horizon=horizon,
-            value_case=str(value_case),
-            budget_cost=int(budget_cost),
-            owner_surface=str(owner_surface),
-            external_deadline=external_deadline,
-            due_at=due_at,
+        loan = WorkLoanV1.model_validate(
+            {
+                "source_origin": origin,
+                "horizon": horizon,
+                "value_case": value_case,
+                "budget_cost": budget_cost,
+                "owner_surface": owner_surface,
+                "external_deadline": external_deadline,
+                "due_at": due_at,
+            }
         )
     except ValidationError as exc:
         fields = []
