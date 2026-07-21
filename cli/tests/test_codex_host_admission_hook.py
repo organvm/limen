@@ -453,6 +453,7 @@ def test_malformed_store_emits_exactly_one_redacted_rejection_channel(
     monkeypatch,
     capsys,
 ) -> None:
+    _main, worktree, _second = linked_worktrees(tmp_path)
     root = tmp_path / "state"
     root.mkdir(mode=0o700)
     (root / "state.json").write_text(
@@ -461,6 +462,7 @@ def test_malformed_store_emits_exactly_one_redacted_rejection_channel(
     )
     request = payload(
         "PreToolUse",
+        cwd=str(worktree),
         tool_input={"command": "git checkout -b topic"},
     )
     hook = load_hook()
