@@ -134,11 +134,12 @@ def test_agent_claim_submits_atomic_compatibility_event_without_mutating_project
                         "created": "2026-07-02",
                         "claude_tier": "sonnet",
                         "depends_on": ["TASK-0"],
-                        # claim-time intake normalization fails CLOSED without owner data: a legacy
-                        # task needs at least an exact owner/repo so the merged-PR fallback contract
-                        # (github_pr_contract) is derivable. Without it agent_claim correctly raises
-                        # IntakeContractError instead of dispatching unverifiable work.
                         "repo": "organvm/limen",
+                        "origin": "human_prompt",
+                        "horizon": "present",
+                        "value_case": "Verify that compatibility claims remain broker-owned.",
+                        "predicate": "python3 scripts/check-task.py",
+                        "receipt_target": "git:organvm/limen:logs/task-1.json",
                         "custom_extension": {"keep": True},
                     }
                 ],
@@ -166,7 +167,7 @@ def test_agent_claim_submits_atomic_compatibility_event_without_mutating_project
     assert packet.intent["patch"]["target_agent"] == "opencode"
     assert packet.intent["patch"]["status"] == "dispatched"
     assert packet.intent["patch"]["target_agent"] == "opencode"
-    assert "gh pr list --repo organvm/limen" in packet.intent["patch"]["predicate"]
+    assert packet.intent["patch"]["predicate"] == "python3 scripts/check-task.py"
     assert packet.resource_claims[0].key == "task/TASK-1"
     assert packet.required_capabilities == frozenset({"board-write"})
 
@@ -272,6 +273,11 @@ def test_agent_claim_rejects_unavailable_runtime_without_mutating(tmp_path, monk
                         "budget_cost": 3,
                         "status": "open",
                         "created": "2026-07-13",
+                        "origin": "obligation",
+                        "horizon": "present",
+                        "value_case": "Run the task only while its declared runtime is mounted.",
+                        "predicate": "python3 scripts/check-task.py",
+                        "receipt_target": "git:organvm/limen:logs/task-mount.json",
                         "execution_requirements": [{"kind": "mount", "path": "/runtime/unavailable"}],
                     }
                 ],
@@ -318,6 +324,9 @@ def test_agent_claim_accepts_available_explicit_mount(tmp_path, monkeypatch):
                         "budget_cost": 1,
                         "status": "open",
                         "created": "2026-07-13",
+                        "origin": "obligation",
+                        "horizon": "present",
+                        "value_case": "Exercise the declared mounted runtime.",
                         "predicate": "python3 scripts/check.py",
                         "receipt_target": "git:organvm/limen:logs/check.json",
                         "execution_requirements": [{"kind": "mount", "path": "/runtime/available"}],
@@ -426,6 +435,7 @@ def test_task_add_and_status_are_conduct_compatibility_events(tmp_path, monkeypa
         "organvm/limen",
         "pytest -q",
         "github:organvm/limen:pull-request:LIMEN-001",
+        "Deliver the explicitly requested MCP task",
         agent="codex",
     )
     updated = server.update_task_status("TASK-STATUS", "done", context="predicate passed")

@@ -166,6 +166,11 @@ def test_dispatch_dry_run_does_not_mutate_board(client: TestClient, tmp_path: Pa
                 "budget_cost": 1,
                 "status": "open",
                 "created": "2026-06-03",
+                "origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Preview the next admissible Jules task without mutation.",
+                "predicate": "pytest -q web/api/tests/test_main.py",
+                "receipt_target": "github:4444J99/limen:pull-request:LIMEN-001",
                 "dispatch_log": [],
             }
         ],
@@ -279,6 +284,11 @@ def test_live_dispatch_mutates_after_command_success(
                 "budget_cost": 2,
                 "status": "open",
                 "created": "2026-06-03",
+                "origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Prove successful command execution precedes the claim mutation.",
+                "predicate": "pytest -q web/api/tests/test_main.py",
+                "receipt_target": "github:4444J99/limen:pull-request:LIMEN-003",
                 "dispatch_log": [],
             }
         ],
@@ -329,6 +339,9 @@ def test_live_dispatch_does_not_normalize_over_budget_unselected_sibling(
                 "priority": "high",
                 "budget_cost": 1,
                 "status": "open",
+                "origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Dispatch the affordable underwritten sibling only.",
                 "predicate": "pytest -q web/api/tests/test_main.py",
                 "receipt_target": "github:4444J99/limen:pull-request:AFFORDABLE",
                 "created": "2026-06-03",
@@ -417,6 +430,9 @@ def test_github_storage_create_task_reads_projection_without_direct_put(monkeypa
             "target_agent": "codex",
             "predicate": "pytest -q web/api/tests/test_main.py",
             "receipt_target": "github:organvm/limen:pull-request:LIMEN-CONDUCT-COMPAT",
+            "origin": "human_prompt",
+            "horizon": "present",
+            "value_case": "Deliver the authenticated conduct compatibility task",
         },
     )
 
@@ -455,6 +471,9 @@ def test_github_live_dispatch_does_not_launch_when_broker_claim_is_rejected(
                     "status": "open",
                     "predicate": "pytest -q web/api/tests/test_main.py",
                     "receipt_target": "github:organvm/limen:pull-request:LIMEN-SERIALIZED-DISPATCH",
+                    "origin": "human_prompt",
+                    "horizon": "present",
+                    "value_case": "Deliver the serialized broker-first dispatch task",
                     "created": "2026-07-18T00:00:00Z",
                     "dispatch_log": [],
                 }
@@ -599,6 +618,9 @@ def test_mutation_fails_closed_without_conduct_broker_and_leaves_projection_unch
             "target_agent": "codex",
             "predicate": "pytest -q web/api/tests/test_main.py",
             "receipt_target": "github:organvm/limen:pull-request:LIMEN-NO-BROKER",
+            "origin": "human_prompt",
+            "horizon": "present",
+            "value_case": "Prove task mutation fails closed without the broker",
         },
     )
 
@@ -1031,6 +1053,11 @@ def test_verify_task_moves_active_work_to_closure_gate(client: TestClient, tmp_p
                 "budget_cost": 1,
                 "status": "in_progress",
                 "created": "2026-06-03",
+                "origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Close the task only after predicate and receipt evidence pass.",
+                "predicate": "pytest -q web/api/tests/test_main.py",
+                "receipt_target": "github:4444J99/limen:pull-request:LIMEN-014V",
                 "urls": ["https://github.com/4444J99/limen/pull/14"],
                 "dispatch_log": [],
             }
@@ -1039,7 +1066,15 @@ def test_verify_task_moves_active_work_to_closure_gate(client: TestClient, tmp_p
 
     response = client.post(
         "/api/tasks/LIMEN-014V/verify",
-        json={"status": "done", "note": "Evidence passed", "session_id": "qa-verify"},
+        json={
+            "status": "done",
+            "note": "Evidence passed",
+            "session_id": "qa-verify",
+            "predicate_exit_code": 0,
+            "receipt_target": "github:4444J99/limen:pull-request:LIMEN-014V",
+            "receipt_verified": True,
+            "verification_context_digest": "a" * 64,
+        },
     )
 
     assert response.status_code == 200
@@ -1048,6 +1083,7 @@ def test_verify_task_moves_active_work_to_closure_gate(client: TestClient, tmp_p
     assert payload["verified_status"] == "done"
     task = read_board(tmp_path)["tasks"][0]
     assert task["status"] == "done"
+    assert task["receipt_verified"] is True
     assert task["dispatch_log"][-1]["agent"] == "qa"
     assert task["dispatch_log"][-1]["status"] == "done"
     assert task["dispatch_log"][-1]["session_id"] == "qa-verify"
@@ -1055,6 +1091,39 @@ def test_verify_task_moves_active_work_to_closure_gate(client: TestClient, tmp_p
     qa = client.get("/api/qa-status").json()
     assert qa["lifecycle"]["verify"] == 0
     assert qa["lifecycle"]["archive_ready"] == 1
+
+
+def test_verify_task_refuses_done_without_predicate_and_receipt_evidence(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    write_board(
+        tmp_path / "tasks.yaml",
+        [
+            {
+                "id": "LIMEN-014E",
+                "title": "Evidence-gated task",
+                "repo": "4444J99/limen",
+                "target_agent": "codex",
+                "priority": "high",
+                "budget_cost": 1,
+                "status": "in_progress",
+                "origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Prevent lifecycle completion from earning unverified credit.",
+                "predicate": "pytest -q web/api/tests/test_main.py",
+                "receipt_target": "github:4444J99/limen:pull-request:LIMEN-014E",
+                "created": "2026-06-03",
+                "dispatch_log": [],
+            }
+        ],
+    )
+
+    response = client.post("/api/tasks/LIMEN-014E/verify", json={"status": "done"})
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "completion-not-verified:predicate"
+    assert read_board(tmp_path)["tasks"][0]["status"] == "in_progress"
 
 
 def test_verify_task_can_return_attention_status(client: TestClient, tmp_path: Path) -> None:
@@ -1403,6 +1472,9 @@ def test_create_task_rejects_malformed_untrusted_fields(client: TestClient, tmp_
 def test_create_and_open_update_enforce_typed_intake_contract(client: TestClient, tmp_path: Path) -> None:
     assert main.TaskCreate.model_fields["predicate"].is_required()
     assert main.TaskCreate.model_fields["receipt_target"].is_required()
+    assert main.TaskCreate.model_fields["origin"].is_required()
+    assert main.TaskCreate.model_fields["horizon"].is_required()
+    assert main.TaskCreate.model_fields["value_case"].is_required()
     write_board(
         tmp_path / "tasks.yaml",
         [
@@ -1427,7 +1499,13 @@ def test_create_and_open_update_enforce_typed_intake_contract(client: TestClient
         },
     )
     assert missing.status_code == 422
-    assert {error["loc"][-1] for error in missing.json()["detail"]} == {"predicate", "receipt_target"}
+    assert {error["loc"][-1] for error in missing.json()["detail"]} == {
+        "predicate",
+        "receipt_target",
+        "origin",
+        "horizon",
+        "value_case",
+    }
 
     created = client.post(
         "/api/tasks",
@@ -1438,6 +1516,9 @@ def test_create_and_open_update_enforce_typed_intake_contract(client: TestClient
             "target_agent": "codex",
             "predicate": "pytest -q web/api/tests/test_main.py",
             "receipt_target": "github:organvm/limen:pull-request:LIMEN-CONTRACT-OK",
+            "origin": "human_prompt",
+            "horizon": "present",
+            "value_case": "Deliver the typed and underwritten API task",
         },
     )
     assert created.status_code == 200

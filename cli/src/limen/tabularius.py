@@ -63,6 +63,7 @@ from limen.materialize import (
     diff_boards,
 )
 from limen.models import VALID_STATUSES, LimenFile, Task
+from limen.work_loan import task_work_loan_readiness
 from limen.workstream_contract import WORKSTREAM_SUCCESSOR_REQUIRED_LABEL
 
 # --- ticket intents (a superset of materialize's Event tags, plus the status convenience) --------
@@ -90,6 +91,13 @@ _PATCHABLE_TASK_FIELDS = frozenset(
         "context",
         "predicate",
         "receipt_target",
+        "origin",
+        "horizon",
+        "value_case",
+        "owner_surface",
+        "external_deadline",
+        "due_at",
+        "receipt_verified",
         "execution_requirements",
         "workstream_contract",
         "claude_tier",
@@ -269,6 +277,9 @@ def submit_task_upsert(
     """
     validated = task if isinstance(task, Task) else Task.model_validate(task)
     validate_intake_contract(validated, is_new=True)
+    underwriting = task_work_loan_readiness(validated)
+    if not underwriting.ready:
+        raise ValueError(underwriting.reason_code)
     fields = validated.model_dump(mode="json", exclude_none=True)
     tid = fields.get("id")
     if not tid:
@@ -838,6 +849,10 @@ def _project_local_task_event(board: LimenFile, event: dict[str, Any]) -> tuple[
         )
         validated = Task.model_validate(task)
         validate_intake_contract(validated, is_new=is_new)
+        if is_new:
+            underwriting = task_work_loan_readiness(validated)
+            if not underwriting.ready:
+                raise ValueError(underwriting.reason_code)
     else:
         if kind not in {"task.status", "task.claim", "task.mutate"}:
             raise ValueError(f"unsupported task compatibility intent: {kind}")
@@ -863,6 +878,10 @@ def _project_local_task_event(board: LimenFile, event: dict[str, Any]) -> tuple[
             raise ValueError(f"task {task_id} status intent requires a status patch")
         prior_status = str(existing.get("status") or "")
         next_status = str(patch.get("status") or prior_status)
+        if next_status in {"dispatched", "in_progress"}:
+            underwriting = task_work_loan_readiness({**existing, **patch})
+            if not underwriting.ready:
+                raise ValueError(underwriting.reason_code)
         log = dict(intent.get("log") or {})
         recovery = _held_jules_landing_recovery(existing, next_status, log)
         repair = kind == "task.status" and _lifecycle_repair_authorized(existing, next_status, log, patch)
@@ -1348,6 +1367,10 @@ def _apply(ticket: Ticket, tasks: OrderedDict[str, dict[str, Any]], meta: dict[s
         # The keeper repeats admission independently so that ticket is quarantined
         # alone while valid siblings still land.
         validate_intake_contract(validated, is_new=is_new)
+        if is_new:
+            underwriting = task_work_loan_readiness(validated)
+            if not underwriting.ready:
+                raise ValueError(underwriting.reason_code)
         tasks[ticket.task_id] = merged  # dict update keeps first-seen position; new id appends
         return
 

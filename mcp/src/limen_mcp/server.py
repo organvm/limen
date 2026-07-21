@@ -20,6 +20,7 @@ from limen.conduct.models import (
     WorkPacketV1,
     canonical_hash,
 )
+from limen.work_loan import task_work_loan_readiness
 from limen_mcp import runtime_requirements
 from limen_mcp.intake import normalize_selected_legacy_task, validate_intake_contract
 
@@ -125,6 +126,13 @@ class Task(BaseModel):
     context: Optional[str] = None
     predicate: Optional[str] = None
     receipt_target: Optional[str] = None
+    origin: Optional[str] = None
+    horizon: Optional[str] = None
+    value_case: Optional[str] = None
+    owner_surface: Optional[str] = None
+    external_deadline: bool = False
+    due_at: Optional[str] = None
+    receipt_verified: Optional[bool] = None
     execution_requirements: Optional[List[ExecutionRequirement]] = None
     claude_tier: Optional[str] = None
     depends_on: List[str] = Field(default_factory=list)
@@ -519,13 +527,17 @@ def add_task(
     repo: str,
     predicate: str,
     receipt_target: str,
+    value_case: str,
     agent: str = "jules",
     priority: str = "medium",
     budget_cost: int = 1,
+    origin: str = "human_prompt",
+    horizon: str = "present",
 ) -> str:
     """Add a new task to the pipeline."""
     title = _validate_text(title, "title", 512)
     repo = _validate_text(repo, "repo", 256)
+    value_case = _validate_text(value_case, "value_case", 8192)
     agent = _validate_optional_enum(agent, VALID_AGENTS, "agent") or "jules"
     priority = _validate_optional_enum(priority, VALID_PRIORITIES, "priority") or "medium"
     if type(budget_cost) is not int or budget_cost < 1 or budget_cost > 100:
@@ -554,6 +566,9 @@ def add_task(
         status="open",
         predicate=predicate,
         receipt_target=receipt_target,
+        origin=origin,
+        horizon=horizon,
+        value_case=value_case,
         created=date.today(),
     )
     validate_intake_contract(new_task, is_new=True)
@@ -688,6 +703,10 @@ def agent_claim(task_id: str, agent_name: str = "opencode") -> str:
                 return f"Task {task_id} requires a separately admitted successor - cannot claim expired row"
             if t.target_agent not in (agent_name, "any"):
                 return f"Task {task_id} targets {t.target_agent}, not {agent_name} - cannot claim"
+
+            underwriting = task_work_loan_readiness(t)
+            if not underwriting.ready:
+                return f"{underwriting.reason_code} - cannot claim"
 
             readiness = runtime_requirements.evaluate_execution_requirements(t)
             if not readiness.ready:

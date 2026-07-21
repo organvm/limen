@@ -27,10 +27,19 @@ There are two admission dimensions:
   canonical Git common-dir and worktree git-dir identities; raw paths are not stored;
 - `heavy`: one heavy local surface across Codex, Claude, OpenCode, Agy, and Limen workers.
 
-The v1 state schema and legacy unscoped `execution` kind remain valid during rollout. The current
-owner's legacy record upgrades in place. A different live owner's record is scoped only after its
-PID/start identity and cwd resolve to a Git worktree. Distinct proven scopes proceed; the same scope
-denies; an unprovable legacy scope blocks only the attempted mutation and is never deleted.
+The store has two views under the same `.lock`:
+
+- `state.json` retains the v1 schema and may contain only `execution` and `heavy`, so an older
+  checkout never encounters a kind it cannot parse;
+- `scoped-state.json` uses `limen.host_admission_scoped_state.v1` and may contain only
+  `execution:<scope_hash>` records.
+
+Current readers load the union and publish both views while holding the shared lock. If a valid
+scoped record is found in `state.json` during rollout, the next current operation moves it to the
+sibling file atomically. Malformed input remains in place and fails closed. The current owner's
+legacy record upgrades in place. A different live owner's record is scoped only after its PID/start
+identity and cwd resolve to a Git worktree. Distinct proven scopes proceed; the same scope denies;
+an unprovable legacy scope blocks only the attempted mutation and is never deleted.
 
 A lease binds an unpredictable ID, bounded owner and surface labels, PID, process-start identity,
 and finite expiry. All updates run under `fcntl.flock` and publish with fsync plus atomic replace.
@@ -99,6 +108,21 @@ Project hooks are inert until the operator reviews and trusts their current defi
 belong to the Domus cartridge. Limen must not edit home-directory hooks, backup policy, or global
 host configuration directly.
 
+An immutable host wrapper may delegate repository context to the project hook only after a timely
+`scripts/hooks/codex-host-admission.py --capabilities` response matches
+`limen.codex_host_admission_capabilities.v1`, the required reader/state schemas, stable action
+denial, and the installed policy revision. A missing, slow, or incompatible response is not an
+instruction to run arbitrary project policy: host-global admission stays with the installed
+runtime. `scripts/host-work-admission.py diagnose` reports the precise invalid field, reader and
+writer protocols, lease PID/start identity when available, and a safe inspection command without
+printing prompt or transcript content.
+
+The project hook runner does not execute checkout-owned host policy. It resolves repository context,
+then calls the project adapter's `--delegate-immutable` boundary. That boundary rechecks the installed
+runtime's complete capability document with a one-second ceiling and delegates the event only to that
+runtime's own interpreter. Missing, slow, malformed, or incompatible installed policy produces one
+event-appropriate fail-closed channel and the safe `domus-limen-runtime status` diagnostic.
+
 ## Lock order and recovery
 
 `verify-whole.sh` takes the legacy verifier flock first and the shared heavy lease second. Scoped
@@ -109,9 +133,7 @@ Do not delete the store to seize admission. Inspect it with `status`. A live lea
 and expiry; a stale/dead/PID-reused lease is reaped on the next operation. A corrupt store is an
 owner-routed blocker because silently replacing it would make concurrent work look absent.
 
-The SessionEnd lifecycle refresh separately preserves the useful low-priority closeout ideas from
-draft PR #744 against current `main`: one dead-PID/stale-safe singleton, a process-group timeout,
-`nice -n 10`, a narrower worktree-debt timeout, and a declared maximum number of roots per size
-scan with explicit partial receipts. Combined with host admission and the existing bounded
-`closeout-fast` queue/test timeouts, this supersedes #744; its old conflicting branch is not merge
-or cherry-pick authority.
+Claude `SessionEnd` is a separate constant-time breadcrumb seam. It does not refresh handoff,
+inspect watchers or transcripts, audit models, or evaluate lifecycle pressure synchronously; those
+consumers are heartbeat-owned and idempotent. See
+[`docs/session-end-breadcrumbs.md`](session-end-breadcrumbs.md).

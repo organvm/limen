@@ -51,6 +51,9 @@ tasks:
     priority: high
     budget_cost: 1
     status: in_progress
+    origin: human_prompt
+    horizon: present
+    value_case: Close the task only after predicate and receipt evidence pass.
     predicate: pytest -q
     receipt_target: git:organvm/limen:tasks.yaml#TASK-OWNER
     created: 2026-07-01
@@ -77,6 +80,10 @@ test("owner task mutations traverse the authenticated keeper and return projecti
         status: "done",
         note: "exact-head evidence passed",
         session_id: "qa-owner",
+        predicate_exit_code: 0,
+        receipt_target: "git:organvm/limen:tasks.yaml#TASK-OWNER",
+        receipt_verified: true,
+        verification_context_digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       }),
     },
   ), env);
@@ -84,6 +91,7 @@ test("owner task mutations traverse the authenticated keeper and return projecti
   const payload = await response.json();
   assert.equal(payload.status, "verified");
   assert.equal(payload.task.status, "done");
+  assert.equal(payload.task.receipt_verified, true);
   assert.equal(payload.task.dispatch_log.at(-1).agent, "api");
   assert.equal(payload.task.dispatch_log.at(-1).session_id, "worker-owner-compatibility");
   assert.equal(payload.broker_receipt.status, "committed");
@@ -100,7 +108,13 @@ test("owner mutation routes fail closed when the conduct keeper is unavailable",
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ status: "done" }),
+      body: JSON.stringify({
+        status: "done",
+        predicate_exit_code: 0,
+        receipt_target: "git:organvm/limen:tasks.yaml#TASK-OWNER",
+        receipt_verified: true,
+        verification_context_digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      }),
     },
   ), env);
   assert.equal(response.status, 503);
