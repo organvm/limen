@@ -120,6 +120,16 @@ gates:
     scoped: false
     owner: consulting
     note: "Sovereign Systems engagement records stay schema-clean."
+  consulting-phase0:
+    command: "python3 organs/consulting/validate-consulting.py organs/consulting/prospects/bbnc.yaml --quiet && python3 organs/consulting/validate-phase0.py prepare --packet organs/consulting/prospects/bbnc/phase-0/preparation.json --quiet && python3 -m unittest discover -s organs/consulting/tests -p 'test_phase0.py'"
+    paths:
+      - "organs/consulting/prospects/bbnc/**"
+      - "organs/consulting/validate-phase0.py"
+      - "organs/consulting/tests/test_phase0.py"
+    scoped: true
+    tier: cheap
+    owner: consulting
+    note: "BBNC Phase 0 stays public-safe, workshop-ready, and fail-closed without client authority."
   artist-records:
     command: "python3 organs/artist/validate-artist.py --fleet --quiet"
     paths: ["organs/artist/**"]
