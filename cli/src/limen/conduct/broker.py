@@ -26,7 +26,7 @@ from limen.conduct.models import (
 )
 from limen.conduct.resources import conflicting_keys, parse_resource, sorted_claims
 from limen.conduct.store import MemoryStateStore, StateStore
-from limen.work_loan import packet_work_loan_missing, work_loan_denial
+from limen.work_loan import packet_is_non_capacity_projection, packet_work_loan_missing, work_loan_denial
 
 
 class ConductError(RuntimeError):
@@ -82,12 +82,7 @@ def authority_attenuates(child: AuthorityEnvelopeV1, parent: AuthorityEnvelopeV1
 
 
 def _is_task_compatibility_packet(packet: WorkPacketV1) -> bool:
-    return bool(
-        packet.execution.get("adapter") == "tabularius"
-        and packet.intent.get("kind") in {"task.upsert", "task.status", "task.claim", "task.mutate"}
-        and packet.task_id
-        and packet.intent.get("task_id") == packet.task_id
-    )
+    return packet_is_non_capacity_projection(packet)
 
 
 def _require_work_loan(packet: WorkPacketV1) -> None:
