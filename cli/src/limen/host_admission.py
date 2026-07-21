@@ -1254,9 +1254,7 @@ class AdmissionController:
             "legacy_state_file": self.state_path.name,
             "scoped_state_file": self.scoped_state_path.name,
             "legacy_lease_count": sum(lease["kind"] in LEASE_KINDS for lease in state["leases"]),
-            "scoped_lease_count": sum(
-                bool(SCOPED_EXECUTION_RE.fullmatch(lease["kind"])) for lease in state["leases"]
-            ),
+            "scoped_lease_count": sum(bool(SCOPED_EXECUTION_RE.fullmatch(lease["kind"])) for lease in state["leases"]),
             "safe_next_command": "python3 scripts/host-work-admission.py status --no-probe",
         }
 
