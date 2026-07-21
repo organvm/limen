@@ -115,3 +115,8 @@ draft PR #744 against current `main`: one dead-PID/stale-safe singleton, a proce
 scan with explicit partial receipts. Combined with host admission and the existing bounded
 `closeout-fast` queue/test timeouts, this supersedes #744; its old conflicting branch is not merge
 or cherry-pick authority.
+
+Claude `SessionEnd` is a separate constant-time breadcrumb seam. It does not refresh handoff,
+inspect watchers or transcripts, audit models, or evaluate lifecycle pressure synchronously; those
+consumers are heartbeat-owned and idempotent. See
+[`docs/session-end-breadcrumbs.md`](session-end-breadcrumbs.md).
