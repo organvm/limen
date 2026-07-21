@@ -1640,8 +1640,16 @@ test("task compatibility events are idempotent and update budget exactly once", 
     },
     tasks: [{
       id: "TASK-1",
+      title: "Idempotent compatibility task",
+      repo: "organvm/limen",
       status: "open",
       budget_cost: 2,
+      origin: "system_debt",
+      horizon: "present",
+      value_case: "Apply one idempotent compatibility transition",
+      owner_surface: "organvm/limen",
+      predicate: "npm test",
+      receipt_target: "git:organvm/limen:tasks.yaml#TASK-1",
       dispatch_log: [],
     }],
   };
@@ -1770,6 +1778,13 @@ test("task claims derive canonical debit and identity while canonical transition
       priority: "high",
       budget_cost: 2,
       status: "open",
+      repo: "organvm/limen",
+      origin: "system_debt",
+      horizon: "present",
+      value_case: "Prove canonical task claim and budget enforcement",
+      owner_surface: "organvm/limen",
+      predicate: "npm test",
+      receipt_target: "git:organvm/limen:tasks.yaml#TASK-CLAIM",
       created: "2026-07-01",
       dispatch_log: [],
     }],
@@ -2199,7 +2214,20 @@ tasks: []
 test("GitHub projection retries SHA conflicts and always writes the observed SHA", async () => {
   let board = {
     portal: { budget: { daily: 10, per_agent: { codex: 10 }, track: { spent: 0, per_agent: {} } } },
-    tasks: [{ id: "TASK-2", status: "open", budget_cost: 1, dispatch_log: [] }],
+    tasks: [{
+      id: "TASK-2",
+      title: "GitHub compatibility projection",
+      repo: "organvm/limen",
+      status: "open",
+      budget_cost: 1,
+      origin: "system_debt",
+      horizon: "present",
+      value_case: "Retry one bounded GitHub projection conflict",
+      owner_surface: "organvm/limen",
+      predicate: "npm test",
+      receipt_target: "git:organvm/limen:tasks.yaml#TASK-2",
+      dispatch_log: [],
+    }],
   };
   let sha = "sha-1";
   let puts = 0;

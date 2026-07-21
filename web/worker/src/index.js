@@ -771,7 +771,7 @@ async function compatibilityPacket(env, intent, task) {
         key: `task/${canonicalIntent.task_id}`,
         mode: "exclusive",
       }],
-      predicate: `test -n "${canonicalIntent.task_id}"`,
+      predicate: "python3 scripts/validate-task-board.py --tasks tasks.yaml",
       receipt_target: `git:${repository}:tasks.yaml#${canonicalIntent.task_id}`,
       authority: {
         schema_version: "limen.authority_envelope.v1",
