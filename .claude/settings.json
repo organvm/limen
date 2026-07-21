@@ -91,11 +91,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "LIMEN_ROOT=\"${LIMEN_ROOT:-$HOME/Workspace/limen}\"; [ -x \"$LIMEN_ROOT/scripts/hooks/session-closeout.sh\" ] && \"$LIMEN_ROOT/scripts/hooks/session-closeout.sh\" || true"
-          },
-          {
-            "type": "command",
-            "command": "LIMEN_ROOT=\"${LIMEN_ROOT:-$HOME/Workspace/limen}\"; [ -x \"$LIMEN_ROOT/scripts/hooks/session-lifecycle-pressure.sh\" ] && \"$LIMEN_ROOT/scripts/hooks/session-lifecycle-pressure.sh\" || true"
+            "command": "PROJECT_ROOT=\"${CLAUDE_PROJECT_DIR:-$PWD}\"; [ -x \"$PROJECT_ROOT/scripts/hooks/session-closeout.sh\" ] && LIMEN_ROOT=\"$PROJECT_ROOT\" \"$PROJECT_ROOT/scripts/hooks/session-closeout.sh\" || true",
+            "timeout": 5
           }
         ]
       }
