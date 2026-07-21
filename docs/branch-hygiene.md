@@ -22,7 +22,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `worktree-fix-macos-fork-oslog-crash` — 414ded13 heal(tests): fix 3 non-hermetic/mismatched cli tests breaking main pr-gate
 - `worktree-linear-conjuring-bear` — 92c21f2e chore(gitignore): ignore .wrangler/ cache at any depth, not just web/worker
 
-## Live-work branches (314) — decide each
+## Live-work branches (316) — decide each
 
 - `_pr198` — 4cd0dbaa fix(ci): heal main CI-poison — remove dead `import time` in dispatch.py (F401)
 - `agent/codex-sessions-adapter-0713` — 4f56aa95 fix(prompt): adapt Codex session records exactly
@@ -235,6 +235,8 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `limen/jules-aw-mail-historical-backlog-9f1d` — fd91625a Continue historical mail backlog in resumable batches
 - `limen/jules-aw-mail-historical-backlog-c97e` — a9797d4a Continue historical mail backlog in resumable batches
 - `limen/jules-aw-mail-historical-backlog-e50f` — 4cbf2f03 Continue historical mail backlog in resumable batches
+- `limen/jules-capfill-jules-20260629-09-f6cc` — d7bb7ecd fix: ruff format cli/src/limen/cli.py (wrap long @click.option decorators)
+- `limen/jules-capfill-opencode-20260629-11-980d` — 8bbcfb23 OpenCode daily capacity-fill packet 11
 - `limen/jules-org-contributions-organ-deepen-0704-7930` — b035e97c Deepen the contributions organ toward a usable institution
 - `limen/jules-studium-film-beowulf-3e40` — 8573c3f8 Beowulf film companion (wyrd/heroic doom)
 - `limen/org-artist-organ-face-0704-2152` — 0bf299b0 artist: polish macro and micro faces (ORG-artist-organ-face-0704)

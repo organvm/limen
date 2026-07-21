@@ -58,17 +58,6 @@
           }
         ]
       }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$(git rev-parse --show-toplevel)/scripts/hooks/codex-hook-runner.sh\" host-admission",
-            "timeout": 10
-          }
-        ]
-      }
     ]
   }
 }
