@@ -20,6 +20,7 @@ limen progress
 limen progress --view origin
 limen progress --view horizon --scope past
 limen progress --view workstream --scope financial
+limen progress --view source_lineage --scope prompt-lineage-7
 
 # Print every matching active board leaf or return the bounded JSON projection
 limen progress --all
@@ -55,6 +56,7 @@ Board producers can provide the following explicit fields or labels:
 | `origin` / `origin:*` | `obligation`, `human_prompt`, `agent_recommendation`, or `system_debt` |
 | `horizon` / `horizon:*` | `past`, `present`, or `future` |
 | `workstream` | Purpose lane, distinct from the execution provider |
+| `source_lineage` / `lineage:*` | Explicit source-owned cohort; absence remains `unknown` |
 | `due_at` / `due:*` | Exact deadline when one exists |
 | `repo` and `urls` | Durable owner surface and evidence |
 | `predicate` | Executable definition of done |
@@ -68,6 +70,27 @@ origin, horizon, value case, owner repo, run cost, predicate, and receipt target
 provider spend. `credit_forecast` is text, not earned value. A terminal status with contract strings
 is a board credit claim; only explicit receipt-verification evidence reduces
 `verified_receipt_debt`.
+
+The owner QA endpoint may set `receipt_verified: true` only on a `done` transition carrying a zero
+predicate exit code, the task's exact declared receipt target, a positive receipt-verification
+attestation, and a 64-hex verification-context digest. Merely changing lifecycle status to `done`
+does not create verified progress credit.
+
+The same `WorkLoanV1` readiness predicate is enforced by the keeper before packet reservation or
+claim and by task projection before a new row or active transition is accepted. Missing fields use
+the stable denial `task-not-underwritten:<comma-separated-fields>`. Historical rows remain visible
+but cannot consume capacity until their source-owned cohort supplies the missing collateral; intake
+must not invent a value case from title prose. In `logs/handoff.json`, `ostensible_next` remains the
+raw priority candidate while `dispatchable_next` (and the compatibility alias `next_action`) means
+the candidate cleared underwriting, dependency, budget, provider-health, human-gate, and execution
+requirements. `dispatch_admission.reason_counts` explains every gated open row.
+
+Raw discoveries remain in their source-owned feed or staging ledger until a producer can pass the
+ask gate and WorkLoan predicate. The board writer rejects a new ununderwritten row; it does not
+silently turn the discovery into work. For legacy repair, `--view source_lineage` and each group's
+`underwriting_denial_counts` expose cohort-sized gaps. An absent lineage is `unknown` and must not be
+treated as zero debt or filled by guessing from a title. Duplicate or superseded lifecycle changes
+still require explicit source-lineage evidence and a broker transition.
 
 ## Content-addressed inputs
 

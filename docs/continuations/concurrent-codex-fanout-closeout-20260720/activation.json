@@ -1,0 +1,270 @@
+{
+  "schema": "limen.truth_first_activation_receipt.v1",
+  "generated_at": "2026-07-21T12:02:40Z",
+  "objective": "Preserve and decompose Limen hook compatibility, concurrent Codex admission, constant-time Claude closeout, and WorkLoanV1 admission without overstating host activation.",
+  "verdict": "preserved_not_mergeable",
+  "verdict_reasons": [
+    "the complete overlay is remotely preserved in draft PR 1324 and must not merge as one unit",
+    "PR 1323 merged without rewriting its immutable head, so clean component branches can start from current main",
+    "the installed immutable Limen runtime does not expose the required capability protocol",
+    "the Domus global Claude breadcrumb hook is not installed",
+    "the scoped verifier was denied before execution by live host pressure",
+    "the authenticated conduct broker is unavailable, so lifecycle transitions and fanout fail closed"
+  ],
+  "limen_implementation": {
+    "baseline_head": "22adab82c67d322ca7d21c48325b6339d6d5fb3b",
+    "baseline_parent": "0768952017eca9d04a18a6cbd180345abd0a1fb8",
+    "baseline_branch": "work/concurrent-codex-fanout-closeout-20260720",
+    "baseline_upstream_exact": true,
+    "preservation_branch": "work/truth-first-system-advance-20260720",
+    "preservation_commit": "20896d37799fe33a5e88979d8398b5dac7474d34",
+    "preservation_pr": 1324,
+    "custody": "remote_draft_preservation_pr",
+    "ref_write": {
+      "status": "succeeded",
+      "branch": "work/truth-first-system-advance-20260720",
+      "remote": "origin"
+    },
+    "change_sets": [
+      "dual legacy and scoped Codex host-admission state with a shared lock, migration, capabilities, and redacted diagnostics",
+      "project-hook repository context with capability-gated delegation to the installed immutable host runtime",
+      "constant-time Claude SessionEnd breadcrumb production with idempotent heartbeat consumption",
+      "WorkLoanV1 broker, task, API, handoff, progress, and receipt-credit admission"
+    ],
+    "protected_exact_head": true,
+    "protected_primary_checkouts_edited": false
+  },
+  "verification": {
+    "diff_check": {
+      "command": "git diff --check",
+      "status": "pass"
+    },
+    "focused_receipts": [
+      {
+        "suite": "lifecycle and host matrix",
+        "passed": 131,
+        "status": "pass"
+      },
+      {
+        "suite": "session breadcrumbs, handoff, WorkLoanV1, and Python conduct protocol",
+        "passed": 48,
+        "status": "pass"
+      },
+      {
+        "suite": "progress and WorkLoanV1",
+        "passed": 18,
+        "status": "pass"
+      },
+      {
+        "suite": "standalone Python API",
+        "passed": 42,
+        "status": "pass"
+      },
+      {
+        "suite": "dependency-free Worker WorkLoanV1",
+        "passed": 3,
+        "status": "pass"
+      },
+      {
+        "suite": "Codex hook immutable delegation and single-channel denial",
+        "passed": 21,
+        "status": "pass",
+        "note": "one runner-text assertion was deselected while the pre-change runner was temporarily restored for bootstrap testing; the restored final runner string was verified directly"
+      }
+    ],
+    "worker_syntax": "pass",
+    "scoped_verifier": {
+      "command": "bash scripts/verify-scoped.sh",
+      "status": "denied_before_start",
+      "reasons": [
+        "backblaze-cpu",
+        "backblaze-rss",
+        "swap-fraction"
+      ]
+    },
+    "full_worker_suite": {
+      "status": "not_run",
+      "reason": "node_modules is absent; the sanctioned scoped verifier owns dependency installation and was denied by host admission"
+    },
+    "baseline_exact_head_ci": "PR 1323 head 22adab82c67d322ca7d21c48325b6339d6d5fb3b passed pr-gate and CodeQL before merge",
+    "preservation_exact_head_ci": "pending on draft PR 1324",
+    "three_real_codex_cycles": "not_started_before_installation",
+    "three_real_claude_cycles": "not_started_before_installation"
+  },
+  "host_admission": {
+    "overlay_capabilities": {
+      "schema": "limen.codex_host_admission_capabilities.v1",
+      "reader_protocol": "limen.host_admission_reader.v2",
+      "policy_revision": "2026-07-20.dual-state.v1",
+      "legacy_schema": "limen.host_admission_state.v1",
+      "scoped_schema": "limen.host_admission_scoped_state.v1",
+      "stable_action_denial": true,
+      "single_rejection_channel": true
+    },
+    "live_state_after_current_reader": {
+      "valid": true,
+      "legacy_lease_count": 0,
+      "scoped_lease_count": 1
+    },
+    "installed_runtime": {
+      "sha": "0768952017eca9d04a18a6cbd180345abd0a1fb8",
+      "installed_at": "2026-07-20T22:28:44+00:00",
+      "capability_probe": "incompatible",
+      "capability_probe_result": "hook input parse failure instead of a capabilities document"
+    },
+    "pressure_observation": {
+      "observed_at": "2026-07-21T02:18:26.932449+00:00",
+      "backblaze_cpu_percent": 99.2,
+      "backblaze_rss_bytes": 1680064512,
+      "swap_fraction": 0.6256372070056386,
+      "swap_used_bytes": 10748365373,
+      "reasons": [
+        "backblaze-cpu",
+        "backblaze-rss",
+        "swap-fraction"
+      ]
+    }
+  },
+  "domus_activation": {
+    "cached_origin_master": "db254e6263b17b138b2c793b2853c63bbb01869c",
+    "pr_315_merge_commit": "3cc86e985ed1f636c6fb2974da9f95ef62a1ff6a",
+    "pr_315_is_cached_origin_master_ancestor": true,
+    "installed_codex_wrapper_sha256": "2706f548ebaed82a361879dc9b9e1fb1cd41ca7a9b3fc28ba090f0763c095e6b",
+    "wrapper_capability_handshake": "absent",
+    "installed_claude_settings_sha256": "d7ff96bcafc3b9f61b11f8a984ee7472770d6ffd28587a8172c09373aefba486",
+    "installed_session_end_hooks": [
+      "insights-capture"
+    ],
+    "installed_global_breadcrumb_hook": false,
+    "insights_hook_sha256": "1d0980382b74921e41b7058d45304fbe7493d558b0ac313ce89a35c38e3ecb3f",
+    "insights_constant_time_proof": "absent",
+    "targeted_render_warning": "cached Domus master contains additional slow SessionEnd hooks; apply settings only after the rendered diff proves the installed result is breadcrumb-only",
+    "primary_checkout": {
+      "dirty": true,
+      "head": "62fa2becf6fde3821074a6dc88a8e97ef7400843",
+      "ahead_of_cached_origin_master": 6,
+      "behind_cached_origin_master": 39,
+      "edited": false
+    }
+  },
+  "queue_truth": {
+    "generated_at": "2026-07-21T02:20:00.092516Z",
+    "input_contract_sha256": "fad28c731048f42a236be2f364c4d647ddcfa95b5c248938807f73bf99de8328",
+    "scope": "partial",
+    "total_tasks": 3015,
+    "active_debt": 1206,
+    "underwritten_active": 2,
+    "requested_active_debit_runs": 1262,
+    "underwritten_active_debit_runs": 2,
+    "verified_receipt_claims": 0,
+    "verified_receipt_debt": 1809,
+    "source_lineage": {
+      "unknown_total": 3015,
+      "unknown_active_debt": 1206
+    },
+    "underwriting_denial_counts": {
+      "task-not-underwritten:source_origin": 1,
+      "task-not-underwritten:source_origin,horizon,value_case": 211,
+      "task-not-underwritten:source_origin,horizon,value_case,owner_surface,predicate,receipt_target": 18,
+      "task-not-underwritten:source_origin,horizon,value_case,predicate,receipt_target": 974
+    },
+    "live_primary_handoff": {
+      "generated_at": "2026-07-21T02:19:29+00:00",
+      "dispatch_admission_present": false,
+      "dispatchable_equals_ostensible": true,
+      "meaning": "the truthful handoff implementation is not active"
+    },
+    "conduct_broker": {
+      "status": "unavailable",
+      "reason": "LIMEN_CONDUCT_URL and LIMEN_CONDUCT_TOKEN are absent",
+      "transitions_or_fanout_attempted": false
+    }
+  },
+  "prompt_authority": {
+    "authority_ready": false,
+    "validation_ok": false,
+    "validation_errors": 2220,
+    "pending_source_units": 19511,
+    "source_cursor_sha256": "d2b341d9e8fb862658d067e7e477630c82d601979c4479ec4acdd1da714fa557",
+    "private_corpus_in_this_worktree": false,
+    "incremental_zero_growth_pass": false,
+    "legacy_archive_mutations_attempted": false
+  },
+  "campaign_truth": {
+    "omega": {
+      "generated_at": "2026-07-16T19:23:00+00:00",
+      "verdict": "BROKEN",
+      "pass": 16,
+      "fail": 6,
+      "skip": 1
+    },
+    "financial": {
+      "generated_at": "2026-07-21T00:16:35Z",
+      "real_revenue_flowing": false,
+      "first_outward_lane": "ChatGPT Exporter to MONETA to Ko-fi",
+      "network_canaries": "unverified",
+      "paid_or_account_actions": "not_attempted"
+    },
+    "custody": {
+      "data_volume_capacity_percent": 85,
+      "below_80_percent_gate": false,
+      "worktree_debt": 10,
+      "destructive_cleanup_attempted": false,
+      "archive4t_operations": "human_physical_gate_not_attempted"
+    },
+    "public_value_surface": {
+      "pilot_started": false,
+      "reason": "broker, activation, prompt-authority, and host-pressure gates are closed"
+    }
+  },
+  "remote_truth": {
+    "limen_pr_1323": {
+      "expected_head": "22adab82c67d322ca7d21c48325b6339d6d5fb3b",
+      "cached_branch_exact": true,
+      "merge_state": "merged",
+      "merged_at": "2026-07-21T08:59:53Z",
+      "merge_commit": "b487b4d87d71804c1207a36000fe01a8cdcce7ad",
+      "ci_state": "pr-gate_and_codeql_success"
+    },
+    "preservation_pr_1324": {
+      "head": "20896d37799fe33a5e88979d8398b5dac7474d34",
+      "state": "open",
+      "draft": true,
+      "merge_policy": "do_not_merge_until_component_equivalence_is_proven"
+    },
+    "github": "verified_live",
+    "production": "not_activated",
+    "network_failure_interpretation": "not_evidence_of_remote_outage"
+  },
+  "next_owner_actions": [
+    {
+      "owner": "Limen component integrator",
+      "action": "decompose draft PR 1324 into bounded host-bootstrap, breadcrumb, WorkLoan contract/adoption, WorkLoan enforcement, and immutable-cutover PRs from current origin/main",
+      "predicate": "each component has its own exact-head verified PR and PR 1324 is patch-equivalent to merged main",
+      "next_command": "git fetch origin main"
+    },
+    {
+      "owner": "Domus cartridge",
+      "action": "add the capability handshake to the global Codex wrapper, render from clean cached-origin-master custody, and apply only the exact compatible hook/runtime surfaces",
+      "predicate": "the installed wrapper yields only to a timely compatible project capability response and the immutable runtime reports the dual-state policy revision",
+      "next_command": "chezmoi diff ~/.local/share/codex/config.toml ~/.local/share/codex/hooks.json ~/.local/bin/domus-codex-host-hook"
+    },
+    {
+      "owner": "Domus Claude hook cartridge",
+      "action": "render the global breadcrumb producer and settings, reject any diff that retains slow SessionEnd work, then apply and verify installed hashes",
+      "predicate": "installed SessionEnd is breadcrumb-only with a five-second outer timeout and the insights hook is either proven under 500 ms or moved to heartbeat",
+      "next_command": "chezmoi diff ~/.claude/settings.json ~/.claude/hooks/limen-session-closeout.py"
+    },
+    {
+      "owner": "network-capable lifecycle verifier",
+      "action": "run three real Codex and Claude lifecycle cycles after installation, then verify Exporter endpoints and the non-spend license canary",
+      "predicate": "three consecutive cycles have no invalid lease, duplicate denial, or cancelled SessionEnd, and the outward rail has a separate external readiness receipt",
+      "next_command": "bash .limen-workstream/kickstart.sh"
+    }
+  ],
+  "continuation": {
+    "workstream_contract": "docs/continuations/concurrent-codex-fanout-closeout-20260720/workstream.json",
+    "runway_deadline": "2026-07-27T22:56:04+00:00",
+    "launch_command": "bash .limen-workstream/kickstart.sh"
+  }
+}

@@ -40,6 +40,11 @@ def board(budget_cost=2):
                 "target_agent": "any",
                 "status": "open",
                 "budget_cost": budget_cost,
+                "origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Deliver the explicitly requested task claim",
+                "predicate": "pytest -q cli/tests/test_claim_task.py",
+                "receipt_target": "github:organvm/limen:pull-request:TASK-1",
                 "created": "2026-07-18",
                 "dispatch_log": [],
             }
@@ -162,13 +167,13 @@ def test_claim_task_accepts_available_explicit_mount(monkeypatch) -> None:
     assert data["portal"]["budget"]["track"]["spent"] == 5
 
 
-def test_claim_task_fails_closed_when_legacy_owner_cannot_be_derived() -> None:
+def test_claim_task_fails_closed_when_work_loan_owner_is_missing() -> None:
     claim = load_claim_module()
     data = board()
     data["tasks"][0].pop("repo")
     before = copy.deepcopy(data)
 
-    with pytest.raises(SystemExit, match="typed intake blocked"):
+    with pytest.raises(SystemExit, match="task-not-underwritten:owner_surface"):
         claim.claim_task(data, "TASK-1", "codex", "session-1")
 
     assert data == before

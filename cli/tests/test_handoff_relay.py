@@ -88,6 +88,11 @@ def _task(task_id, *, priority="medium", agent="codex", **extra):
         "labels": [],
         "depends_on": [],
         "dispatch_log": [],
+        "origin": "human_prompt",
+        "horizon": "present",
+        "value_case": f"Deliver the bounded outcome for {task_id}",
+        "predicate": "pytest -q",
+        "receipt_target": f"github:organvm/limen:pull-request:{task_id}",
         **extra,
     }
 
@@ -102,7 +107,8 @@ def test_build_splits_ostensible_from_dispatchable_and_preserves_aliases(monkeyp
 
     assert payload["ostensible_next"]["id"] == "BLOCKED"
     assert payload["dispatchable_next"]["id"] == "READY"
-    assert payload["next_action"] == payload["ostensible_next"]
+    assert payload["next_action"] == payload["dispatchable_next"]
+    assert payload["dispatch_admission"]["reason_counts"] == {"provider_health": 1}
     assert payload["board_budget"] == {
         "daily": 10,
         "unit": "runs",
@@ -162,6 +168,30 @@ def test_dispatchable_next_skips_successor_required_open_row():
     providers = {"generated": "now", "vendors": {"codex": {"remaining": 2}}}
 
     assert mod._dispatchable_next(tasks, budget, providers)["id"] == "READY"
+
+
+def test_ununderwritten_priority_remains_ostensible_but_cannot_dispatch():
+    mod = _load()
+    raw = _task(
+        "RAW",
+        priority="critical",
+        origin=None,
+        horizon=None,
+        value_case=None,
+        predicate=None,
+        receipt_target=None,
+    )
+    ready = _task("READY", priority="medium")
+    tasks = [raw, ready]
+    budget = {"remaining": 3, "per_agent": {"codex": {"remaining": 3}}}
+    providers = {"generated": "now", "vendors": {"codex": {"remaining": 2, "health": "ok"}}}
+
+    assert mod._ostensible_next(tasks)["id"] == "RAW"
+    admission = mod._dispatch_admission(tasks, budget, providers)
+    assert admission["dispatchable_next"]["id"] == "READY"
+    assert admission["reason_counts"] == {
+        "task-not-underwritten:source_origin,horizon,value_case,predicate,receipt_target": 1,
+    }
 
 
 def test_dispatchable_next_rejects_live_low_health_even_with_remaining_capacity():
@@ -247,13 +277,16 @@ def test_check_rejects_missing_or_stale_provider_truth(monkeypatch, tmp_path, ca
     assert "provider headroom stale" in capsys.readouterr().out
 
 
-def test_handoff_refresh_is_wired_across_heartbeat_metabolize_and_session_end():
+def test_handoff_refresh_is_wired_across_heartbeat_metabolize_and_breadcrumb_consumer():
     heartbeat = (ROOT / "scripts" / "heartbeat-loop.sh").read_text(encoding="utf-8")
     metabolize = (ROOT / "scripts" / "metabolize.sh").read_text(encoding="utf-8")
     session_end = (ROOT / "scripts" / "hooks" / "session-closeout.sh").read_text(encoding="utf-8")
+    consumer = (ROOT / "scripts" / "consume-session-end-breadcrumbs.py").read_text(encoding="utf-8")
 
     # Observe-mode and normal dispatch beats both refresh; metabolize remains independently wired.
     assert heartbeat.count('python3 "$LIMEN_ROOT/scripts/handoff-relay.py"') >= 2
     assert 'python3 "$LIMEN_ROOT/scripts/handoff-relay.py"' in metabolize
-    # Every SessionEnd refreshes before the worktree-only early return.
-    assert session_end.index('python3 "$HANDOFF_ROOT/scripts/handoff-relay.py"') < session_end.index('case "$CWD" in')
+    assert "consume-session-end-breadcrumbs.py" in heartbeat
+    assert '"handoff-relay.py"' in consumer
+    # SessionEnd itself never performs the slow refresh.
+    assert "handoff-relay.py" not in session_end

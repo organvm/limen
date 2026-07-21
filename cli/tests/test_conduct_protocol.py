@@ -22,6 +22,7 @@ from limen.conduct import (
     RunReceiptV1,
     SpendEnvelopeV1,
     WorkPacketV1,
+    WorkLoanV1,
 )
 from limen.conduct.models import PredicateEvidenceV1
 from limen.conduct.models import canonical_hash
@@ -87,6 +88,13 @@ def packet(
         resource_claims=claims if claims is not None else (ResourceClaimV1(key=resource),),
         predicate="pytest -q",
         receipt_target=f"github:organvm/limen:pull-request:{work_id}",
+        work_loan=WorkLoanV1(
+            source_origin="human_prompt",
+            horizon="present",
+            value_case=f"Deliver the bounded conduct test outcome for {work_id}",
+            budget_cost=spend_limit,
+            owner_surface="organvm/limen",
+        ),
         authority=authority
         or AuthorityEnvelopeV1(
             actions=frozenset({"code", "review"}),
@@ -136,6 +144,36 @@ def test_packet_hashes_are_canonical_and_mismatch_is_rejected() -> None:
     assert first.execution_hash == second.execution_hash
     with pytest.raises(ValueError, match="intent_hash"):
         WorkPacketV1(**(first.model_dump() | {"intent_hash": "0" * 64}))
+
+
+def test_work_loan_is_required_deterministically_at_reserve_and_claim() -> None:
+    codex = session("codex")
+    broker = broker_with(codex)
+    underwritten = packet(work_id="underwritten", conductor=codex.identity)
+    missing = underwritten.model_copy(update={"work_loan": None})
+    with pytest.raises(
+        ConductConflict,
+        match="task-not-underwritten:source_origin,horizon,value_case,budget_cost,owner_surface",
+    ):
+        broker.submit(missing, now=NOW)
+    mismatched = underwritten.model_copy(
+        update={
+            "work_id": "mismatched-budget",
+            "work_key": "mismatched-budget",
+            "work_loan": underwritten.work_loan.model_copy(update={"budget_cost": underwritten.spend.limit + 1}),
+        }
+    )
+    with pytest.raises(ConductConflict, match="task-not-underwritten:budget_cost"):
+        broker.submit(mismatched, now=NOW)
+
+    reserved = broker.submit(underwritten, now=NOW)
+    with broker.store.transaction() as state:
+        state["runs"][reserved["run_id"]]["packet"]["work_loan"] = None
+    with pytest.raises(
+        ConductConflict,
+        match="task-not-underwritten:source_origin,horizon,value_case,budget_cost,owner_surface",
+    ):
+        broker.claim(reserved["lease"]["lease_id"], reserved["lease"]["generation"], now=NOW)
 
 
 def test_rfc8785_hash_fixture_matches_worker_runtime() -> None:
@@ -486,6 +524,13 @@ def test_spend_limit_and_permanent_failure_stop_retry() -> None:
     bounded = packet(work_id="attempt-spend", conductor=codex.identity).model_copy(
         update={
             "spend": SpendEnvelopeV1(limit=1),
+            "work_loan": WorkLoanV1(
+                source_origin="human_prompt",
+                horizon="present",
+                value_case="Bound the executor attempt spend",
+                budget_cost=1,
+                owner_surface="organvm/limen",
+            ),
             "retry": RetryPolicyV1(max_attempts=2, transient_only=True),
         }
     )
@@ -784,7 +829,7 @@ def test_child_authority_attenuates_and_cycles_are_rejected() -> None:
         depth=1,
         max_children=2,
         max_depth=2,
-        spend_limit=0,
+        spend_limit=1,
     )
     with pytest.raises(ConductConflict, match="cycle"):
         broker.split(parent_result["run_id"], cycle, now=NOW)
@@ -797,7 +842,7 @@ def test_child_authority_attenuates_and_cycles_are_rejected() -> None:
                 repositories=frozenset({"organvm/limen"}),
                 path_prefixes=frozenset({"cli"}),
             ),
-            "spend": SpendEnvelopeV1(limit=0),
+            "spend": SpendEnvelopeV1(limit=1),
         }
     )
     with pytest.raises(ConductConflict, match="authority"):
@@ -808,7 +853,7 @@ def test_child_authority_attenuates_and_cycles_are_rejected() -> None:
             "work_id": "extended",
             "work_key": "extended",
             "deadline": NOW + timedelta(hours=2),
-            "spend": SpendEnvelopeV1(limit=0),
+            "spend": SpendEnvelopeV1(limit=1),
         }
     )
     with pytest.raises(ConductConflict, match="deadline"):
@@ -819,7 +864,7 @@ def test_child_authority_attenuates_and_cycles_are_rejected() -> None:
             "work_id": "wider-fanout",
             "work_key": "wider-fanout",
             "fanout": FanoutBoundsV1(max_children=3, max_depth=3),
-            "spend": SpendEnvelopeV1(limit=0),
+            "spend": SpendEnvelopeV1(limit=1),
         }
     )
     with pytest.raises(ConductConflict, match="fanout"):

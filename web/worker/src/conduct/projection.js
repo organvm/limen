@@ -1,4 +1,5 @@
 import YAML from "yaml";
+import { taskWorkLoanMissingFields, workLoanDenial } from "./work-loan.js";
 
 const GITHUB_API = "https://api.github.com";
 const inlineBoards = new WeakMap();
@@ -27,6 +28,13 @@ const PATCHABLE_TASK_FIELDS = new Set([
   "context",
   "predicate",
   "receipt_target",
+  "origin",
+  "horizon",
+  "value_case",
+  "owner_surface",
+  "external_deadline",
+  "due_at",
+  "receipt_verified",
   "execution_requirements",
   "workstream_contract",
   "claude_tier",
@@ -559,6 +567,10 @@ export function applyTaskPacketProjectionEvent(input, event) {
       task.dispatch_log = history;
       if (created !== undefined) task.created = created;
     }
+    if (!existing) {
+      const missing = taskWorkLoanMissingFields(task);
+      if (missing.length) throw new ConductProjectionError(workLoanDenial(missing), 422);
+    }
     board.tasks ||= [];
     if (!existing) board.tasks.push(task);
     task.updated = event.timestamp;
@@ -594,6 +606,10 @@ export function applyTaskPacketProjectionEvent(input, event) {
     throw new ConductProjectionError(`task ${taskId} status intent requires a status patch`, 422);
   }
   const nextStatus = patch.status ?? existing.status;
+  if (["dispatched", "in_progress"].includes(nextStatus)) {
+    const missing = taskWorkLoanMissingFields({ ...existing, ...patch });
+    if (missing.length) throw new ConductProjectionError(workLoanDenial(missing), 409);
+  }
   if (!isHeldJulesLandingRecovery(existing, nextStatus, intent.log)
       && !(kind === "task.status"
         && isLifecycleRepairAuthorized(existing, nextStatus, intent.log, patch))) {
@@ -651,6 +667,10 @@ export function applyTaskCompatibilityEvent(input, event) {
   }
   const task = (board.tasks || []).find((candidate) => candidate.id === event.task_id);
   if (!task) throw new ConductProjectionError(`task ${event.task_id} not found in canonical board`, 409);
+  if (["dispatched", "in_progress"].includes(event.status)) {
+    const missing = taskWorkLoanMissingFields(task);
+    if (missing.length) throw new ConductProjectionError(workLoanDenial(missing), 409);
+  }
   if (!event.from_statuses.includes(task.status)) {
     throw new ConductProjectionError(
       `task ${event.task_id} is ${task.status}; conduct event ${event.kind} requires ${event.from_statuses.join(" or ")}`,

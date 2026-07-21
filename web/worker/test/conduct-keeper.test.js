@@ -97,6 +97,13 @@ async function packet({
     resource_claims: claims || [{ key: resource, mode: "exclusive" }],
     predicate: "pytest -q",
     receipt_target: `github:organvm/limen:pull-request:${workId}`,
+    work_loan: {
+      source_origin: "human_prompt",
+      horizon: "present",
+      value_case: `Deliver the bounded conduct test outcome for ${workId}`,
+      budget_cost: spendLimit,
+      owner_surface: "organvm/limen",
+    },
     authority: authority || {
       actions: ["code", "review"],
       repositories: ["organvm/limen"],
@@ -837,6 +844,39 @@ test("work ids and deterministic work keys share one idempotency index", async (
       }),
     }),
     /reused with different immutable hashes or contract/,
+  );
+});
+
+test("work-loan admission is deterministic at reserve and claim", async () => {
+  const codex = session("codex");
+  const { service, store } = await serviceWith([codex]);
+  const underwritten = await packet({ workId: "underwritten", conductor: codex.identity });
+  const missing = await validateWorkPacket({ ...underwritten, work_loan: null });
+  await assert.rejects(
+    service.call("submit", { packet: missing }),
+    /task-not-underwritten:source_origin,horizon,value_case,budget_cost,owner_surface/,
+  );
+  const mismatched = await validateWorkPacket({
+    ...underwritten,
+    work_id: "mismatched-budget",
+    work_key: "mismatched-budget",
+    work_loan: { ...underwritten.work_loan, budget_cost: underwritten.spend.limit + 1 },
+  });
+  await assert.rejects(
+    service.call("submit", { packet: mismatched }),
+    /task-not-underwritten:budget_cost/,
+  );
+
+  const reserved = await service.call("submit", { packet: underwritten });
+  const stale = store.snapshot();
+  stale.runs[reserved.run_id].packet.work_loan = null;
+  await store.save(stale);
+  await assert.rejects(
+    service.call("claim", {
+      lease_id: reserved.lease.lease_id,
+      generation: reserved.lease.generation,
+    }),
+    /task-not-underwritten:source_origin,horizon,value_case,budget_cost,owner_surface/,
   );
 });
 
@@ -1969,6 +2009,56 @@ test("exceptional task transitions require exact structured evidence", () => {
   }
 });
 
+test("task projection rejects ununderwritten discoveries and legacy claims", () => {
+  const event = {
+    schema_version: "limen.task_packet_projection_event.v1",
+    event_id: "conduct:underwriting:1:compatibility",
+    timestamp: NOW.toISOString(),
+    task_id: "RAW-TASK",
+    run_id: "run-underwriting",
+    lease_id: "lease-underwriting",
+    generation: 1,
+    agent: "codex",
+    session_id: "codex-session",
+    intent: {
+      kind: "task.upsert",
+      task_id: "RAW-TASK",
+      expected_absent: true,
+      task: {
+        id: "RAW-TASK",
+        title: "Raw discovery",
+        repo: "organvm/limen",
+        target_agent: "codex",
+        priority: "high",
+        budget_cost: 1,
+        status: "open",
+        created: "2026-07-18",
+        dispatch_log: [],
+      },
+    },
+  };
+  assert.throws(
+    () => applyTaskPacketProjectionEvent({ tasks: [] }, event),
+    /task-not-underwritten:source_origin,horizon,value_case,predicate,receipt_target/,
+  );
+
+  const board = { tasks: [event.intent.task] };
+  const claim = {
+    ...event,
+    event_id: "conduct:underwriting:2:compatibility",
+    intent: {
+      kind: "task.claim",
+      task_id: "RAW-TASK",
+      expected_status: "open",
+      patch: { status: "dispatched", target_agent: "codex" },
+    },
+  };
+  assert.throws(
+    () => applyTaskPacketProjectionEvent(board, claim),
+    /task-not-underwritten:source_origin,horizon,value_case,predicate,receipt_target/,
+  );
+});
+
 test("MCP-compatible task packets execute in the keeper without a board-write lane", async () => {
   const env = {
     LIMEN_INLINE_TASKS_YAML: `
@@ -2005,6 +2095,12 @@ tasks: []
       priority: "high",
       budget_cost: 2,
       status: "open",
+      origin: "human_prompt",
+      horizon: "present",
+      value_case: "Deliver the explicitly submitted MCP task",
+      repo: "organvm/limen",
+      predicate: "pytest -q",
+      receipt_target: "github:organvm/limen:pull-request:TASK-MCP",
       created: "2026-07-18",
       dispatch_log: [],
     },
