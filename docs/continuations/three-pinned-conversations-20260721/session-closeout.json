@@ -1,0 +1,29 @@
+{
+  "schema": "limen.session-closeout.receipt.v1",
+  "recorded_at": "2026-07-21T18:26:35Z",
+  "scope": "claude-agent-manager",
+  "before": {
+    "sessions": 17,
+    "terminal": 15,
+    "blocked_idle": 2,
+    "working": 0
+  },
+  "actions": {
+    "blocked_idle_sessions_stopped": 2,
+    "manager_entries_removed": 17
+  },
+  "preservation": {
+    "transcripts_retained": true,
+    "substantive_owner_receipts_preexisted": true,
+    "external_messages_sent": 0,
+    "deployments_performed": 0,
+    "merges_performed": 0
+  },
+  "after": {
+    "predicate": "claude agents --json --all",
+    "runs": [
+      [],
+      []
+    ]
+  }
+}
