@@ -1,10 +1,11 @@
 {
   "schema": "limen.truth_first_activation_receipt.v1",
-  "generated_at": "2026-07-21T02:20:00Z",
-  "objective": "Advance Limen hook compatibility, constant-time Claude closeout, and WorkLoanV1 admission without overstating host or remote activation.",
-  "verdict": "activation_closed",
+  "generated_at": "2026-07-21T12:02:40Z",
+  "objective": "Preserve and decompose Limen hook compatibility, concurrent Codex admission, constant-time Claude closeout, and WorkLoanV1 admission without overstating host activation.",
+  "verdict": "preserved_not_mergeable",
   "verdict_reasons": [
-    "the implementation is a local overlay on the immutable PR 1323 head and this sandbox cannot create a new Git ref",
+    "the complete overlay is remotely preserved in draft PR 1324 and must not merge as one unit",
+    "PR 1323 merged without rewriting its immutable head, so clean component branches can start from current main",
     "the installed immutable Limen runtime does not expose the required capability protocol",
     "the Domus global Claude breadcrumb hook is not installed",
     "the scoped verifier was denied before execution by live host pressure",
@@ -15,12 +16,14 @@
     "baseline_parent": "0768952017eca9d04a18a6cbd180345abd0a1fb8",
     "baseline_branch": "work/concurrent-codex-fanout-closeout-20260720",
     "baseline_upstream_exact": true,
-    "intended_successor_branch": "work/truth-first-system-advance-20260720",
-    "custody": "local_overlay_only",
+    "preservation_branch": "work/truth-first-system-advance-20260720",
+    "preservation_commit": "20896d37799fe33a5e88979d8398b5dac7474d34",
+    "preservation_pr": 1324,
+    "custody": "remote_draft_preservation_pr",
     "ref_write": {
-      "status": "blocked",
-      "reason": "operation-not-permitted",
-      "target": ".git/refs/heads/work/truth-first-system-advance-20260720.lock"
+      "status": "succeeded",
+      "branch": "work/truth-first-system-advance-20260720",
+      "remote": "origin"
     },
     "change_sets": [
       "dual legacy and scoped Codex host-admission state with a shared lock, migration, capabilities, and redacted diagnostics",
@@ -83,7 +86,8 @@
       "status": "not_run",
       "reason": "node_modules is absent; the sanctioned scoped verifier owns dependency installation and was denied by host admission"
     },
-    "exact_head_ci": "unverified_from_restricted_session",
+    "baseline_exact_head_ci": "PR 1323 head 22adab82c67d322ca7d21c48325b6339d6d5fb3b passed pr-gate and CodeQL before merge",
+    "preservation_exact_head_ci": "pending on draft PR 1324",
     "three_real_codex_cycles": "not_started_before_installation",
     "three_real_claude_cycles": "not_started_before_installation"
   },
@@ -217,24 +221,27 @@
     "limen_pr_1323": {
       "expected_head": "22adab82c67d322ca7d21c48325b6339d6d5fb3b",
       "cached_branch_exact": true,
-      "merge_state": "unverified",
-      "ci_state": "user_supplied_green_receipt_not_reverified"
+      "merge_state": "merged",
+      "merged_at": "2026-07-21T08:59:53Z",
+      "merge_commit": "b487b4d87d71804c1207a36000fe01a8cdcce7ad",
+      "ci_state": "pr-gate_and_codeql_success"
     },
-    "github_and_production": "unverified_from_restricted_session",
+    "preservation_pr_1324": {
+      "head": "20896d37799fe33a5e88979d8398b5dac7474d34",
+      "state": "open",
+      "draft": true,
+      "merge_policy": "do_not_merge_until_component_equivalence_is_proven"
+    },
+    "github": "verified_live",
+    "production": "not_activated",
     "network_failure_interpretation": "not_evidence_of_remote_outage"
   },
   "next_owner_actions": [
     {
-      "owner": "network-capable Limen integrator",
-      "action": "merge PR 1323 through the normal merge queue at its immutable head without rewriting it",
-      "predicate": "GitHub reports PR 1323 merged at head 22adab82c67d322ca7d21c48325b6339d6d5fb3b",
-      "next_command": "scripts/await-pr.sh 1323 --merge"
-    },
-    {
-      "owner": "Git-ref-writable Limen continuation",
-      "action": "move this unchanged overlay to its own topic branch, run the scoped gate after host pressure clears, commit, push, and open its owner PR",
-      "predicate": "the overlay has an open remote PR with exact-head scoped verification",
-      "next_command": "git switch -c work/truth-first-system-advance-20260720"
+      "owner": "Limen component integrator",
+      "action": "decompose draft PR 1324 into bounded host-bootstrap, breadcrumb, WorkLoan contract/adoption, WorkLoan enforcement, and immutable-cutover PRs from current origin/main",
+      "predicate": "each component has its own exact-head verified PR and PR 1324 is patch-equivalent to merged main",
+      "next_command": "git fetch origin main"
     },
     {
       "owner": "Domus cartridge",
