@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import main
+import limen_work_loan
 
 
 REAL_SUBMIT_TASK_MUTATION = main.submit_task_mutation
@@ -1454,6 +1455,44 @@ def test_create_and_open_update_enforce_typed_intake_contract(client: TestClient
         json={"status": "dispatched"},
     )
     assert bypassed_dispatch.status_code == 422
+
+
+def test_task_api_exposes_work_loan_fields_without_breaking_legacy_create_payloads() -> None:
+    base = {
+        "id": "LIMEN-WORK-LOAN-COMPAT",
+        "title": "Compatibility contract",
+        "repo": "organvm/limen",
+        "target_agent": "codex",
+        "predicate": "pytest -q web/api/tests/test_main.py",
+        "receipt_target": "github:organvm/limen:pull-request:LIMEN-WORK-LOAN-COMPAT",
+    }
+    legacy = main.TaskCreate.model_validate(base)
+    assert legacy.origin is None
+    assert legacy.horizon is None
+    assert legacy.value_case is None
+
+    adopted = main.TaskCreate.model_validate(
+        base
+        | {
+            "origin": "human_prompt",
+            "horizon": "present",
+            "value_case": "Deliver a bounded API contract with a durable owner receipt",
+            "owner_surface": "github:organvm/limen",
+        }
+    )
+    assert adopted.origin == "human_prompt"
+    assert adopted.horizon == "present"
+    assert adopted.owner_surface == "github:organvm/limen"
+
+    assert limen_work_loan.task_work_loan_missing_fields(base) == (
+        "source_origin",
+        "horizon",
+        "value_case",
+        "budget_cost",
+    )
+    assert limen_work_loan.work_loan_denial(("value_case", "source_origin")) == (
+        "task-not-underwritten:source_origin,value_case"
+    )
 
 
 def test_dispatch_rejects_invalid_agent_limit_and_task_id(client: TestClient, tmp_path: Path) -> None:

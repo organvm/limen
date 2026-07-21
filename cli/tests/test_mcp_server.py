@@ -426,6 +426,7 @@ def test_task_add_and_status_are_conduct_compatibility_events(tmp_path, monkeypa
         "organvm/limen",
         "pytest -q",
         "github:organvm/limen:pull-request:LIMEN-001",
+        "Deliver the explicitly requested MCP task",
         agent="codex",
     )
     updated = server.update_task_status("TASK-STATUS", "done", context="predicate passed")

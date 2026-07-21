@@ -47,6 +47,7 @@ try:
         WorkPacketV1,
     )
     from limen.conduct.client import client_from_env  # noqa: E402
+    from limen.work_loan import WorkLoanV1  # noqa: E402
     from limen.session_sources import (  # noqa: E402
         SessionSource,
         child_identity_environment,
@@ -66,6 +67,7 @@ except Exception:  # pragma: no cover - import failure is surfaced by the releva
     RetryPolicyV1 = None
     SpendEnvelopeV1 = None
     WorkPacketV1 = None
+    WorkLoanV1 = None
     client_from_env = None
     SessionSource = Any
     child_identity_environment = None
@@ -926,6 +928,8 @@ def _work_packet(
     task_id = task_seed_id(str(snapshot["session_hash"]), str(packet["id"]))
     repo = str((packet.get("owner_packet") or {}).get("owner_repo") or origin_repo_slug())
     claims = () if phase == "planner" else (ResourceClaimV1(key=f"repo/{repo}/write", mode="exclusive"),)
+    budget_cost = max(1, child_count)
+    theme = str(packet.get("theme") or packet["id"])
     return WorkPacketV1(
         root_run_id=root_run_id,
         parent_run_id=parent_run_id,
@@ -953,9 +957,16 @@ def _work_packet(
         resource_claims=claims,
         predicate=_packet_predicate(packet),
         receipt_target=_packet_receipt_target(packet),
+        work_loan=WorkLoanV1(
+            source_origin="human_prompt",
+            horizon="present",
+            value_case=f"Deliver the bounded {phase} outcome for {theme}",
+            budget_cost=budget_cost,
+            owner_surface=repo,
+        ),
         authority=authority,
         deadline=deadline,
-        spend=SpendEnvelopeV1(limit=max(1, child_count)),
+        spend=SpendEnvelopeV1(limit=budget_cost),
         retry=RetryPolicyV1(max_attempts=1),
         depth=depth,
         fanout=FanoutBoundsV1(max_children=child_count, max_depth=2),
@@ -1093,6 +1104,13 @@ def reserve_fanout(snapshot: dict[str, Any], client: Any | None = None) -> dict[
         required_capabilities=frozenset({"conduct"}),
         predicate="python3 -m py_compile scripts/current-session-fanout.py",
         receipt_target=f"git:{origin_repo_slug()}:docs/current-session-fanout.md",
+        work_loan=WorkLoanV1(
+            source_origin="human_prompt",
+            horizon="present",
+            value_case="Deliver the bounded current-session peer fanout with per-packet receipts",
+            budget_cost=max(1, root_budget),
+            owner_surface=origin_repo_slug(),
+        ),
         authority=authority,
         deadline=deadline,
         spend=SpendEnvelopeV1(limit=max(1, root_budget)),
