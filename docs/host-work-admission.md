@@ -120,8 +120,11 @@ The project hook also stages an immutable delegation entrypoint:
 complete capability document within one second, then invokes only that target using its installed
 runtime interpreter. Missing, slow, malformed, or incompatible policy never blocks
 `UserPromptSubmit`; it allows observation and denies mutation through one event-appropriate channel
-with a safe `domus-limen-runtime status` diagnostic. The project hook runner does not invoke this
-entrypoint yet; changing the runner is the later immutable-cutover lane after live runtime proof.
+with a safe `domus-limen-runtime status` diagnostic. The project hook runner invokes this boundary
+with the installed runtime at
+`~/.local/share/limen/current/source/scripts/hooks/codex-host-admission.py`. The
+`LIMEN_IMMUTABLE_ADMISSION_ENTRYPOINT` override is reserved for focused compatibility testing; host
+activation still installs and proves an exact runtime SHA before this cutover may merge.
 
 ## Lock order and recovery
 
