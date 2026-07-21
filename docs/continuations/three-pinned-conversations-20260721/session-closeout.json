@@ -25,5 +25,14 @@
       [],
       []
     ]
+  },
+  "requested_codex_session": {
+    "target_id_sha256": "b01cff3f83a63dd14b328018fc49693b600f9189eddab0d255f430778388b7fa",
+    "action": "native_archive",
+    "active_record_absent": true,
+    "archived_record_present": true,
+    "archived_record_sha256": "8c95d44a15d6fb584df417e004d334968f70f1e26e2f0d00f2f27c69f475dad2",
+    "sqlite_archived": true,
+    "reversible": true
   }
 }
