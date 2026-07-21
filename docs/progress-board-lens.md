@@ -77,6 +77,12 @@ no admission path rejects them solely for missing underwriting. Sanctioned produ
 new source, horizon, value, owner, and budget fields before fail-closed enforcement is activated in
 a separate change.
 
+One exact compatibility packet is not a work loan: the broker-authenticated TABVLARIVS projection
+shape with an exclusive task claim and a zero-run spend envelope. It mutates only the task-board
+projection and therefore consumes no executor capacity. Any positive spend, different adapter,
+different authority, or non-task intent loses that exemption and requires a positive `WorkLoanV1`.
+The projected task row itself still requires underwriting before later claim or dispatch.
+
 The lens already reports missing collateral with the future stable denial
 `task-not-underwritten:<comma-separated-fields>`. This is visibility, not lifecycle enforcement:
 `--view source_lineage` and each group's `underwriting_denial_counts` expose cohort-sized repair

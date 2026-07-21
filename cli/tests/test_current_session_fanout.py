@@ -182,11 +182,16 @@ def test_current_session_fanout_extracts_full_plan_set_and_marks_duplicates(
     assert "profile:runway-seconds:172800" in executor_seed["labels"]
     assert '"approval_mode":"never"' in executor_seed["context"]
     assert "proceed without confirmation for in-scope reversible work" in executor_seed["context"]
+    assert executor_seed["origin"] == "human_prompt"
+    assert executor_seed["horizon"] == "present"
+    assert executor_seed["value_case"]
+    assert executor_seed["owner_surface"] == "organvm/limen"
 
     from limen.models import Task
     from limen.provider_selection import execution_profile_for
 
     task = Task(**mod.task_model_payload(executor_seed))
+    assert task.value_case == executor_seed["value_case"]
     assert task.workstream_contract == snap["workstream_contract"]
     profile = execution_profile_for(task)
     assert profile.runway_seconds == 172_800

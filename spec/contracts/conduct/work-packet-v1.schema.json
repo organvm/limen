@@ -217,6 +217,32 @@
     },
     "WorkLoanV1": {
       "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "external_deadline": {
+                "const": true
+              }
+            },
+            "required": [
+              "external_deadline"
+            ]
+          },
+          "then": {
+            "properties": {
+              "due_at": {
+                "not": {
+                  "type": "null"
+                }
+              }
+            },
+            "required": [
+              "due_at"
+            ]
+          }
+        }
+      ],
       "description": "The collateral required before one bounded run may consume capacity.",
       "properties": {
         "budget_cost": {
@@ -257,6 +283,9 @@
           "type": "string"
         },
         "owner_surface": {
+          "maxLength": 8192,
+          "minLength": 1,
+          "pattern": "^[^\\x00]*[^\\s\\x00][^\\x00]*$",
           "title": "Owner Surface",
           "type": "string"
         },
@@ -277,6 +306,9 @@
           "type": "string"
         },
         "value_case": {
+          "maxLength": 8192,
+          "minLength": 1,
+          "pattern": "^[^\\x00]*[^\\s\\x00][^\\x00]*$",
           "title": "Value Case",
           "type": "string"
         }

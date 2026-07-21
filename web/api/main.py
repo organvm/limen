@@ -301,6 +301,8 @@ class AssignmentRequest(BaseModel):
     horizon: str | None = Field(default=None, pattern=r"^(past|present|future)$")
     value_case: str | None = Field(default=None, max_length=8192)
     owner_surface: str | None = Field(default=None, max_length=512)
+    external_deadline: bool | None = None
+    due_at: str | None = Field(default=None, max_length=128)
 
     @field_validator("priority")
     @classmethod
@@ -330,7 +332,15 @@ class AssignmentRequest(BaseModel):
             raise ValueError(f"target_agent must be one of {', '.join(sorted(VALID_AGENTS))}")
         return v
 
-    @field_validator("note", "session_id", "predicate", "receipt_target")
+    @field_validator(
+        "note",
+        "session_id",
+        "predicate",
+        "receipt_target",
+        "value_case",
+        "owner_surface",
+        "due_at",
+    )
     @classmethod
     def validate_text(cls, v: str | None) -> str | None:
         if v is None:
@@ -1553,6 +1563,8 @@ def assign_task(task_id: str, req: AssignmentRequest, authorization: str | None 
         "horizon": task.get("horizon"),
         "value_case": task.get("value_case"),
         "owner_surface": task.get("owner_surface"),
+        "external_deadline": task.get("external_deadline"),
+        "due_at": task.get("due_at"),
     }
     if req.target_agent is not None:
         prospective["target_agent"] = req.target_agent
@@ -1572,6 +1584,10 @@ def assign_task(task_id: str, req: AssignmentRequest, authorization: str | None 
         prospective["value_case"] = req.value_case
     if req.owner_surface is not None:
         prospective["owner_surface"] = req.owner_surface
+    if req.external_deadline is not None:
+        prospective["external_deadline"] = req.external_deadline
+    if req.due_at is not None:
+        prospective["due_at"] = req.due_at
     if req.status is not None:
         prospective["status"] = req.status
     try:
@@ -1587,6 +1603,8 @@ def assign_task(task_id: str, req: AssignmentRequest, authorization: str | None 
         "horizon": prospective.get("horizon"),
         "value_case": prospective.get("value_case"),
         "owner_surface": prospective.get("owner_surface"),
+        "external_deadline": prospective.get("external_deadline"),
+        "due_at": prospective.get("due_at"),
     }
     changed = [key for key, value in after.items() if before.get(key) != value]
     output = req.note or f"Assigned via steering controls: {', '.join(changed) if changed else 'no field changes'}"

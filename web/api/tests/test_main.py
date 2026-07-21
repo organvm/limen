@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import main
+import limen_intake
 import limen_work_loan
 
 
@@ -941,6 +942,12 @@ def test_assign_task_updates_steering_fields_and_logs(client: TestClient, tmp_pa
             "status": "open",
             "predicate": "pytest -q web/api/tests/test_main.py",
             "receipt_target": "github:4444J99/limen:pull-request:LIMEN-011",
+            "origin": "obligation",
+            "horizon": "present",
+            "value_case": "Deliver the assigned external obligation",
+            "owner_surface": "github:4444J99/limen:pull-request:LIMEN-011",
+            "external_deadline": True,
+            "due_at": "2026-08-01",
             "note": "Route through Jules after QA steering",
             "session_id": "qa-panel",
         },
@@ -949,12 +956,25 @@ def test_assign_task_updates_steering_fields_and_logs(client: TestClient, tmp_pa
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "assigned"
-    assert set(payload["changed"]) == {"target_agent", "priority", "budget_cost", "status"}
+    assert set(payload["changed"]) == {
+        "target_agent",
+        "priority",
+        "budget_cost",
+        "status",
+        "origin",
+        "horizon",
+        "value_case",
+        "owner_surface",
+        "external_deadline",
+        "due_at",
+    }
     task = read_board(tmp_path)["tasks"][0]
     assert task["target_agent"] == "jules"
     assert task["priority"] == "high"
     assert task["budget_cost"] == 2
     assert task["status"] == "open"
+    assert task["external_deadline"] is True
+    assert task["due_at"] == "2026-08-01"
     assert task["dispatch_log"][-1]["status"] == "assigned"
     assert task["dispatch_log"][-1]["session_id"] == "qa-panel"
     assert "Route through Jules" in task["dispatch_log"][-1]["output"]
@@ -1492,6 +1512,32 @@ def test_task_api_exposes_work_loan_fields_without_breaking_legacy_create_payloa
     )
     assert limen_work_loan.work_loan_denial(("value_case", "source_origin")) == (
         "task-not-underwritten:source_origin,value_case"
+    )
+
+
+def test_work_loan_shared_fixtures_match_api_runtime() -> None:
+    fixtures_path = Path(__file__).resolve().parents[3] / "spec/contracts/work-loan-v1-fixtures.json"
+    fixtures = json.loads(fixtures_path.read_text(encoding="utf-8"))
+    task = {
+        "repo": "organvm/limen",
+        "budget_cost": 1,
+        "origin": "obligation",
+        "horizon": "present",
+        "value_case": "Meet the declared external deadline",
+        "predicate": "pytest -q",
+        "receipt_target": "git:organvm/limen:logs/deadline.json",
+        "external_deadline": True,
+    }
+    for case in fixtures["due_at_cases"]:
+        missing = limen_work_loan.task_work_loan_missing_fields(task | {"due_at": case["value"]})
+        assert ("due_at" not in missing) is case["valid"], case["value"]
+    for case in fixtures["predicate_cases"]:
+        assert limen_intake.is_executable_predicate(case["value"]) is case["valid"], case["value"]
+    for case in fixtures["receipt_target_cases"]:
+        assert limen_intake.is_durable_receipt_target(case["value"]) is case["valid"], case["value"]
+    assert limen_work_loan.task_work_loan_missing_fields(task | {"value_case": "\x00"}) == (
+        "value_case",
+        "due_at",
     )
 
 

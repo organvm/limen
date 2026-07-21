@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date, datetime
 from typing import Any, Iterable, Mapping
 
 from limen_intake import is_durable_receipt_target, is_executable_predicate
@@ -44,6 +45,8 @@ HORIZONS = {
     "future": "future",
     "later": "future",
 }
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$")
 
 
 def _value(task: Mapping[str, Any] | object, field: str, default: Any = None) -> Any:
@@ -72,6 +75,24 @@ def _field_or_label(
     return None
 
 
+def _valid_due_at(value: Any) -> bool:
+    text = str(value or "").strip()
+    try:
+        if DATE_RE.fullmatch(text):
+            date.fromisoformat(text)
+            return True
+        if DATETIME_RE.fullmatch(text):
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+            return parsed.tzinfo is not None
+    except ValueError:
+        return False
+    return False
+
+
+def _bounded_text(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip()) and "\x00" not in value and len(value) <= 8192
+
+
 def task_work_loan_missing_fields(task: Mapping[str, Any] | object) -> tuple[str, ...]:
     missing: set[str] = set()
     origin = ORIGINS.get(
@@ -83,29 +104,30 @@ def task_work_loan_missing_fields(task: Mapping[str, Any] | object) -> tuple[str
             )
         )
     )
-    horizon = HORIZONS.get(
-        _slug(_field_or_label(task, ("time_horizon", "horizon"), ("horizon", "time-horizon")))
-    )
+    horizon = HORIZONS.get(_slug(_field_or_label(task, ("time_horizon", "horizon"), ("horizon", "time-horizon"))))
     value_case = _field_or_label(
         task,
         ("value_case", "expected_value", "work_credit"),
         ("value", "value-case", "work-credit"),
     )
-    owner = _field_or_label(
-        task,
-        ("owner_surface", "work_owner"),
-        ("owner-surface", "work-owner"),
-    ) or str(_value(task, "repo", "") or "").strip()
+    owner = (
+        _field_or_label(
+            task,
+            ("owner_surface", "work_owner"),
+            ("owner-surface", "work-owner"),
+        )
+        or str(_value(task, "repo", "") or "").strip()
+    )
     cost = _value(task, "budget_cost")
     if not origin:
         missing.add("source_origin")
     if not horizon:
         missing.add("horizon")
-    if not value_case:
+    if not _bounded_text(value_case):
         missing.add("value_case")
     if isinstance(cost, bool) or not isinstance(cost, int) or cost <= 0:
         missing.add("budget_cost")
-    if not owner:
+    if not _bounded_text(owner):
         missing.add("owner_surface")
     if not is_executable_predicate(_value(task, "predicate")):
         missing.add("predicate")
@@ -118,7 +140,7 @@ def task_work_loan_missing_fields(task: Mapping[str, Any] | object) -> tuple[str
         ("due_at", "due_on", "due_date", "deadline"),
         ("due", "due-at", "due-on", "deadline"),
     )
-    if external and not due:
+    if external and not _valid_due_at(due):
         missing.add("due_at")
     return tuple(field for field in FIELD_ORDER if field in missing)
 

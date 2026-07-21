@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import ast
+import json
 from pathlib import Path
 
 import pytest
 
+from limen.intake import is_durable_receipt_target, is_executable_predicate
 from limen.work_loan import (
     WorkLoanV1,
+    packet_is_non_capacity_projection,
     packet_work_loan_missing,
     task_source_lineage,
     task_work_loan_readiness,
@@ -13,6 +17,7 @@ from limen.work_loan import (
 
 
 ROOT = Path(__file__).resolve().parents[2]
+FIXTURES = json.loads((ROOT / "spec/contracts/work-loan-v1-fixtures.json").read_text())
 
 
 def task(**overrides):
@@ -89,6 +94,36 @@ def test_external_deadline_requires_due_at_but_ordinary_work_does_not() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "case",
+    FIXTURES["due_at_cases"],
+    ids=lambda case: case["value"],
+)
+def test_due_at_fixtures_match_python_readiness(case: dict) -> None:
+    readiness = task_work_loan_readiness(task(external_deadline=True, due_at=case["value"]))
+    assert readiness.ready is case["valid"]
+    assert (readiness.reason_code == "task-not-underwritten:due_at") is not case["valid"]
+
+
+def test_validation_errors_name_the_actual_collateral_field() -> None:
+    readiness = task_work_loan_readiness(task(owner_surface="\x00"))
+    assert readiness.reason_code == "task-not-underwritten:owner_surface"
+
+
+@pytest.mark.parametrize("case", FIXTURES["predicate_cases"], ids=lambda case: case["value"])
+def test_predicate_fixtures_match_canonical_python_intake(case: dict) -> None:
+    assert is_executable_predicate(case["value"]) is case["valid"]
+
+
+@pytest.mark.parametrize(
+    "case",
+    FIXTURES["receipt_target_cases"],
+    ids=lambda case: case["value"],
+)
+def test_receipt_fixtures_match_canonical_python_intake(case: dict) -> None:
+    assert is_durable_receipt_target(case["value"]) is case["valid"]
+
+
 def test_packet_work_loan_requires_canonical_origin_horizon_and_bound_cost() -> None:
     packet = {
         "predicate": "pytest -q cli/tests/test_work_loan.py",
@@ -106,6 +141,41 @@ def test_packet_work_loan_requires_canonical_origin_horizon_and_bound_cost() -> 
     assert packet_work_loan_missing(packet) == ("source_origin", "horizon", "budget_cost")
 
 
+def test_only_exact_zero_cost_task_projection_is_non_capacity_compatibility_work() -> None:
+    task_id = "LIMEN-PROJECTION-1"
+    packet = {
+        "intent": {"kind": "task.status", "task_id": task_id},
+        "execution": {"adapter": "tabularius", "projection": "tasks.yaml"},
+        "preferred_agent": "tabularius",
+        "required_capabilities": ["board-write"],
+        "resource_claims": [{"key": f"task/{task_id}", "mode": "exclusive"}],
+        "predicate": "python3 scripts/validate-task-board.py --tasks tasks.yaml",
+        "receipt_target": f"git:organvm/limen:tasks.yaml#{task_id}",
+        "authority": {
+            "actions": ["task.status"],
+            "path_prefixes": ["tasks.yaml"],
+            "external_effects": [],
+            "may_delegate": False,
+        },
+        "effect": "write",
+        "spend": {"unit": "runs", "limit": 0, "reserve": 0},
+        "task_id": task_id,
+    }
+
+    assert packet_is_non_capacity_projection(packet)
+    assert packet_work_loan_missing(packet) == ()
+
+    packet["spend"]["limit"] = 1
+    assert not packet_is_non_capacity_projection(packet)
+    assert packet_work_loan_missing(packet) == (
+        "source_origin",
+        "horizon",
+        "value_case",
+        "budget_cost",
+        "owner_surface",
+    )
+
+
 def test_source_lineage_is_never_inferred_from_title_or_repo() -> None:
     assert task_source_lineage(task(title="Feed cohort 7")) == "unknown"
     assert task_source_lineage(task(source_lineage="prompt-lineage-7")) == "prompt-lineage-7"
@@ -121,7 +191,9 @@ def test_sanctioned_producers_adopt_explicit_work_loan_collateral() -> None:
         "scripts/batch-dispatch.py",
         "scripts/converge-organ.py",
         "scripts/corpus-converge.py",
+        "scripts/current-session-fanout.py",
         "scripts/discover-value.py",
+        "scripts/dispatch-continuity-check.py",
         "scripts/generate-backlog.py",
         "scripts/generate-experience-backlog.py",
         "scripts/generate-organ-backlog.py",
@@ -129,14 +201,36 @@ def test_sanctioned_producers_adopt_explicit_work_loan_collateral() -> None:
         "scripts/generate-seo-backlog.py",
         "scripts/ingest-backlog.py",
         "scripts/insight-route.py",
+        "scripts/check-main-green.py",
+        "scripts/heal-dispatch.py",
         "scripts/mine-backlog.py",
         "scripts/overnight-watch.py",
+        "scripts/quicken.py",
+        "scripts/routine-freshness-audit.py",
+        "scripts/self-heal.py",
     )
     for relative in task_producers:
         source = (ROOT / relative).read_text(encoding="utf-8")
         assert "origin" in source, relative
         assert "horizon" in source, relative
         assert "value_case" in source, relative
+
+    direct_task_producers = set()
+    for source_root in (ROOT / "scripts", ROOT / "mcp/src/limen_mcp"):
+        for path in source_root.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            if any(
+                isinstance(node, ast.Call)
+                and (
+                    isinstance(node.func, ast.Name)
+                    and node.func.id == "Task"
+                    or isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "Task"
+                )
+                for node in ast.walk(tree)
+            ):
+                direct_task_producers.add(str(path.relative_to(ROOT)))
+    assert direct_task_producers <= set(task_producers) | {"mcp/src/limen_mcp/server.py"}
 
     packet_producers = (
         "cli/src/limen/conduct/campaign.py",

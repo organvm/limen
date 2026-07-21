@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Iterable, Literal, Mapping
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from limen.intake import is_durable_receipt_target, is_executable_predicate
 
@@ -29,6 +29,9 @@ WORK_LOAN_MISSING_ORDER = (
     "receipt_target",
     "due_at",
 )
+
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$")
 
 _ORIGIN_ALIASES = {
     "ask": "human_prompt",
@@ -61,14 +64,39 @@ _HORIZON_ALIASES = {
 class WorkLoanV1(BaseModel):
     """The collateral required before one bounded run may consume capacity."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        json_schema_extra={
+            "allOf": [
+                {
+                    "if": {
+                        "properties": {"external_deadline": {"const": True}},
+                        "required": ["external_deadline"],
+                    },
+                    "then": {
+                        "properties": {"due_at": {"not": {"type": "null"}}},
+                        "required": ["due_at"],
+                    },
+                }
+            ]
+        },
+    )
 
     schema_version: Literal["limen.work_loan.v1"] = WORK_LOAN_SCHEMA
     source_origin: Literal["obligation", "human_prompt", "agent_recommendation", "system_debt"]
     horizon: Literal["past", "present", "future"]
-    value_case: str
+    value_case: str = Field(
+        min_length=1,
+        max_length=8192,
+        json_schema_extra={"pattern": r"^[^\x00]*[^\s\x00][^\x00]*$"},
+    )
     budget_cost: int = Field(gt=0, le=1_000_000)
-    owner_surface: str
+    owner_surface: str = Field(
+        min_length=1,
+        max_length=8192,
+        json_schema_extra={"pattern": r"^[^\x00]*[^\s\x00][^\x00]*$"},
+    )
     external_deadline: bool = False
     due_at: date | datetime | None = None
 
@@ -79,6 +107,27 @@ class WorkLoanV1(BaseModel):
         if not normalized or "\x00" in normalized or len(normalized) > 8192:
             raise ValueError(f"{info.field_name} must be a non-empty bounded string")
         return normalized
+
+    @field_validator("due_at", mode="before")
+    @classmethod
+    def validate_due_at(cls, value: Any) -> date | datetime | None:
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                raise ValueError("due_at datetime must include a timezone")
+            return value
+        if isinstance(value, date):
+            return value
+        text = str(value).strip()
+        try:
+            if _DATE_RE.fullmatch(text):
+                return date.fromisoformat(text)
+            if _DATETIME_RE.fullmatch(text):
+                return datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("due_at must be a valid ISO date or timezone-aware datetime") from exc
+        raise ValueError("due_at must be a valid ISO date or timezone-aware datetime")
 
     @model_validator(mode="after")
     def external_deadline_has_due_at(self) -> "WorkLoanV1":
@@ -169,11 +218,14 @@ def task_value_case(task: Mapping[str, Any] | object) -> str | None:
 def task_source_lineage(task: Mapping[str, Any] | object) -> str:
     """Return only an explicit source/cohort lineage; absence stays visible."""
 
-    return _field_or_label(
-        task,
-        ("source_lineage", "lineage_id", "source_id", "source_event_id"),
-        ("source-lineage", "lineage", "source-id", "source-event"),
-    ) or "unknown"
+    return (
+        _field_or_label(
+            task,
+            ("source_lineage", "lineage_id", "source_id", "source_event_id"),
+            ("source-lineage", "lineage", "source-id", "source-event"),
+        )
+        or "unknown"
+    )
 
 
 def task_owner_surface(task: Mapping[str, Any] | object) -> str | None:
@@ -208,6 +260,24 @@ def _ordered_missing(fields: Iterable[str]) -> tuple[str, ...]:
     return tuple(field for field in WORK_LOAN_MISSING_ORDER if field in selected)
 
 
+def _valid_due_at(value: Any) -> bool:
+    if isinstance(value, datetime):
+        return value.tzinfo is not None
+    if isinstance(value, date):
+        return True
+    text = str(value or "").strip()
+    try:
+        if _DATE_RE.fullmatch(text):
+            date.fromisoformat(text)
+            return True
+        if _DATETIME_RE.fullmatch(text):
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+            return parsed.tzinfo is not None
+    except ValueError:
+        return False
+    return False
+
+
 def task_work_loan_readiness(task: Mapping[str, Any] | object) -> WorkLoanReadiness:
     """Derive only explicit task-owned metadata; never infer from title prose."""
 
@@ -235,7 +305,7 @@ def task_work_loan_readiness(task: Mapping[str, Any] | object) -> WorkLoanReadin
         missing.append("predicate")
     if not is_durable_receipt_target(receipt_target):
         missing.append("receipt_target")
-    if external_deadline and not due_at:
+    if external_deadline and not _valid_due_at(due_at):
         missing.append("due_at")
     ordered = _ordered_missing(missing)
     if ordered:
@@ -250,15 +320,63 @@ def task_work_loan_readiness(task: Mapping[str, Any] | object) -> WorkLoanReadin
             external_deadline=external_deadline,
             due_at=due_at,
         )
-    except ValueError:
-        # A present but malformed due date is still a deterministic due_at denial.
-        fields = ("due_at",) if due_at else ("value_case",)
+    except ValidationError as exc:
+        fields = []
+        for error in exc.errors():
+            location = error.get("loc") or ()
+            field = str(location[0]) if location else ""
+            if field in WORK_LOAN_MISSING_ORDER:
+                fields.append(field)
+        if not fields:
+            fields.append("due_at" if external_deadline else "value_case")
         return WorkLoanReadiness(loan=None, missing_fields=_ordered_missing(fields))
     return WorkLoanReadiness(loan=loan, missing_fields=())
 
 
+def packet_is_non_capacity_projection(packet: Any) -> bool:
+    """Recognize the exact broker-authenticated task projection that consumes no run capacity."""
+
+    execution = _value(packet, "execution", {}) or {}
+    intent = _value(packet, "intent", {}) or {}
+    spend = _value(packet, "spend", {}) or {}
+    authority = _value(packet, "authority", {}) or {}
+    task_id = _value(packet, "task_id")
+    kind = _value(intent, "kind")
+    required_capabilities = set(_value(packet, "required_capabilities", ()) or ())
+    actions = set(_value(authority, "actions", ()) or ())
+    path_prefixes = set(_value(authority, "path_prefixes", ()) or ())
+    external_effects = set(_value(authority, "external_effects", ()) or ())
+    claims = tuple(_value(packet, "resource_claims", ()) or ())
+    receipt_target = str(_value(packet, "receipt_target", "") or "")
+    claim_matches = len(claims) == 1 and _value(claims[0], "key") == f"task/{task_id}"
+    claim_matches = claim_matches and _value(claims[0], "mode") == "exclusive"
+    return bool(
+        _value(execution, "adapter") == "tabularius"
+        and _value(execution, "projection") == "tasks.yaml"
+        and kind in {"task.upsert", "task.status", "task.claim", "task.mutate"}
+        and task_id
+        and _value(intent, "task_id") == task_id
+        and _value(packet, "preferred_agent") == "tabularius"
+        and required_capabilities == {"board-write"}
+        and claim_matches
+        and _value(packet, "predicate") == "python3 scripts/validate-task-board.py --tasks tasks.yaml"
+        and re.fullmatch(rf"git:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+:tasks\.yaml#{re.escape(str(task_id))}", receipt_target)
+        and actions == {kind}
+        and path_prefixes == {"tasks.yaml"}
+        and not external_effects
+        and _value(authority, "may_delegate") is False
+        and _value(packet, "effect") == "write"
+        and _value(spend, "unit", "runs") == "runs"
+        and _value(spend, "limit") == 0
+        and _value(spend, "reserve", 0) == 0
+    )
+
+
 def packet_work_loan_missing(packet: Any) -> tuple[str, ...]:
     """Return stable broker denial fields for a validated conduct packet."""
+
+    if packet_is_non_capacity_projection(packet):
+        return ()
 
     loan = _value(packet, "work_loan")
     missing: list[str] = []
@@ -276,7 +394,7 @@ def packet_work_loan_missing(packet: Any) -> tuple[str, ...]:
         spend = _value(packet, "spend")
         if cost is None or cost != _positive_int(_value(spend, "limit")):
             missing.append("budget_cost")
-        if _value(loan, "external_deadline", False) and _value(loan, "due_at") is None:
+        if _value(loan, "external_deadline", False) and not _valid_due_at(_value(loan, "due_at")):
             missing.append("due_at")
     if not is_executable_predicate(_value(packet, "predicate")):
         missing.append("predicate")
