@@ -469,10 +469,39 @@ def test_inflight_markers_consume_per_lane_limit(tmp_path):
     lf.portal.budget.per_agent = {"codex": 50, "agy": 50}
     lf.tasks = [
         *[
-            Task(id=f"C{i}", title="t", repo="x/y", target_agent="codex", status="open", created=today, origin="human_prompt", horizon="present", value_case="test task fixture", budget_cost=1, predicate="python3 scripts/check.py", receipt_target=f"github:x/y:pull-request:C{i}")
+            Task(
+                id=f"C{i}",
+                title="t",
+                repo="x/y",
+                target_agent="codex",
+                status="open",
+                created=today,
+                origin="human_prompt",
+                horizon="present",
+                value_case="test task fixture",
+                budget_cost=1,
+                predicate="python3 scripts/check.py",
+                receipt_target=f"github:x/y:pull-request:C{i}",
+            )
             for i in range(3)
         ],
-        *[Task(id=f"A{i}", title="t", repo="x/y", target_agent="agy", status="open", created=today, origin="human_prompt", horizon="present", value_case="test task fixture", budget_cost=1, predicate="python3 scripts/check.py", receipt_target=f"github:x/y:pull-request:A{i}") for i in range(3)],
+        *[
+            Task(
+                id=f"A{i}",
+                title="t",
+                repo="x/y",
+                target_agent="agy",
+                status="open",
+                created=today,
+                origin="human_prompt",
+                horizon="present",
+                value_case="test task fixture",
+                budget_cost=1,
+                predicate="python3 scripts/check.py",
+                receipt_target=f"github:x/y:pull-request:A{i}",
+            )
+            for i in range(3)
+        ],
     ]
     save_limen_file(tmp_path / "tasks.yaml", lf)
     for i in range(2):
@@ -488,7 +517,19 @@ def test_running_marker_blocks_duplicate_task_reservation_across_agents(tmp_path
     today = datetime.date.today()
     lf = load_limen_file(tmp_path / "tasks.yaml")
     lf.portal.budget.per_agent = {"codex": 50, "claude": 50}
-    lf.tasks = [Task(id="DUP", title="t", repo="x/y", target_agent="any", status="open", created=today, origin="human_prompt", horizon="present", value_case="test task fixture")]
+    lf.tasks = [
+        Task(
+            id="DUP",
+            title="t",
+            repo="x/y",
+            target_agent="any",
+            status="open",
+            created=today,
+            origin="human_prompt",
+            horizon="present",
+            value_case="test task fixture",
+        )
+    ]
     save_limen_file(tmp_path / "tasks.yaml", lf)
     (da.RUNS / "DUP__codex.running").write_text(datetime.datetime.now(datetime.timezone.utc).isoformat())
 
@@ -502,7 +543,19 @@ def test_pending_result_blocks_duplicate_task_reservation_across_agents(tmp_path
     today = datetime.date.today()
     lf = load_limen_file(tmp_path / "tasks.yaml")
     lf.portal.budget.per_agent = {"codex": 50, "claude": 50}
-    lf.tasks = [Task(id="DUP", title="t", repo="x/y", target_agent="any", status="open", created=today, origin="human_prompt", horizon="present", value_case="test task fixture")]
+    lf.tasks = [
+        Task(
+            id="DUP",
+            title="t",
+            repo="x/y",
+            target_agent="any",
+            status="open",
+            created=today,
+            origin="human_prompt",
+            horizon="present",
+            value_case="test task fixture",
+        )
+    ]
     save_limen_file(tmp_path / "tasks.yaml", lf)
     (da.RUNS / "DUP.result.json").write_text(
         json.dumps({"task_id": "DUP", "agent": "codex", "result": "https://github.com/x/y/pull/9"})
@@ -524,7 +577,21 @@ def test_agy_weak_proxy_can_reserve_against_daily_runway(tmp_path):
         date=today.isoformat(), spent=1, per_agent={"agy": 1}, per_agent_reset={"agy": reset_at}
     )
     lf.tasks = [
-        Task(id=f"A{i}", title="t", repo="x/y", target_agent="agy", status="open", created=today, origin="human_prompt", horizon="present", value_case="test task fixture", budget_cost=1, predicate="python3 scripts/check.py", receipt_target=f"github:x/y:pull-request:A{i}") for i in range(2)
+        Task(
+            id=f"A{i}",
+            title="t",
+            repo="x/y",
+            target_agent="agy",
+            status="open",
+            created=today,
+            origin="human_prompt",
+            horizon="present",
+            value_case="test task fixture",
+            budget_cost=1,
+            predicate="python3 scripts/check.py",
+            receipt_target=f"github:x/y:pull-request:A{i}",
+        )
+        for i in range(2)
     ]
     save_limen_file(tmp_path / "tasks.yaml", lf)
     (tmp_path / "logs").mkdir(exist_ok=True)
@@ -560,7 +627,19 @@ def test_agy_recent_rate_limit_does_not_bypass_proxy_budget(tmp_path):
     lf.portal.budget.track = BudgetTrack(
         date=today.isoformat(), spent=1, per_agent={"agy": 1}, per_agent_reset={"agy": reset_at}
     )
-    lf.tasks = [Task(id="A0", title="t", repo="x/y", target_agent="agy", status="open", created=today, origin="human_prompt", horizon="present", value_case="test task fixture")]
+    lf.tasks = [
+        Task(
+            id="A0",
+            title="t",
+            repo="x/y",
+            target_agent="agy",
+            status="open",
+            created=today,
+            origin="human_prompt",
+            horizon="present",
+            value_case="test task fixture",
+        )
+    ]
     save_limen_file(tmp_path / "tasks.yaml", lf)
     (tmp_path / "logs").mkdir(exist_ok=True)
     (tmp_path / "logs" / "usage.json").write_text(
@@ -669,7 +748,22 @@ def test_async_remote_lane_not_gated_by_local_concurrency_cap(tmp_path):
     today = datetime.date.today()
     lf = load_limen_file(tmp_path / "tasks.yaml")
     lf.portal.budget.per_agent = {"codex": 50, "jules": 50}
-    lf.tasks = [Task(id="JT", title="slow", repo="x/y", target_agent="jules", status="open", created=today, origin="human_prompt", horizon="present", value_case="test task fixture", budget_cost=1, predicate="python3 scripts/check.py", receipt_target="github:x/y:pull-request:JT")]
+    lf.tasks = [
+        Task(
+            id="JT",
+            title="slow",
+            repo="x/y",
+            target_agent="jules",
+            status="open",
+            created=today,
+            origin="human_prompt",
+            horizon="present",
+            value_case="test task fixture",
+            budget_cost=1,
+            predicate="python3 scripts/check.py",
+            receipt_target="github:x/y:pull-request:JT",
+        )
+    ]
     save_limen_file(tmp_path / "tasks.yaml", lf)
     # local in-flight runs fully saturate the cap (4 local markers, cap 4)
     for i in range(4):
@@ -689,7 +783,20 @@ def test_async_remote_lane_is_bounded_by_live_usage_remaining(tmp_path):
     lf = load_limen_file(tmp_path / "tasks.yaml")
     lf.portal.budget.per_agent = {"codex": 50, "jules": 100}
     lf.tasks = [
-        Task(id=f"JT{i}", title="slow", repo="x/y", target_agent="jules", status="open", created=today, origin="human_prompt", horizon="present", value_case="test task fixture", budget_cost=1, predicate="python3 scripts/check.py", receipt_target=f"github:x/y:pull-request:JT{i}")
+        Task(
+            id=f"JT{i}",
+            title="slow",
+            repo="x/y",
+            target_agent="jules",
+            status="open",
+            created=today,
+            origin="human_prompt",
+            horizon="present",
+            value_case="test task fixture",
+            budget_cost=1,
+            predicate="python3 scripts/check.py",
+            receipt_target=f"github:x/y:pull-request:JT{i}",
+        )
         for i in range(10)
     ]
     save_limen_file(tmp_path / "tasks.yaml", lf)
@@ -716,11 +823,37 @@ def test_remote_burst_does_not_expand_local_lane_room(tmp_path):
     lf.portal.budget.per_agent = {"jules": 100, "opencode": 100}
     lf.tasks = [
         *[
-            Task(id=f"JT{i}", title="remote", repo="x/y", target_agent="jules", status="open", created=today, origin="human_prompt", horizon="present", value_case="test task fixture", budget_cost=1, predicate="python3 scripts/check.py", receipt_target=f"github:x/y:pull-request:JT{i}")
+            Task(
+                id=f"JT{i}",
+                title="remote",
+                repo="x/y",
+                target_agent="jules",
+                status="open",
+                created=today,
+                origin="human_prompt",
+                horizon="present",
+                value_case="test task fixture",
+                budget_cost=1,
+                predicate="python3 scripts/check.py",
+                receipt_target=f"github:x/y:pull-request:JT{i}",
+            )
             for i in range(10)
         ],
         *[
-            Task(id=f"OT{i}", title="local", repo="x/y", target_agent="opencode", status="open", created=today, origin="human_prompt", horizon="present", value_case="test task fixture", budget_cost=1, predicate="python3 scripts/check.py", receipt_target=f"github:x/y:pull-request:OT{i}")
+            Task(
+                id=f"OT{i}",
+                title="local",
+                repo="x/y",
+                target_agent="opencode",
+                status="open",
+                created=today,
+                origin="human_prompt",
+                horizon="present",
+                value_case="test task fixture",
+                budget_cost=1,
+                predicate="python3 scripts/check.py",
+                receipt_target=f"github:x/y:pull-request:OT{i}",
+            )
             for i in range(10)
         ],
     ]
@@ -762,7 +895,22 @@ def test_remote_lane_can_launch_when_local_cap_is_zero(tmp_path):
     today = datetime.date.today()
     lf = load_limen_file(tmp_path / "tasks.yaml")
     lf.portal.budget.per_agent = {"jules": 100}
-    lf.tasks = [Task(id="JT", title="remote", repo="x/y", target_agent="jules", status="open", created=today, origin="human_prompt", horizon="present", value_case="test task fixture", budget_cost=1, predicate="python3 scripts/check.py", receipt_target="github:x/y:pull-request:JT")]
+    lf.tasks = [
+        Task(
+            id="JT",
+            title="remote",
+            repo="x/y",
+            target_agent="jules",
+            status="open",
+            created=today,
+            origin="human_prompt",
+            horizon="present",
+            value_case="test task fixture",
+            budget_cost=1,
+            predicate="python3 scripts/check.py",
+            receipt_target="github:x/y:pull-request:JT",
+        )
+    ]
     save_limen_file(tmp_path / "tasks.yaml", lf)
     (tmp_path / "logs").mkdir(exist_ok=True)
     (tmp_path / "logs" / "usage.json").write_text(
@@ -1387,8 +1535,31 @@ def test_async_normalizes_only_selected_legacy_task(tmp_path):
     today = datetime.date.today()
     lf = load_limen_file(tmp_path / "tasks.yaml")
     lf.tasks = [
-        Task(id="SELECTED", title="selected", repo="x/y", target_agent="codex", priority="critical", created=today, origin="human_prompt", horizon="present", value_case="test task fixture", budget_cost=1, predicate="python3 scripts/check.py", receipt_target="github:x/y:pull-request:SELECTED"),
-        Task(id="UNSELECTED", title="unselected", repo="x/y", target_agent="codex", priority="low", created=today, origin="human_prompt", horizon="present", value_case="test task fixture"),
+        Task(
+            id="SELECTED",
+            title="selected",
+            repo="x/y",
+            target_agent="codex",
+            priority="critical",
+            created=today,
+            origin="human_prompt",
+            horizon="present",
+            value_case="test task fixture",
+            budget_cost=1,
+            predicate="python3 scripts/check.py",
+            receipt_target="github:x/y:pull-request:SELECTED",
+        ),
+        Task(
+            id="UNSELECTED",
+            title="unselected",
+            repo="x/y",
+            target_agent="codex",
+            priority="low",
+            created=today,
+            origin="human_prompt",
+            horizon="present",
+            value_case="test task fixture",
+        ),
     ]
 
     picked, _reset_changed = da._pick_reservations(
@@ -1412,8 +1583,30 @@ def test_async_skips_unowned_legacy_candidate_and_continues(tmp_path, capsys):
     today = datetime.date.today()
     lf = load_limen_file(tmp_path / "tasks.yaml")
     lf.tasks = [
-        Task(id="UNOWNED", title="unowned", target_agent="codex", priority="critical", created=today, origin="human_prompt", horizon="present", value_case="test task fixture"),
-        Task(id="OWNED", title="owned", repo="x/y", target_agent="codex", priority="high", created=today, origin="human_prompt", horizon="present", value_case="test task fixture", budget_cost=1, predicate="python3 scripts/check.py", receipt_target="github:x/y:pull-request:OWNED"),
+        Task(
+            id="UNOWNED",
+            title="unowned",
+            target_agent="codex",
+            priority="critical",
+            created=today,
+            origin="human_prompt",
+            horizon="present",
+            value_case="test task fixture",
+        ),
+        Task(
+            id="OWNED",
+            title="owned",
+            repo="x/y",
+            target_agent="codex",
+            priority="high",
+            created=today,
+            origin="human_prompt",
+            horizon="present",
+            value_case="test task fixture",
+            budget_cost=1,
+            predicate="python3 scripts/check.py",
+            receipt_target="github:x/y:pull-request:OWNED",
+        ),
     ]
 
     picked, _reset_changed = da._pick_reservations(
@@ -1437,7 +1630,22 @@ def test_dry_run_does_not_pick_same_any_task_for_multiple_lanes(tmp_path):
     today = datetime.date.today()
     lf = load_limen_file(tmp_path / "tasks.yaml")
     lf.portal.budget.per_agent = {"codex": 50, "agy": 50}
-    lf.tasks = [Task(id="ANY", title="t", repo="x/y", target_agent="any", status="open", created=today, origin="human_prompt", horizon="present", value_case="test task fixture", budget_cost=1, predicate="python3 scripts/check.py", receipt_target="github:x/y:pull-request:ANY")]
+    lf.tasks = [
+        Task(
+            id="ANY",
+            title="t",
+            repo="x/y",
+            target_agent="any",
+            status="open",
+            created=today,
+            origin="human_prompt",
+            horizon="present",
+            value_case="test task fixture",
+            budget_cost=1,
+            predicate="python3 scripts/check.py",
+            receipt_target="github:x/y:pull-request:ANY",
+        )
+    ]
     save_limen_file(tmp_path / "tasks.yaml", lf)
 
     picked = da.reserve_and_launch(["codex", "agy"], per_agent=1, cap=2, dry=True)
@@ -1468,7 +1676,20 @@ def test_reserve_skips_generated_buildout_outside_value_tier(tmp_path, monkeypat
             predicate="python3 scripts/check.py",
             receipt_target="github:x/site.github.io:pull-request:GEN-NONVALUE",
         ),
-        Task(id="VALUE-WORK", title="value", repo="x/y", target_agent="codex", status="open", created=today, origin="human_prompt", horizon="present", value_case="test task fixture", budget_cost=1, predicate="python3 scripts/check.py", receipt_target="github:x/y:pull-request:VALUE-WORK"),
+        Task(
+            id="VALUE-WORK",
+            title="value",
+            repo="x/y",
+            target_agent="codex",
+            status="open",
+            created=today,
+            origin="human_prompt",
+            horizon="present",
+            value_case="test task fixture",
+            budget_cost=1,
+            predicate="python3 scripts/check.py",
+            receipt_target="github:x/y:pull-request:VALUE-WORK",
+        ),
     ]
     save_limen_file(tmp_path / "tasks.yaml", lf)
 
@@ -2341,9 +2562,48 @@ def test_async_reserve_does_not_use_stale_daily_board_cap(tmp_path):
     lf.portal.budget.daily = 2
     lf.portal.budget.per_agent = {"codex": 50, "agy": 50}
     lf.tasks = [
-        Task(id="C0", title="t", repo="x/y", target_agent="codex", status="open", created=today, origin="human_prompt", horizon="present", value_case="test task fixture", budget_cost=1, predicate="python3 scripts/check.py", receipt_target="github:x/y:pull-request:C0"),
-        Task(id="C1", title="t", repo="x/y", target_agent="codex", status="open", created=today, origin="human_prompt", horizon="present", value_case="test task fixture", budget_cost=1, predicate="python3 scripts/check.py", receipt_target="github:x/y:pull-request:C1"),
-        Task(id="A0", title="t", repo="x/y", target_agent="agy", status="open", created=today, origin="human_prompt", horizon="present", value_case="test task fixture", budget_cost=1, predicate="python3 scripts/check.py", receipt_target="github:x/y:pull-request:A0"),
+        Task(
+            id="C0",
+            title="t",
+            repo="x/y",
+            target_agent="codex",
+            status="open",
+            created=today,
+            origin="human_prompt",
+            horizon="present",
+            value_case="test task fixture",
+            budget_cost=1,
+            predicate="python3 scripts/check.py",
+            receipt_target="github:x/y:pull-request:C0",
+        ),
+        Task(
+            id="C1",
+            title="t",
+            repo="x/y",
+            target_agent="codex",
+            status="open",
+            created=today,
+            origin="human_prompt",
+            horizon="present",
+            value_case="test task fixture",
+            budget_cost=1,
+            predicate="python3 scripts/check.py",
+            receipt_target="github:x/y:pull-request:C1",
+        ),
+        Task(
+            id="A0",
+            title="t",
+            repo="x/y",
+            target_agent="agy",
+            status="open",
+            created=today,
+            origin="human_prompt",
+            horizon="present",
+            value_case="test task fixture",
+            budget_cost=1,
+            predicate="python3 scripts/check.py",
+            receipt_target="github:x/y:pull-request:A0",
+        ),
     ]
     save_limen_file(tmp_path / "tasks.yaml", lf)
 
@@ -2359,12 +2619,57 @@ def test_async_reserve_round_robins_local_slots_across_lanes(tmp_path):
     lf.portal.budget.daily = 20
     lf.portal.budget.per_agent = {"codex": 20, "opencode": 20, "agy": 20}
     lf.tasks = (
-        [Task(id=f"C{i}", title="t", repo="x/y", target_agent="codex", status="open", created=today, origin="human_prompt", horizon="present", value_case="test task fixture", budget_cost=1, predicate="python3 scripts/check.py", receipt_target=f"github:x/y:pull-request:C{i}") for i in range(4)]
-        + [
-            Task(id=f"O{i}", title="t", repo="x/y", target_agent="opencode", status="open", created=today, origin="human_prompt", horizon="present", value_case="test task fixture", budget_cost=1, predicate="python3 scripts/check.py", receipt_target=f"github:x/y:pull-request:O{i}")
+        [
+            Task(
+                id=f"C{i}",
+                title="t",
+                repo="x/y",
+                target_agent="codex",
+                status="open",
+                created=today,
+                origin="human_prompt",
+                horizon="present",
+                value_case="test task fixture",
+                budget_cost=1,
+                predicate="python3 scripts/check.py",
+                receipt_target=f"github:x/y:pull-request:C{i}",
+            )
             for i in range(4)
         ]
-        + [Task(id=f"A{i}", title="t", repo="x/y", target_agent="agy", status="open", created=today, origin="human_prompt", horizon="present", value_case="test task fixture", budget_cost=1, predicate="python3 scripts/check.py", receipt_target=f"github:x/y:pull-request:A{i}") for i in range(4)]
+        + [
+            Task(
+                id=f"O{i}",
+                title="t",
+                repo="x/y",
+                target_agent="opencode",
+                status="open",
+                created=today,
+                origin="human_prompt",
+                horizon="present",
+                value_case="test task fixture",
+                budget_cost=1,
+                predicate="python3 scripts/check.py",
+                receipt_target=f"github:x/y:pull-request:O{i}",
+            )
+            for i in range(4)
+        ]
+        + [
+            Task(
+                id=f"A{i}",
+                title="t",
+                repo="x/y",
+                target_agent="agy",
+                status="open",
+                created=today,
+                origin="human_prompt",
+                horizon="present",
+                value_case="test task fixture",
+                budget_cost=1,
+                predicate="python3 scripts/check.py",
+                receipt_target=f"github:x/y:pull-request:A{i}",
+            )
+            for i in range(4)
+        ]
     )
     save_limen_file(tmp_path / "tasks.yaml", lf)
 
@@ -2387,7 +2692,22 @@ def test_async_reserve_projects_stale_budget_reset_before_selection(tmp_path, mo
         per_agent={"jules": 100},
         per_agent_reset={"jules": stale},
     )
-    lf.tasks = [Task(id="JT", title="remote", repo="x/y", target_agent="jules", status="open", created=now.date(), origin="human_prompt", horizon="present", value_case="test task fixture", budget_cost=1, predicate="python3 scripts/check.py", receipt_target="github:x/y:pull-request:JT")]
+    lf.tasks = [
+        Task(
+            id="JT",
+            title="remote",
+            repo="x/y",
+            target_agent="jules",
+            status="open",
+            created=now.date(),
+            origin="human_prompt",
+            horizon="present",
+            value_case="test task fixture",
+            budget_cost=1,
+            predicate="python3 scripts/check.py",
+            receipt_target="github:x/y:pull-request:JT",
+        )
+    ]
     save_limen_file(tmp_path / "tasks.yaml", lf)
 
     picked = da.reserve_and_launch(["jules"], per_agent=8, cap=0, dry=True)
