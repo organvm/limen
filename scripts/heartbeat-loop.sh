@@ -124,6 +124,22 @@ dispatch_bounded() {  # dispatch_bounded <cmd...> — run dispatch under the SIG
   fi
 }
 
+SESSION_END_SOURCE="${LIMEN_SESSION_END_BREADCRUMBS:-${XDG_STATE_HOME:-$HOME/.local/state}/limen/session-end-breadcrumbs.jsonl}"
+drain_session_end_breadcrumbs() {
+  if [ -n "$DISPATCH_TIMEOUT_BIN" ]; then
+    "$DISPATCH_TIMEOUT_BIN" "${LIMEN_SESSION_END_CONSUMER_TIMEOUT:-90}" \
+      python3 "$LIMEN_ROOT/scripts/consume-session-end-breadcrumbs.py" \
+        --source "$SESSION_END_SOURCE" \
+        --max-sessions "${LIMEN_SESSION_END_CONSUMER_BATCH:-8}" \
+        --runway-seconds "${LIMEN_SESSION_END_CONSUMER_RUNWAY:-60}" 2>&1 | tail -1 || true
+  else
+    python3 "$LIMEN_ROOT/scripts/consume-session-end-breadcrumbs.py" \
+      --source "$SESSION_END_SOURCE" \
+      --max-sessions "${LIMEN_SESSION_END_CONSUMER_BATCH:-8}" \
+      --runway-seconds "${LIMEN_SESSION_END_CONSUMER_RUNWAY:-60}" 2>&1 | tail -1 || true
+  fi
+}
+
 # SINGLETON GUARD (ATOMIC) — only one heartbeat-loop may run. mkdir is atomic, so two
 # near-simultaneous launchd respawns cannot both win (the pidfile read-then-write did).
 # Stale-lock (dead holder) is recovered with a single rmdir+retry; lose that race → exit.
@@ -291,6 +307,10 @@ while true; do
   VITALS_PRESSURE=0
   VITALS_THROTTLE=0
   echo "──── beat $c $(date '+%F %T') ────"
+  # Drain local SessionEnd work while this process owns the singleton, even when
+  # autonomy is paused or the network is offline. The consumer remains bounded
+  # and fail-open so lifecycle work cannot wedge the daemon.
+  drain_session_end_breadcrumbs
   MODE="$(python3 "$LIMEN_ROOT/scripts/autonomy-governor.py" mode 2>/dev/null || echo paused)"
   if [ "$MODE" = "paused" ]; then
     # Stay the singleton owner. Exiting here made launchd KeepAlive respawn a fresh
