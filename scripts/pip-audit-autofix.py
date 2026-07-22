@@ -275,12 +275,15 @@ def apply_pins(component: Path, pins: dict[str, str]) -> None:
             if exported.returncode == 0 and exported.stdout.strip():
                 (component / "requirements.txt").write_text(exported.stdout, encoding="utf-8")
         return
-    # plain requirements.txt: rewrite each pinned package's line to name>=fix (case-insensitive match)
+    # plain requirements.txt: rewrite each pinned package's line to name>=fix (case-insensitive match).
+    # We only need the leading PEP 508 distribution name (which must start alphanumeric); matching just
+    # the name — a pattern with no comparison operators — sidesteps the CodeQL py/bad-tag-filter
+    # heuristic that misreads a `<|>`-bearing specifier alternation as a naive HTML-tag sanitizer.
     reqs = component / "requirements.txt"
     pin_by_norm = {n.lower(): v for n, v in pins.items()}
     out = []
     for line in reqs.read_text(encoding="utf-8").splitlines():
-        m = re.match(r"^\s*([A-Za-z0-9._-]+)\s*(==|>=|~=|<=|<|>).*$", line)
+        m = re.match(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)", line)
         if m and m.group(1).lower() in pin_by_norm:
             out.append(f"{m.group(1)}{pin_by_norm[m.group(1).lower()]}")
         else:
