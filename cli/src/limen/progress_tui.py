@@ -63,7 +63,7 @@ def filtered_leaves(snapshot: dict[str, Any], state: TuiState) -> list[dict[str,
     if state.debt_only:
         rows = [row for row in rows if not bool(row.get("terminal"))]
     if state.verification_debt_only:
-        rows = [row for row in rows if not bool(row.get("verified_outcome"))]
+        rows = [row for row in rows if bool(row.get("terminal")) and not bool(row.get("verified_outcome"))]
     return sorted(rows, key=lambda row: (str(row.get("source_id")), str(row.get("leaf_key"))))
 
 
@@ -349,9 +349,10 @@ def run_curses(
     loader: Callable[[], dict[str, Any]],
     *,
     watch_seconds: float = 2.0,
+    initial_state: TuiState | None = None,
 ) -> None:
     def session(screen) -> None:
-        state = TuiState()
+        state = initial_state if initial_state is not None else TuiState()
         snapshot = loader()
         last_refresh = time.monotonic()
         screen.keypad(True)

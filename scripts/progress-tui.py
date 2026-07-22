@@ -92,7 +92,7 @@ def main() -> int:
         if args.plain or not sys.stdout.isatty() or not sys.stdin.isatty():
             print(render_text(snapshot, state))
             return 0
-        run_curses(load, watch_seconds=args.watch_seconds)
+        run_curses(load, watch_seconds=args.watch_seconds, initial_state=state)
         return 0
     except (OSError, ValueError, ProgressHistoryError) as exc:
         print(f"progress tui failed: {exc}", file=sys.stderr)

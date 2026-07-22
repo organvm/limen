@@ -74,7 +74,7 @@ def normalize_adapter(value: dict[str, Any]) -> dict[str, Any]:
         "kind_field": value.get("kind_field"),
         "ask_kind_values": sorted({str(item).lower() for item in ask_kind_values}),
         "timestamp_fields": _text_list(value.get("timestamp_fields", ["created_at"]), "timestamp_fields"),
-        "evidence_fields": _text_list(value.get("evidence_fields"), "evidence_fields"),
+        "evidence_fields": _text_list(value["evidence_fields"], "evidence_fields") if value.get("evidence_fields") else [],
     }
 
 
