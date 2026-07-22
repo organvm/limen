@@ -70,20 +70,37 @@ verdict:
 scope_sources:
   value_repos: value-repos.json   # {repos: ["organvm/<name>", ...]} — the egg-face-critical set
 
-# ── Polish lane (Phase 2/3) ───────────────────────────────────────────────────
+# ── Polish lane (Phase 2 deterministic + Phase 3 LLM-judge) ───────────────────
+# The polish lane is the capability none of the six departments covered: does the public PROSE read
+# professionally? All Phase-2 checks are pure rules (zero tokens). Polish findings are `medium` by
+# default — below the `high` floor — so they inform + get ticketed but do not, by themselves, flip the
+# keeper red (a typo is backlog; a broken front door is an active egg-face).
 polish:
+  enabled: true
+  severity: medium
+  # Local PUBLIC prose DECORVM lints — never code, never the *.internal.md positioning drafts.
+  prose_globs:
+    - README.md
+    - docs/positioning/*.md
+  exclude_globs:
+    - "*.internal.md"
+  # Also lint the public-facing strings baked into repo descriptions / the front door.
+  seeds_text: positioning-seeds.json
   spellcheck:
     enabled: true
-    severity: medium
-    # texts DECORVM lints (README/bio/positioning prose only — never code)
-  bio_staleness_days: 180        # profile/positioning prose older than this → medium finding
+    severity: medium             # a typo on the front door is the classic egg-face
+  # Prose whose AGE matters (bios/positioning): git last-commit older than N days → medium finding.
+  staleness_globs:
+    - docs/positioning/*.md
+  bio_staleness_days: 180
   narrative_accuracy:
     enabled: true
-    severity: medium             # profile claims vs contribution mix (vvltvs NVMERVS)
+    severity: medium             # profile claims vs contribution mix (vvltvs NVMERVS); fail-open when mix absent
+  # Phase 3 — tiered LLM-judge (Haiku-first per model policy), re-run only when a surface's content changes.
   llm_judge:
     enabled: true
-    tier: haiku                  # Haiku-first per model-tiering policy; escalate per model_selection
-    on: change                   # only re-judge a surface when its content hash changes
+    tier: haiku
+    on: change
     severity: medium
 
 # ── Off-platform surfaces (Phase 5 slots — empty until enacted) ───────────────

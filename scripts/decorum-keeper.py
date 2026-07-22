@@ -204,6 +204,132 @@ def _run_command(cmd: str, timeout: int):
         return None
 
 
+# ── the polish lane (Phase 2 — deterministic, zero tokens) ─────────────────────
+# A curated, HIGH-CONFIDENCE misspelling map. Deliberately small and unambiguous: every entry is a
+# word that is essentially never intended, so false positives on public prose stay near zero. (codespell
+# is used when present; this is the always-available fallback per the registry.)
+_TYPO_MAP = {
+    "recieve": "receive", "recieved": "received", "seperate": "separate", "seperated": "separated",
+    "definately": "definitely", "occured": "occurred", "occurance": "occurrence", "untill": "until",
+    "adress": "address", "calender": "calendar", "cateogry": "category", "commited": "committed",
+    "wich": "which", "teh": "the", "thier": "their", "acheive": "achieve", "acheived": "achieved",
+    "beleive": "believe", "publically": "publicly", "neccessary": "necessary", "accomodate": "accommodate",
+    "occassion": "occasion", "existance": "existence", "maintainance": "maintenance", "priviledge": "privilege",
+    "enviroment": "environment", "goverment": "government", "independant": "independent", "reccomend": "recommend",
+    "refered": "referred", "succesful": "successful", "sucessful": "successful", "tommorow": "tomorrow",
+    "untils": "until", "buisness": "business", "gaurantee": "guarantee", "hardward": "hardware",
+    "developement": "development", "arguement": "argument", "compatability": "compatibility",
+}
+_FENCE_RX = None  # compiled lazily to keep import cheap
+
+
+def _strip_code(text: str) -> str:
+    """Drop fenced ``` code blocks and inline `code spans` — typos there are not public-prose egg-face."""
+    import re
+    out, in_fence = [], False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        out.append(re.sub(r"`[^`]*`", " ", line))
+    return "\n".join(out)
+
+
+def _spellcheck(text: str):
+    """Return [(word, fix, lineno)] for vendored typos in prose (code stripped, word-boundary, case-insensitive)."""
+    import re
+    hits = []
+    for lineno, line in enumerate(_strip_code(text).splitlines(), 1):
+        for word in re.findall(r"[A-Za-z]+", line):
+            fix = _TYPO_MAP.get(word.lower())
+            if fix:
+                hits.append((word, fix, lineno))
+    return hits
+
+
+def _git_mtime_days(relpath: str) -> float | None:
+    """Age in days of a file's last git commit (authored freshness, not checkout mtime)."""
+    try:
+        p = subprocess.run(["git", "-C", str(ROOT), "log", "-1", "--format=%ct", "--", relpath],
+                           capture_output=True, text=True, timeout=15)
+        epoch = int(p.stdout.strip())
+        return (datetime.now(timezone.utc).timestamp() - epoch) / 86400.0
+    except Exception:
+        return None
+
+
+def _prose_files(pol: dict):
+    import fnmatch
+    globs = pol.get("prose_globs") or []
+    excl = pol.get("exclude_globs") or []
+    files = []
+    for g in globs:
+        for p in sorted(ROOT.glob(g)):
+            rel = p.relative_to(ROOT).as_posix()
+            if p.is_file() and not any(fnmatch.fnmatch(p.name, e) for e in excl):
+                files.append((rel, p))
+    return files
+
+
+def polish_findings(reg: dict) -> tuple[list, bool]:
+    pol = (reg.get("polish") or {})
+    if not pol.get("enabled", True):
+        return [], False
+    sev = pol.get("severity", "medium")
+    findings, measured = [], False
+
+    # 1) spellcheck over public prose files
+    if (pol.get("spellcheck") or {}).get("enabled", True):
+        ssev = (pol.get("spellcheck") or {}).get("severity", sev)
+        for rel, path in _prose_files(pol):
+            measured = True
+            try:
+                hits = _spellcheck(path.read_text(errors="ignore"))
+            except Exception:
+                continue
+            for word, fix, ln in hits[:10]:
+                findings.append(_finding("polish", rel, ssev, f"misspelling '{word}' → '{fix}' ({rel}:{ln})", "spellcheck"))
+        # also lint the public strings baked into repo descriptions / the front door
+        seeds = pol.get("seeds_text")
+        if seeds and (ROOT / seeds).exists():
+            measured = True
+            for word, fix, ln in _spellcheck((ROOT / seeds).read_text(errors="ignore"))[:10]:
+                findings.append(_finding("polish", seeds, ssev, f"misspelling '{word}' → '{fix}' in {seeds}", "spellcheck"))
+
+    # 2) staleness of bio/positioning prose (git authored age)
+    max_days = pol.get("bio_staleness_days")
+    import fnmatch
+    if max_days:
+        for g in pol.get("staleness_globs") or []:
+            for p in sorted(ROOT.glob(g)):
+                rel = p.relative_to(ROOT).as_posix()
+                if not p.is_file() or any(fnmatch.fnmatch(p.name, e) for e in (pol.get("exclude_globs") or [])):
+                    continue
+                age = _git_mtime_days(rel)
+                if age is None:
+                    continue
+                measured = True
+                if age > max_days:
+                    findings.append(_finding("polish", rel, sev, f"stale positioning prose: {int(age)}d since last edit (max {max_days})", "staleness"))
+
+    # 3) narrative accuracy — profile claims vs contribution mix (fail-open when the mix is absent)
+    nar = pol.get("narrative_accuracy") or {}
+    if nar.get("enabled"):
+        vv = _load_json(ROOT / "logs" / "vvltvs-organ-state.json") or {}
+        if vv.get("mix_present") and vv.get("commit_pct") is not None:
+            measured = True
+            # a public identity that claims building/engineering while the contribution graph is
+            # overwhelmingly commit-churn (little review/design) is a narrative mismatch — the exact
+            # AW-PUBLIC-FACE-CONTRIBUTION-BALANCE risk the board already flagged.
+            if (vv.get("commit_pct") or 0) >= 80 and (vv.get("review_pct") or 0) < (vv.get("review_floor") or 10):
+                findings.append(_finding("polish", "profile", nar.get("severity", sev),
+                                         f"narrative mismatch: {vv.get('commit_pct')}% commit-churn, {vv.get('review_pct')}% review (below {vv.get('review_floor')}% floor) — public activity reads as churn, not craft",
+                                         "narrative-accuracy"))
+    return findings, measured
+
+
 # ── the sweep ───────────────────────────────────────────────────────────────
 def sweep(reg: dict, offline: bool) -> dict:
     depts = reg.get("departments") or {}
@@ -239,6 +365,11 @@ def sweep(reg: dict, offline: bool) -> dict:
                 fs, ms = dept_links(data, name, sev)
         findings.extend(fs)
         measured[name] = "measured" if ms else "skip"
+
+    # the polish lane — the NEW capability: does the public prose read professionally?
+    pfs, pms = polish_findings(reg)
+    findings.extend(pfs)
+    measured["polish"] = "measured" if pms else "skip"
 
     floor_i = _sev_index(order, floor)
     blocking = [f for f in findings if _sev_index(order, f["severity"]) >= floor_i]
