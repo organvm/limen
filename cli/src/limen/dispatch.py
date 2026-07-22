@@ -920,27 +920,6 @@ def _task_targets_agent(task: Task, agent: str) -> bool:
     return target in {canonical_agent(agent), "any"}
 
 
-def _effective_target_agent(task: Task) -> str:
-    """Return the live claim lane without mutating durable ownership metadata.
-
-    ``target_agent`` is the task's durable eligibility/ownership constraint. A
-    bounded provider failure may route the next claim through the latest OPEN
-    receipt; that executor lives in ``dispatch_log.route_to`` and does not
-    rewrite the task itself.
-    """
-
-    if task.status == "open" and task.dispatch_log:
-        latest = task.dispatch_log[-1]
-        if latest.status == "open" and latest.route_to:
-            return canonical_agent(latest.route_to)
-    return canonical_agent(task.target_agent)
-
-
-def _task_targets_agent(task: Task, agent: str) -> bool:
-    target = _effective_target_agent(task)
-    return target in {canonical_agent(agent), "any"}
-
-
 def _entry_text(entry: DispatchLogEntry) -> str:
     return " ".join(
         str(part or "")
