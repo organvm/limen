@@ -25,6 +25,15 @@ set -euo pipefail
 #
 # Hermetic: verify.py resolves ROOT from its own location, so copying it into a
 # throwaway git repo with a minimal fixture registry sandboxes every run.
+#
+# Hermetic in ENV too: pr-gate's PR step exports LIMEN_VERIFY_* (REQUIRE_BASE,
+# NO_DEPLOY_ESCALATION, NO_LOCK) for its own scoped run, and this test runs INSIDE
+# that step whenever verify.py changes — ambient values would silently flip what a
+# fixture exercises (fixture 4 escalates only when NO_DEPLOY_ESCALATION is unset).
+# Each fixture sets exactly the env it tests; everything ambient is stripped here.
+
+unset LIMEN_VERIFY_REQUIRE_BASE LIMEN_VERIFY_NO_DEPLOY_ESCALATION \
+  LIMEN_VERIFY_WHOLE_CMD LIMEN_VERIFY_NO_LOCK LIMEN_VERIFY_LOCK_FILE
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 fails=0
