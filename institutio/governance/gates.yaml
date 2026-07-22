@@ -39,6 +39,7 @@ deploy_triggers:
     workflow: .github/workflows/deploy.yml
     paths:
       - "web/app/**"
+      - "scripts/assemble-dashboard-data.py"
       - "firebase.json"
       - "tasks.yaml"
       - ".github/workflows/deploy.yml"
