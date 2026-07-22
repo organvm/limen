@@ -729,13 +729,37 @@ parameters:
     env: LIMEN_SESSION_LIFECYCLE_TIMEOUT
     self_update: none
     owner: continuity
-    note: "Hard process-group timeout for the low-priority SessionEnd lifecycle-pressure refresh. Timeout is fail-open and never kills an unrelated peer."
+    note: "Legacy standalone lifecycle-pressure wrapper ceiling. Project SessionEnd no longer invokes that wrapper; the heartbeat consumer owns deferred refresh timing."
   LIMEN_SESSION_WORKTREE_DEBT_TIMEOUT:
     default: 30
     env: LIMEN_SESSION_WORKTREE_DEBT_TIMEOUT
     self_update: none
     owner: continuity
-    note: "Narrow worktree-debt subprocess timeout injected only by the SessionEnd lifecycle-pressure hook."
+    note: "Narrow worktree-debt subprocess timeout propagated by the heartbeat lifecycle-pressure consumer and retained by the legacy standalone wrapper."
+  LIMEN_SESSION_END_BREADCRUMBS:
+    default: "${XDG_STATE_HOME:-$HOME/.local/state}/limen/session-end-breadcrumbs.jsonl"
+    env: LIMEN_SESSION_END_BREADCRUMBS
+    self_update: none
+    owner: continuity
+    note: "One host-stable, private JSONL queue shared by project and installed global Claude SessionEnd producers across runtime upgrades. It must not live under a versioned runtime or checkout; cursor and consumer receipts remain in the live Limen logs directory."
+  LIMEN_SESSION_END_CONSUMER_TIMEOUT:
+    default: 90
+    env: LIMEN_SESSION_END_CONSUMER_TIMEOUT
+    self_update: none
+    owner: continuity
+    note: "Outer heartbeat process timeout in seconds for one bounded SessionEnd breadcrumb drain. Timeout is fail-open; per-session receipts retain finite retry state for the next beat."
+  LIMEN_SESSION_END_CONSUMER_BATCH:
+    default: 8
+    env: LIMEN_SESSION_END_CONSUMER_BATCH
+    self_update: none
+    owner: continuity
+    note: "Maximum session receipts selected by one heartbeat breadcrumb drain before later receipts roll to a future beat."
+  LIMEN_SESSION_END_CONSUMER_RUNWAY:
+    default: 60
+    env: LIMEN_SESSION_END_CONSUMER_RUNWAY
+    self_update: none
+    owner: continuity
+    note: "Internal monotonic-time runway in seconds for one breadcrumb drain; no new slow consumer begins after this deadline."
   LIMEN_LIFECYCLE_SIZE_SCAN_MAX_ROOTS:
     default: 50
     env: LIMEN_LIFECYCLE_SIZE_SCAN_MAX_ROOTS
@@ -1787,6 +1811,30 @@ parameters:
     self_update: none
     owner: mail
     note: "Safety cap on how many SAFE-tier replies send_drafts.py may send per run, so an armed run can never blast the whole ledger."
+  LIMEN_MAIL_UMA_SYNC:
+    default: 1
+    env: LIMEN_MAIL_UMA_SYNC
+    self_update: none
+    owner: mail
+    note: "Gate for the C_MAIL beat's UMA-checkout auto-sync (mail-beat.sh step 0). 1 (default) = fast-forward $UMA_ROOT to origin/main each beat so the beat never runs stale mail code (the drift that ran the pre-merge tree). Only a clean, on-main, fast-forwardable checkout is advanced — a dirty tree or work branch is left untouched (never a merge/rebase; untracked files don't count as dirty). 0 disables the sync (run whatever checkout is present)."
+  LIMEN_MAIL_ARCHIVED_SCAN:
+    default: 1
+    env: LIMEN_MAIL_ARCHIVED_SCAN
+    self_update: none
+    owner: mail
+    note: "Gate for the C_MAIL archived-but-unanswered scan (mail-beat.sh step 1c → archived_scan.py). 1 (default) = one account per beat, round-robin via a persisted cursor, writes a READ-ONLY per-account receipt (audit/archived_scan-*.json) that obligations_build folds into the ledger — surfacing owed replies on threads that were archived out of the INBOX. Flags/moves nothing. Needs the macOS Automation grant (self-skips when absent). 0 disables the scan."
+  LIMEN_MAIL_ARCHIVED_LIMIT:
+    default: 500
+    env: LIMEN_MAIL_ARCHIVED_LIMIT
+    self_update: none
+    owner: mail
+    note: "Max messages archived_scan.py reads per mailbox (Archive + Sent) each beat — bounds the AppleScript enumeration so a large All-Mail never full-materializes. Paired with the scanner's --since-days window."
+  LIMEN_MAIL_ARCHIVED_CURSOR:
+    default: "~/Workspace/limen/logs/.mail-archived-scan-cursor"
+    env: LIMEN_MAIL_ARCHIVED_CURSOR
+    self_update: none
+    owner: mail
+    note: "Path of the round-robin cursor file for the archived-scan (mail-beat.sh step 1c): holds the last-scanned account index so each beat advances to the next account and every account is covered over a full cycle. A missing/corrupt cursor restarts the cycle at account 0 (fail-open)."
   LIMEN_MAIL_HOLD_SEND:
     default: "safe_only"
     env: LIMEN_MAIL_HOLD_SEND
@@ -3495,6 +3543,68 @@ parameters:
     self_update: none
     owner: tabularius
     note: "Effector arm for the trunk-green sensor (observable-before-autonomous, the LIMEN_CENSOR_APPLY pattern). When 0 (default) a RED main is only detected + surfaced in the beat log. When 1, check-main-green.py also emits ONE idempotent SYMPTOM-scoped HEAL-mainred-organvm-limen task (id scoped to the symptom, not the head SHA — the SHA lives in the title/context) via the daemon's queue-lock (the safe shared-append path self-heal.py uses) so every lane AND every successive red commit converges on a single canonical heal task instead of duplicating (the #869-vs-#871 gap, limen#895); a recurrence after a prior heal re-opens the same ticket. Arm after watching the detection log prove out."
+
+  LIMEN_NPM_AUDIT_AUTOFIX:
+    default: "1"               # ON — detect npm-audit high/critical each beat (§0g3b)
+    env: LIMEN_NPM_AUDIT_AUTOFIX
+    self_update: none
+    owner: tabularius
+    note: "Beat gate for the npm-audit-autofix sensor (scripts/npm-audit-autofix.py) run each beat by metabolize.sh section 0g3b. Closes the 2026-07-22 gap: ci.yml runs `npm audit --audit-level=high` as a hard-fail step in web/app + web/worker, so a newly-published high/critical TRANSITIVE advisory deterministically reds under the frozen lockfile and jams the whole PR queue — a class neither Renovate (bumps) nor Dependabot (security-only) fixes, because the only non-breaking fix is an npm `overrides` pin. On a present advisory the sensor exits non-zero so the beat surfaces it. Fail-open when npm is absent/offline. Set 0 to silence."
+  LIMEN_NPM_AUDIT_AUTOFIX_APPLY:
+    default: "0"               # OFF (DARK) — detection-only until armed; then opens an overrides fix PR
+    env: LIMEN_NPM_AUDIT_AUTOFIX_APPLY
+    self_update: none
+    owner: tabularius
+    note: "Effector arm for the npm-audit-autofix sensor (observable-before-autonomous, the LIMEN_MAIN_GREEN_APPLY pattern). When 0 (default) a high/critical npm advisory is only detected + printed. When 1, npm-audit-autofix.py resolves the minimal leaf `overrides` pin(s) (looping to catch unmasked advisories), regenerates the lockfile, verifies 0 high/critical, and opens a fix PR via the ship-docs worktree recipe — gated by merge-policy.sh (web/app is a deploy trigger → HOLD until CI green; a pin that breaks the build reds only the fix PR, never the queue). Idempotent on the advisory-set signature. Arm after watching the detection log prove out."
+  LIMEN_NPM_AUDIT_DIRS:
+    default: ""
+    env: LIMEN_NPM_AUDIT_DIRS
+    self_update: none
+    owner: tabularius
+    note: "Test/override hook for npm-audit-autofix.py: colon-separated npm project dirs (relative-to-root or absolute) to audit instead of the derived web/* subdirs holding a package-lock.json. Empty (default) → derive. Used only by the hermetic test and ad-hoc fixture runs; never set in production."
+
+  LIMEN_ESTATE_AUDIT_HEAL:
+    default: "1"               # ON — detect other-repo audit-CI reds on the slow heartbeat cadence
+    env: LIMEN_ESTATE_AUDIT_HEAL
+    self_update: none
+    owner: gitvs
+    note: "Beat gate for the estate-audit-heal sensor (scripts/estate-audit-heal.py). The estate-wide v2 of npm-audit-autofix: heals the OTHER organvm repos whose CI runs npm/pnpm audit (npm-audit-autofix covers limen itself). Verify-gated: applies overrides, re-audits, keeps only pins whose advisory measurably cleared (Tier-1); framework-major-held residue is deferred to Dependabot (Tier-2). Detection-only until armed. Set 0 to silence."
+  LIMEN_ESTATE_AUDIT_HEAL_APPLY:
+    default: "0"               # OFF (DARK) — detection-only until armed; then opens cross-repo fix PRs (NO merge)
+    env: LIMEN_ESTATE_AUDIT_HEAL_APPLY
+    self_update: none
+    owner: gitvs
+    note: "Effector arm for estate-audit-heal (observable-before-autonomous, the LIMEN_MAIN_GREEN_APPLY pattern, read internally). When 0 (default) other-repo advisories are only detected + printed. When 1, the healer clones each repo (capped by LIMEN_ESTATE_AUDIT_MAX), applies verify-gated Tier-1 overrides, and opens a fix PR in that repo — never auto-merged (mass cross-repo merges are a human-gated lever; the repo's own CI + owner adjudicate). Arm after watching the detection log prove out."
+  LIMEN_BEAT_ESTATE_AUDIT:
+    default: 24
+    env: LIMEN_BEAT_ESTATE_AUDIT
+    self_update: none
+    owner: gitvs
+    note: "Cadence (every N heartbeat beats) of the estate-audit-heal sensor. Deliberately SLOW — the pass clones + installs multiple repos, so it is a rotating daily-class job, not an every-beat check (contrast the local npm-audit-autofix sensor, which is fast + every-beat for limen itself)."
+  LIMEN_ESTATE_AUDIT_TIMEOUT:
+    default: 1200
+    env: LIMEN_ESTATE_AUDIT_TIMEOUT
+    self_update: none
+    owner: gitvs
+    note: "Per-run timeout (seconds) for the estate-audit-heal sensor; generous because it clones + runs full npm/pnpm installs across up to LIMEN_ESTATE_AUDIT_MAX repos. The runner kills the group on overrun and the beat continues fail-open."
+  LIMEN_ESTATE_AUDIT_MAX:
+    default: 5
+    env: LIMEN_ESTATE_AUDIT_MAX
+    self_update: none
+    owner: gitvs
+    note: "Per-run repo cap for estate-audit-heal — a first arming can't fan out uncontrolled across the estate. Repos rotate across runs; blocking-audit repos are healed first. Raise once the detection log + first PRs prove out."
+  LIMEN_ESTATE_AUDIT_OWNER:
+    default: "organvm"
+    env: LIMEN_ESTATE_AUDIT_OWNER
+    self_update: none
+    owner: gitvs
+    note: "GitHub owner/org whose audit-CI repos estate-audit-heal enumerates via `gh search code`. Default organvm (the canonical org). Override for a different owner scope."
+  LIMEN_ESTATE_AUDIT_REPOS:
+    default: ""
+    env: LIMEN_ESTATE_AUDIT_REPOS
+    self_update: none
+    owner: gitvs
+    note: "Test/override hook for estate-audit-heal: colon-separated full repo names (owner/repo) to process instead of the derived `gh search code` discovery. Empty (default) → discover. Used by the hermetic test and bounded armed rehearsals (e.g. cap=1 against one repo); never set in production."
 
   LIMEN_MAIN_GREEN_THROTTLE:
     default: "1800"            # seconds between live gh queries; cached verdict surfaces every beat
