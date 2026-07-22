@@ -1,0 +1,341 @@
+#!/usr/bin/env python3
+"""decorum-keeper.py — DECORVM, the professionalization keeper (the guard against egg-face).
+
+In Roman rhetoric *decorum* is "the fitting/becoming" — the propriety that makes a public act land
+as dignified rather than embarrassing. This organ is its analogue: a continuous keeper that answers
+one question every beat — "is anything on my public surfaces currently embarrassing?" — and drives
+each embarrassment class to structural closure so it never recurs (the "no egg-face EVER").
+
+DECORVM owns no measurement machinery and no surface list. It FEDERATES the estate's existing
+quality organs — each of which already measures one facet and enumerates its own surfaces — and
+rolls their sub-verdicts into a single verdict (logs/decorum.json, schema limen.decorum.v1):
+
+    experience  (scripts/experience-audit.py)      reachable / fast / light / no-console-errors
+    visual      (experience-judge → judgments.yaml) layout / typography / coherence / trust
+    seo         (scripts/seo-audit.py)             README/SEO 10-rung standard, scoped to value-repos
+    countenance (scripts/vvltvs-organ.py)          public numbers not drifting from SSOT
+    links       (scripts/link-health.py)           no dead links on the public front doors
+    moat        (scripts/moat-audit.py)            no private value leaked onto a public repo
+
+The department set, each department's artifact/command, and the severity floor that flips the
+verdict red are DECLARED DATA in institutio/governance/decorum-surfaces.yaml (derive-never-pin).
+Add a facet = add one department entry; there is no surface list to maintain.
+
+FAIL-OPEN IS LAW. A missing, unreadable, or unmeasured department is a `skip`, never a `fail`:
+a keeper that cries wolf because `requests` isn't installed, or because an artifact is stale, is
+its own egg-face. Only a *measured* failure becomes a finding.
+
+The polish lane (Phase 2/3 — spellcheck, bio-staleness, narrative accuracy, tiered LLM-judge) and
+the effector loop (Phase 4 — findings → tasks + censor precedents + GitHub issues, armed by
+LIMEN_DECORUM_APPLY=1, dry-run by default, never sends) attach to this same core.
+
+Usage:
+  python3 scripts/decorum-keeper.py --sweep     # federate every department → logs/decorum.json; exit 0 iff clean
+  python3 scripts/decorum-keeper.py --doctor    # offline: validate the registry + schema, run no network
+  python3 scripts/decorum-keeper.py --json      # emit the machine verdict to stdout
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
+REGISTRY = Path(os.environ.get("LIMEN_DECORUM_SURFACES", ROOT / "institutio" / "governance" / "decorum-surfaces.yaml"))
+OUT = ROOT / "logs" / "decorum.json"
+VOICE = ROOT / "logs" / ".voice" / "decorum"
+SCHEMA = "limen.decorum.v1"
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover - yaml is a hard dep of the beat
+    yaml = None
+
+
+# ── helpers ───────────────────────────────────────────────────────────────────
+def _now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _load_yaml(path: Path):
+    if yaml is None or not path.exists():
+        return None
+    try:
+        return yaml.safe_load(path.read_text()) or {}
+    except Exception:
+        return None
+
+
+def _load_json(path: Path):
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return None
+
+
+def _sev_index(order: list[str], sev: str) -> int:
+    try:
+        return order.index(sev)
+    except ValueError:
+        return 0
+
+
+def _finding(dept: str, surface: str, severity: str, detail: str, source: str) -> dict:
+    fid = f"{dept}:{surface}".lower().replace("/", "-").replace(" ", "-")
+    return {"id": fid, "lane": dept, "surface": surface, "severity": severity, "detail": detail, "source": source}
+
+
+def _value_repos(reg: dict) -> set[str]:
+    """The egg-face-critical repo set — DERIVED from value-repos.json, matched by 'owner/name' and bare name."""
+    src = ((reg.get("scope_sources") or {}).get("value_repos")) or "value-repos.json"
+    data = _load_json(ROOT / src) or {}
+    repos = data.get("repos") if isinstance(data, dict) else data
+    out: set[str] = set()
+    for r in repos or []:
+        out.add(r.lower())
+        out.add(r.split("/")[-1].lower())
+    return out
+
+
+# ── department extractors (each fail-open; returns (findings, measured?)) ───────
+def dept_experience(art, dept, sev) -> tuple[list, bool]:
+    if not isinstance(art, dict):
+        return [], False
+    surfaces = art.get("surfaces") or {}
+    findings, measured = [], False
+    for sid, s in surfaces.items() if isinstance(surfaces, dict) else []:
+        # UNMEASURED → skip: env-blind probe, or every rung null.
+        if s.get("probe_error"):
+            continue
+        rungs = s.get("rungs") or {}
+        real = {k: v for k, v in rungs.items() if v is not None}
+        if not real:
+            continue
+        measured = True
+        if s.get("pass") is False:
+            failed = sorted(k for k, v in real.items() if v is False)
+            findings.append(_finding(dept, sid, sev, f"experience rungs failed: {', '.join(failed) or '?'} ({s.get('url','')})", "experience-audit.json"))
+    return findings, measured
+
+
+def dept_visual(art, dept, sev) -> tuple[list, bool]:
+    if not isinstance(art, dict):
+        return [], False
+    judgments = art.get("judgments") or {}
+    findings, measured = [], False
+    for sid, rows in judgments.items() if isinstance(judgments, dict) else []:
+        if not rows:
+            continue
+        measured = True
+        last = rows[-1]
+        if str(last.get("verdict")).lower() == "fail":
+            defects = "; ".join(last.get("defects") or []) or "failed visual judgment"
+            findings.append(_finding(dept, sid, sev, f"visual: {defects}", "experience-judgments.yaml"))
+    return findings, measured
+
+
+def dept_seo(art, dept, sev, value_set) -> tuple[list, bool]:
+    if not isinstance(art, dict):
+        return [], False
+    repos = art.get("repos") or {}
+    findings, measured = [], False
+    for key, r in repos.items() if isinstance(repos, dict) else []:
+        # scope to value/portal repos only — the estate's long tail is not an egg-face
+        if value_set and key.lower() not in value_set and key.split("/")[-1].lower() not in value_set:
+            continue
+        measured = True
+        if r.get("pass") is False:
+            failed = sorted(k for k, v in (r.get("rungs") or {}).items() if v is False)
+            findings.append(_finding(dept, key, sev, f"README/SEO ({r.get('standard','?')}) failed rungs: {', '.join(failed)}", "seo-audit.json"))
+    return findings, measured
+
+
+def dept_countenance(art, dept, sev) -> tuple[list, bool]:
+    if not isinstance(art, dict):
+        return [], False
+    measured = "at_true" in art
+    findings = []
+    if art.get("at_true") is False:
+        for d in art.get("open_drifts") or ["face drifted from SSOT"]:
+            findings.append(_finding(dept, "countenance", sev, f"face-drift: {d}", "vvltvs-organ-state.json"))
+    return findings, measured
+
+
+def dept_links(art, dept, sev) -> tuple[list, bool]:
+    if not isinstance(art, dict):
+        return [], False
+    measured = "ok" in art or "total_dead" in art
+    findings = []
+    if art.get("ok") is False or (art.get("total_dead") or 0) > 0:
+        findings.append(_finding(dept, "public-links", sev, f"{art.get('total_dead', '?')} dead link(s) across public surfaces", "link-health/last.json"))
+    return findings, measured
+
+
+def dept_moat(out, dept, sev, lure_sev) -> tuple[list, bool]:
+    """moat-audit emits JSON: {moat_leaks: N|[...], lure_gaps: N|[...]} (shape-tolerant)."""
+    if not isinstance(out, dict):
+        return [], False
+    findings = []
+
+    def _count(v):
+        return len(v) if isinstance(v, list) else (int(v) if isinstance(v, (int, float)) else 0)
+
+    leaks = out.get("moat_leaks", out.get("leaks"))
+    gaps = out.get("lure_gaps", out.get("gaps"))
+    if _count(leaks) > 0:
+        findings.append(_finding(dept, "moat", sev, f"{_count(leaks)} MOAT LEAK(s): private value on a public repo", "moat-audit"))
+    if _count(gaps) > 0:
+        findings.append(_finding(dept, "lure", lure_sev, f"{_count(gaps)} lure gap(s): dark/unpositioned public repo", "moat-audit"))
+    return findings, True
+
+
+def _run_command(cmd: str, timeout: int):
+    try:
+        p = subprocess.run(cmd, shell=True, cwd=str(ROOT), capture_output=True, text=True, timeout=timeout)
+        return json.loads(p.stdout) if p.stdout.strip() else None
+    except Exception:
+        return None
+
+
+# ── the sweep ───────────────────────────────────────────────────────────────
+def sweep(reg: dict, offline: bool) -> dict:
+    depts = reg.get("departments") or {}
+    order = ((reg.get("verdict") or {}).get("severity_order")) or ["low", "medium", "high", "critical"]
+    floor = ((reg.get("verdict") or {}).get("floor")) or "high"
+    value_set = _value_repos(reg)
+
+    findings: list[dict] = []
+    measured: dict[str, str] = {}   # dept -> "measured" | "skip"
+
+    for name, cfg in depts.items():
+        sev = cfg.get("severity", "medium")
+        fs, ms = [], False
+        if "command" in cfg:
+            if offline and "--no-visibility" not in cfg["command"] and name != "moat":
+                ms = False  # doctor mode: don't run network departments
+            else:
+                out = _run_command(cfg["command"], cfg.get("timeout", 60))
+                if name == "moat":
+                    fs, ms = dept_moat(out, name, sev, cfg.get("lure_severity", "low"))
+        else:
+            art = ROOT / cfg["artifact"]
+            data = _load_yaml(art) if art.suffix in (".yaml", ".yml") else _load_json(art)
+            if name == "experience":
+                fs, ms = dept_experience(data, name, sev)
+            elif name == "visual":
+                fs, ms = dept_visual(data, name, sev)
+            elif name == "seo":
+                fs, ms = dept_seo(data, name, sev, value_set)
+            elif name == "countenance":
+                fs, ms = dept_countenance(data, name, sev)
+            elif name == "links":
+                fs, ms = dept_links(data, name, sev)
+        findings.extend(fs)
+        measured[name] = "measured" if ms else "skip"
+
+    floor_i = _sev_index(order, floor)
+    blocking = [f for f in findings if _sev_index(order, f["severity"]) >= floor_i]
+    passed = len(blocking) == 0
+
+    return {
+        "schema": SCHEMA,
+        "generated_at": _now(),
+        "pass": passed,
+        "verdict_floor": floor,
+        "departments": measured,
+        "counts": {
+            "findings": len(findings),
+            "blocking": len(blocking),
+            "measured": sum(1 for v in measured.values() if v == "measured"),
+            "skipped": sum(1 for v in measured.values() if v == "skip"),
+        },
+        "egg_face_findings": sorted(findings, key=lambda f: (-_sev_index(order, f["severity"]), f["lane"], f["surface"])),
+    }
+
+
+def _stamp_voice() -> None:
+    try:
+        VOICE.parent.mkdir(parents=True, exist_ok=True)
+        VOICE.write_text(_now() + "\n")
+    except Exception:
+        pass
+
+
+def doctor(reg: dict) -> int:
+    """Offline validation: registry present, well-formed, every department addressable."""
+    problems = []
+    if not isinstance(reg, dict) or reg.get("schema_version") != 1:
+        problems.append("registry missing or schema_version != 1")
+    depts = reg.get("departments") or {}
+    if not depts:
+        problems.append("no departments declared")
+    for name, cfg in depts.items():
+        if "artifact" not in cfg and "command" not in cfg:
+            problems.append(f"department '{name}' has neither artifact nor command")
+        if "severity" not in cfg:
+            problems.append(f"department '{name}' missing severity")
+    order = ((reg.get("verdict") or {}).get("severity_order")) or []
+    floor = ((reg.get("verdict") or {}).get("floor"))
+    if floor not in order:
+        problems.append(f"verdict.floor '{floor}' not in severity_order")
+    if problems:
+        print("DECORVM doctor: FAIL")
+        for p in problems:
+            print(f"  ✗ {p}")
+        return 1
+    print(f"DECORVM doctor: OK — {len(depts)} departments, floor={floor}")
+    return 0
+
+
+def _print_summary(verdict: dict) -> None:
+    c = verdict["counts"]
+    mark = "✓ green — no egg-face" if verdict["pass"] else f"✗ {c['blocking']} blocking finding(s)"
+    print(f"DECORVM — professionalization keeper: {mark}")
+    print(f"  departments: {c['measured']} measured, {c['skipped']} skipped (fail-open)")
+    print(f"  findings: {c['findings']} total, {c['blocking']} at/above floor '{verdict['verdict_floor']}'")
+    for f in verdict["egg_face_findings"][:20]:
+        print(f"    [{f['severity']:<8}] {f['lane']}/{f['surface']}: {f['detail']}")
+    extra = len(verdict["egg_face_findings"]) - 20
+    if extra > 0:
+        print(f"    … +{extra} more (see {OUT})")
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--sweep", action="store_true", help="federate every department → logs/decorum.json (default)")
+    ap.add_argument("--doctor", action="store_true", help="offline: validate the registry + schema, run no network")
+    ap.add_argument("--json", action="store_true", help="emit the machine verdict to stdout instead of a summary")
+    args = ap.parse_args()
+
+    reg = _load_yaml(REGISTRY)
+    if reg is None:
+        print(f"DECORVM: registry unreadable at {REGISTRY}", file=sys.stderr)
+        return 1
+
+    if args.doctor:
+        return doctor(reg)
+
+    verdict = sweep(reg, offline=False)
+    try:
+        OUT.parent.mkdir(parents=True, exist_ok=True)
+        OUT.write_text(json.dumps(verdict, indent=2) + "\n")
+    except Exception as e:
+        print(f"DECORVM: could not write {OUT}: {e}", file=sys.stderr)
+    _stamp_voice()
+
+    if args.json:
+        print(json.dumps(verdict, indent=2))
+    else:
+        _print_summary(verdict)
+
+    return 0 if verdict["pass"] else 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
