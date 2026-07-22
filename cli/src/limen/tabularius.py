@@ -597,9 +597,10 @@ def _local_budget_debit(
     amount = task.get("budget_cost", 0)
     if isinstance(amount, bool) or not isinstance(amount, int) or amount < 0:
         raise ValueError(f"task {task['id']} has invalid canonical budget_cost")
-    agent = str(event.get("agent") or "")
+    log = dict((event.get("intent") or {}).get("log") or {})
+    agent = str(log.get("logical_agent") or log.get("agent") or "")
     if not agent or agent == "any":
-        raise ValueError(f"task {task['id']} claim requires one concrete authenticated agent")
+        raise ValueError(f"task {task['id']} claim requires one concrete executor")
     latest = (task.get("dispatch_log") or [])[-1:] or [{}]
     route_to = str(latest[0].get("route_to") or "") if latest[0].get("status") == "open" else ""
     if task.get("target_agent") not in {None, "", "any", agent} and route_to != agent:
@@ -622,8 +623,11 @@ def _local_budget_debit(
 
 def _local_budget_refund(board: dict[str, Any], task: dict[str, Any], event: dict[str, Any]) -> None:
     amount = task.get("budget_cost", 0)
-    latest = (task.get("dispatch_log") or [])[-1:] or [{}]
-    agent = str(latest[0].get("logical_agent") or latest[0].get("agent") or "")
+    claim = next(
+        (entry for entry in reversed(task.get("dispatch_log") or []) if entry.get("status") == "dispatched"),
+        {},
+    )
+    agent = str(claim.get("logical_agent") or claim.get("agent") or task.get("target_agent") or "")
     if isinstance(amount, bool) or not isinstance(amount, int) or amount < 0 or not agent or agent == "any":
         raise ValueError(f"task {task['id']} cannot derive a canonical budget refund")
     budget = (board.get("portal") or {}).get("budget") or {}
@@ -1140,13 +1144,7 @@ def apply_limen_file_sync(
                         raise RuntimeError(
                             f"task {task_id} compatibility transition must append exactly one dispatch receipt"
                         )
-                    latest_log = dict(desired_log[-1])
-                    update: dict[str, Any] = {"log": latest_log}
-                    if prior.get("status") == "open" and desired.get("status") == "dispatched":
-                        executor = str(latest_log.get("logical_agent") or latest_log.get("agent") or "")
-                        if executor:
-                            update["agent"] = executor
-                    ticket = ticket.model_copy(update=update)
+                    ticket = ticket.model_copy(update={"log": dict(desired_log[-1])})
         tickets.append(ticket)
     if not tickets:
         return DrainResult(note="no task transition; budget-window metadata is derived by the remote keeper")

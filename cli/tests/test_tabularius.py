@@ -277,7 +277,7 @@ def test_sync_relays_claim_to_broker_without_writing_projection(tmp_path, monkey
     assert result.wrote is False
     assert result.note == "broker-committed"
     assert fake.packets[0].intent["kind"] == "task.claim"
-    assert fake.packets[0].initiator.agent == "codex"
+    assert fake.packets[0].initiator.agent == "legacy-adapter"
     assert fake.tasks["T-1"]["status"] == "dispatched"
     assert board.read_bytes() == before
     assert not _archive(board).exists()
@@ -391,6 +391,7 @@ def test_local_retry_replays_committed_full_projection_after_cache_write_crash(t
         task_id="T-1",
         patch={"status": "dispatched"},
         log={"status": "dispatched", "output": "claimed once"},
+        agent="codex",
         ticket_id="crash-retry",
     )
     submit_ticket(board, ticket)
