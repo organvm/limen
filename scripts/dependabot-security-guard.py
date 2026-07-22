@@ -103,9 +103,12 @@ def is_drifted(state: dict) -> bool:
 
 
 def enable(repo: str) -> dict:
-    """Enable both postures — ON only, never disables (toward-desired-state). Mirrors
-    apply-visibility.py:_flip (gh repo edit) + a vulnerability-alerts PUT."""
-    fixes = _gh(["repo", "edit", repo, "--enable-automated-security-fixes"], timeout=45)
+    """Enable both postures — ON only, never disables (toward-desired-state). Uses the REST
+    automated-security-fixes + vulnerability-alerts PUT endpoints. NOTE: `gh repo edit` has NO
+    --enable-automated-security-fixes flag (only --enable-advanced-security); the documented path
+    is `PUT /repos/{repo}/automated-security-fixes`. Verified empirically 2026-07-22 (full
+    DELETE→disabled / PUT→enabled round-trip on a live repo)."""
+    fixes = _gh(["api", "-X", "PUT", f"/repos/{repo}/automated-security-fixes"], timeout=45)
     alerts = _gh(["api", "-X", "PUT", f"/repos/{repo}/vulnerability-alerts"], timeout=30)
     return {"repo": repo,
             "security_fixes": "enabled" if fixes.returncode == 0 else f"FAILED:{(fixes.stderr or '')[:60]}",

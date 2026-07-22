@@ -53,6 +53,16 @@ def make_fake_gh(posture: dict, calls: list):
     return fake_gh
 
 
+def enabled_repos(calls: list) -> list:
+    """Repos the guard called ENABLE on. enable() uses `gh api -X PUT /repos/<r>/automated-security-fixes`
+    (gh repo edit has NO --enable-automated-security-fixes flag — verified empirically 2026-07-22)."""
+    out = []
+    for c in calls:
+        if c[:1] == ["api"] and "PUT" in c and c[-1].endswith("/automated-security-fixes"):
+            out.append(c[-1][len("/repos/"):-len("/automated-security-fixes")])
+    return sorted(out)
+
+
 # --- 2/3/4. observe mapping + drift + --check exit codes ---
 posture = {
     "organvm/a": {"security_updates": "on", "alerts": "on"},     # clean
@@ -89,10 +99,9 @@ try:
     os.environ["LIMEN_DEPENDABOT_GUARD_REPOS"] = "organvm/a:organvm/b:organvm/c:organvm/d"
     os.environ[m.APPLY_ENV] = "1"
     m.run(apply=True, as_json=True)
-    edited = sorted(c[2] for c in calls if c[:2] == ["repo", "edit"])
-    assert edited == ["organvm/b", "organvm/c"], edited  # only the drifted, not a/d
-    # never a disable: the only repo-edit flag used is --enable-automated-security-fixes
-    assert all("--enable-automated-security-fixes" in c for c in calls if c[:2] == ["repo", "edit"])
+    assert enabled_repos(calls) == ["organvm/b", "organvm/c"], enabled_repos(calls)  # only drifted, not a/d
+    # never a disable: only PUT (enable) endpoints are used — never DELETE, never a --disable flag
+    assert not any("DELETE" in c for c in calls)
     assert not any("--disable" in " ".join(c) for c in calls)
 finally:
     m._gh = _orig
@@ -108,7 +117,7 @@ try:
     os.environ[m.APPLY_ENV] = "1"
     rc = m.run(apply=True, as_json=False)
     assert rc == 0
-    assert [c for c in calls if c[:2] == ["repo", "edit"]] == [], "no writes when all clean"
+    assert enabled_repos(calls) == [], "no writes when all clean"
 finally:
     m._gh = _orig
     os.environ.pop("LIMEN_DEPENDABOT_GUARD_REPOS", None)
@@ -123,8 +132,7 @@ try:
     os.environ[m.APPLY_ENV] = "1"
     m.DEFAULT_CAP = 2
     m.run(apply=True, as_json=True)
-    edited = [c for c in calls if c[:2] == ["repo", "edit"]]
-    assert len(edited) == 2, f"cap=2 → 2 enables, got {len(edited)}"
+    assert len(enabled_repos(calls)) == 2, f"cap=2 → 2 enables, got {len(enabled_repos(calls))}"
 finally:
     m._gh = _orig
     os.environ.pop("LIMEN_DEPENDABOT_GUARD_REPOS", None)
