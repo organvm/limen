@@ -13,6 +13,7 @@ import {
 test("production projection targets the protected board publication branch", () => {
   const config = readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
   assert.match(config, /LIMEN_GITHUB_BRANCH = "tabularius\/board-projection"/);
+  assert.match(config, /LIMEN_CONDUCT_KEEPER_NAME = "tabularius-conduct-v2"/);
   assert.doesNotMatch(config, /LIMEN_GITHUB_BRANCH = "main"/);
 });
 
