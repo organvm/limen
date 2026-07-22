@@ -241,6 +241,12 @@ resource_types:
 # (all code lives here) or an exact ceiling. Observed by census (_org_posture); diffed by doctor
 # class L; drift cites L-ORG-TEAM-UPGRADE — never a per-session chat re-derivation.
 orgs:
+  external_custody:
+    match: ["victoroffgroup"]
+    plan_ok: ["free"]
+    repos: 1
+    owner: victoroff
+    note: "Declared one-repository client-custody exception for private victoroffgroup/victoroff-os. organvm remains the estate's canonical owner; any second repository or paid-plan drift fails org-posture policy."
   canonical:
     match: ["organvm"]
     plan_ok: ["free", "team"]
@@ -488,9 +494,9 @@ repo_overrides:
 
 # ── expected orgs — reserved namespaces are declared, an unexpected org is drift ────────────────
 expected_orgs:
-  list: [4444J99, a-organvm, meta-organvm, organvm, organvm-i-theoria, organvm-ii-poiesis, organvm-iii-ergon, organvm-iv-taxis, organvm-v-logos, organvm-vi-koinonia, organvm-vii-kerygma]
+  list: [4444J99, a-organvm, meta-organvm, organvm, organvm-i-theoria, organvm-ii-poiesis, organvm-iii-ergon, organvm-iv-taxis, organvm-v-logos, organvm-vi-koinonia, organvm-vii-kerygma, victoroffgroup]
   owner: gitvs
-  note: "The nine empty orgs are reserved namespaces ($0 — they hold the names). An org observed on /user/orgs but absent here is cited drift; org deletion is lever-only, never proposed by the engine."
+  note: "The nine empty orgs are reserved namespaces ($0 — they hold the names); victoroffgroup is the declared one-repository external-custody exception. An org observed on /user/orgs but absent here is cited drift; org deletion is lever-only, never proposed by the engine."
 
 # ── ecosystem integrations — the free third-party Apps GITVS harnesses as $0 labor (§3) ─────────
 # "Everything GitHub" is not only the resources we OWN; it is the ecosystem of free/OSS-tier Apps we

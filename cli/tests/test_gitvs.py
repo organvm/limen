@@ -7,8 +7,11 @@ import json
 import subprocess
 from pathlib import Path
 
+import yaml
+
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "gitvs.py"
+ESTATE = SCRIPT.parents[1] / "institutio" / "github" / "estate.yaml"
 
 
 def _load():
@@ -77,3 +80,20 @@ def test_owner_open_pr_counts_blocks_on_incomplete_remote_evidence(monkeypatch) 
         lambda _args, _token, timeout=60: subprocess.CompletedProcess([], 1, "", "unavailable"),
     )
     assert module._owner_open_pr_counts("example", "opaque") is None
+
+
+def test_victoroff_external_custody_is_explicit_and_bounded() -> None:
+    module = _load()
+    estate = yaml.safe_load(ESTATE.read_text(encoding="utf-8"))
+
+    class_name, policy = module._org_class("victoroffgroup", estate)
+
+    assert class_name == "external_custody"
+    assert policy == {
+        "match": ["victoroffgroup"],
+        "plan_ok": ["free"],
+        "repos": 1,
+        "owner": "victoroff",
+        "note": policy["note"],
+    }
+    assert "victoroffgroup" in estate["expected_orgs"]["list"]
