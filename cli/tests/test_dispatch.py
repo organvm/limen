@@ -15,13 +15,23 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import limen.dispatch as D
+import limen.tabularius as T
 from limen.capacity import PAID_AGENT_ORDER, agent_status, capacity_census, format_capacity_census, select_lanes
+from limen.conduct.client import BrokerUnavailable
+from limen.conduct.broker import ConductError
 from limen.dispatch import dispatch_parallel, dispatch_tasks, release_stale_tasks
 from limen.doctor import qa_report, readiness_report, stale_tasks
 from limen.execution_contract import execution_contract_hash
 from limen.io import load_limen_file
 from limen.jules_remote import JulesRemoteSnapshot
-from limen.models import JULES_LANDING_HOLD_LABEL, BudgetTrack, DispatchLogEntry, LimenFile, Task
+from limen.models import (
+    JULES_LANDING_HOLD_LABEL,
+    BudgetTrack,
+    DispatchLogEntry,
+    LimenFile,
+    Task,
+    dispatch_session_id,
+)
 from limen.status import print_status
 from limen.workstream_contract import packet_contract
 
@@ -70,6 +80,25 @@ def write_board(path: Path, tasks: list[dict]) -> None:
 
 def read_board(path: Path) -> dict:
     return yaml.safe_load(path.read_text())
+
+
+def capture_canonical_deltas(monkeypatch) -> list[LimenFile]:
+    """Capture intended remote projections without mutating the local hot cache."""
+
+    projections: list[LimenFile] = []
+
+    def capture(_tasks_path, limen, **_kwargs):
+        projections.append(limen.model_copy(deep=True))
+
+    monkeypatch.setattr(D, "apply_limen_file_sync", capture)
+    return projections
+
+
+def force_broker_unavailable(monkeypatch) -> None:
+    def unavailable():
+        raise BrokerUnavailable("test conduct broker unavailable")
+
+    monkeypatch.setattr(T, "client_from_env", unavailable)
 
 
 def test_always_working_timeout_fails_open_by_default(tmp_path: Path, monkeypatch, capsys) -> None:
@@ -215,6 +244,12 @@ def test_parallel_selection_suppresses_chronic_push_rejection(tmp_path: Path, mo
                 "target_agent": "codex",
                 "status": "open",
                 "priority": "critical",
+                "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Fix chronic push rejection loop.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:x/y:pull-request:CHRONIC",
                 "created": str(date.today()),
                 "dispatch_log": [
                     {
@@ -240,6 +275,12 @@ def test_parallel_selection_suppresses_chronic_push_rejection(tmp_path: Path, mo
                 "target_agent": "codex",
                 "status": "open",
                 "priority": "low",
+                "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Fresh task ready for dispatch.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:x/y:pull-request:FRESH",
                 "created": str(date.today()),
             },
         ],
@@ -506,6 +547,11 @@ def test_dispatch_dry_run_prints_capacity_census_and_copilot_command(tmp_path: P
                 "target_agent": "copilot",
                 "priority": "high",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Route task through the Copilot agent lane.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:organvm/limen:pull-request:LIMEN-COPILOT",
                 "status": "open",
                 "urls": ["https://github.com/organvm/limen/issues/12"],
                 "created": "2026-06-20",
@@ -600,6 +646,11 @@ def test_dispatch_bulk_gates_unmet_deps_but_explicit_task_overrides(tmp_path: Pa
                 "target_agent": "external",  # keep DEP out of the codex candidate set
                 "priority": "high",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Predecessor task that must merge before dependent proceeds.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:someorg/dispatch-lab:pull-request:DEP",
                 "status": "open",
                 "created": "2026-06-30",
                 "dispatch_log": [],
@@ -611,6 +662,11 @@ def test_dispatch_bulk_gates_unmet_deps_but_explicit_task_overrides(tmp_path: Pa
                 "target_agent": "codex",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Dependent task gated on DEP merging first.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:someorg/dispatch-lab:pull-request:DEPENDENT",
                 "status": "open",
                 "depends_on": ["DEP"],
                 "created": "2026-06-30",
@@ -644,6 +700,11 @@ def test_dispatch_parallel_skips_needs_human_label(tmp_path: Path, capsys, monke
                 "target_agent": "any",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Human-gated task requiring manual approval.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:someorg/dispatch-lab:pull-request:HUMAN-GATE",
                 "status": "open",
                 "labels": ["needs-human"],
                 "created": "2026-06-20",
@@ -656,6 +717,11 @@ def test_dispatch_parallel_skips_needs_human_label(tmp_path: Path, capsys, monke
                 "target_agent": "any",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Machine-executable task with no human gate.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:someorg/dispatch-lab:pull-request:MACHINE-WORK",
                 "status": "open",
                 "created": "2026-06-20",
                 "dispatch_log": [],
@@ -682,6 +748,12 @@ def test_parallel_selection_normalizes_only_selected_legacy_task(monkeypatch) ->
                     "repo": "someorg/dispatch-lab",
                     "target_agent": "codex",
                     "priority": "critical",
+                    "budget_cost": 1,
+                    "source_origin": "human_prompt",
+                    "horizon": "present",
+                    "value_case": "High-priority task selected for dispatch normalization.",
+                    "predicate": "python3 scripts/check.py",
+                    "receipt_target": "github:someorg/dispatch-lab:pull-request:SELECTED",
                     "status": "open",
                     "created": "2026-07-12",
                 },
@@ -723,9 +795,16 @@ def test_parallel_selection_fails_closed_when_legacy_owner_cannot_be_derived(mon
             "tasks": [
                 {
                     "id": "NO-OWNER",
-                    "title": "Missing owner repo",
+                    "title": "Missing owner repo (1) scan (2) build (3) test (4) deploy",
                     "target_agent": "codex",
                     "priority": "critical",
+                    "budget_cost": 1,
+                    "source_origin": "human_prompt",
+                    "horizon": "present",
+                    "value_case": "Task without repo should be blocked at intake.",
+                    "owner_surface": "no-owner-team",
+                    "predicate": "python3 scripts/check.py",
+                    "receipt_target": "github:no-owner/task:pull-request:NO-OWNER",
                     "status": "open",
                     "created": "2026-07-12",
                 }
@@ -779,6 +858,11 @@ def test_dispatch_parallel_admission_blocks_every_local_candidate(tmp_path: Path
             "target_agent": "any",
             "priority": "critical",
             "budget_cost": 1,
+            "source_origin": "agent_recommendation",
+            "horizon": "present",
+            "value_case": "Routine generated build-out task.",
+            "predicate": "python3 scripts/check.py",
+            "receipt_target": "github:someorg/dispatch-lab:pull-request:GEN-BUILDOUT",
             "status": "open",
             "labels": ["typing", "generated", "build-out"],
             "created": "2026-06-20",
@@ -791,6 +875,11 @@ def test_dispatch_parallel_admission_blocks_every_local_candidate(tmp_path: Path
             "target_agent": "any",
             "priority": "critical",
             "budget_cost": 1,
+            "source_origin": "system_debt",
+            "horizon": "present",
+            "value_case": "Reclaim lifecycle worktree debt.",
+            "predicate": "python3 scripts/check.py",
+            "receipt_target": "github:someorg/dispatch-lab:pull-request:LIFECYCLE-RECLAIM",
             "status": "open",
             "labels": ["lifecycle", "reclaim"],
             "created": "2026-06-20",
@@ -829,6 +918,11 @@ def test_dispatch_parallel_skips_generated_buildout_outside_value_tier(tmp_path:
                 "target_agent": "any",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "agent_recommendation",
+                "horizon": "present",
+                "value_case": "Non-value-tier generated build-out task.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:organvm/site.github.io:pull-request:GEN-NONVALUE",
                 "status": "open",
                 "labels": ["typing", "generated", "build-out"],
                 "created": "2026-06-20",
@@ -841,6 +935,11 @@ def test_dispatch_parallel_skips_generated_buildout_outside_value_tier(tmp_path:
                 "target_agent": "any",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Value-tier work for owner repository.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:someorg/value-lab:pull-request:VALUE-WORK",
                 "status": "open",
                 "labels": ["lifecycle"],
                 "created": "2026-06-20",
@@ -872,6 +971,11 @@ def test_serial_dispatch_value_gate_withholds_generic_non_value_work(tmp_path: P
                 "target_agent": "codex",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "agent_recommendation",
+                "horizon": "present",
+                "value_case": "Generic non-value queue churn task.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:organvm/generic-repo:pull-request:GENERIC-WORK",
                 "status": "open",
                 "created": "2026-07-08",
                 "dispatch_log": [],
@@ -883,6 +987,11 @@ def test_serial_dispatch_value_gate_withholds_generic_non_value_work(tmp_path: P
                 "target_agent": "codex",
                 "priority": "low",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Value-tier work on owner repository.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:organvm/value-repo:pull-request:VALUE-WORK",
                 "status": "open",
                 "created": "2026-07-08",
                 "dispatch_log": [],
@@ -912,6 +1021,11 @@ def test_dispatch_parallel_value_gate_withholds_generic_non_value_work(tmp_path:
                 "target_agent": "any",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "agent_recommendation",
+                "horizon": "present",
+                "value_case": "Generic non-value parallel queue churn.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:organvm/generic-repo:pull-request:GENERIC-WORK",
                 "status": "open",
                 "created": "2026-07-08",
                 "dispatch_log": [],
@@ -923,6 +1037,11 @@ def test_dispatch_parallel_value_gate_withholds_generic_non_value_work(tmp_path:
                 "target_agent": "any",
                 "priority": "high",
                 "budget_cost": 1,
+                "source_origin": "system_debt",
+                "horizon": "present",
+                "value_case": "Preserve lifecycle worktree receipts.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:organvm/generic-repo:pull-request:LIFECYCLE-WORK",
                 "status": "open",
                 "labels": ["lifecycle"],
                 "created": "2026-07-08",
@@ -953,6 +1072,11 @@ def test_dispatch_parallel_reloads_under_queue_lock_before_reserve_write(
                 "target_agent": "codex",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Dispatch this task under the queue lock.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:someorg/dispatch-lab:pull-request:DISPATCH-ME",
                 "status": "open",
                 "created": "2026-06-20",
                 "dispatch_log": [],
@@ -969,12 +1093,18 @@ def test_dispatch_parallel_reloads_under_queue_lock_before_reserve_write(
             "target_agent": "agy",
             "priority": "critical",
             "budget_cost": 1,
+            "source_origin": "human_prompt",
+            "horizon": "present",
+            "value_case": "Concurrent task added while dispatch holds stale snapshot.",
+            "predicate": "python3 scripts/check.py",
+            "receipt_target": "github:someorg/dispatch-lab:pull-request:CONCURRENT",
             "status": "open",
             "created": "2026-06-20",
             "dispatch_log": [],
         }
     )
     tasks_path.write_text(yaml.safe_dump(board, sort_keys=False))
+    before = tasks_path.read_bytes()
     calls: list[str] = []
 
     def fake_dispatch(agent, task, dry_run=False):
@@ -983,14 +1113,17 @@ def test_dispatch_parallel_reloads_under_queue_lock_before_reserve_write(
 
     monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))
     monkeypatch.setattr(D, "call_agent_dispatch", fake_dispatch)
+    force_broker_unavailable(monkeypatch)
 
-    dispatch_parallel(stale, tasks_path, agents=["codex"], per_agent_limit=1, max_workers=1, dry_run=False)
+    with pytest.raises(BrokerUnavailable, match="test conduct broker unavailable"):
+        dispatch_parallel(stale, tasks_path, agents=["codex"], per_agent_limit=1, max_workers=1, dry_run=False)
 
     tasks = {task["id"]: task for task in read_board(tasks_path)["tasks"]}
     assert set(tasks) == {"DISPATCH-ME", "CONCURRENT"}
-    assert tasks["DISPATCH-ME"]["status"] == "dispatched"
+    assert tasks["DISPATCH-ME"]["status"] == "open"
     assert tasks["CONCURRENT"]["status"] == "open"
-    assert calls == ["DISPATCH-ME"]
+    assert tasks_path.read_bytes() == before
+    assert calls == []  # no execution without an acknowledged reservation
 
 
 def test_dispatch_parallel_does_not_dispatch_stale_open_task(
@@ -1070,6 +1203,11 @@ def test_dispatch_serial_commit_survives_concurrent_board_write(
                 "target_agent": "codex",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Dispatch this task and survive a concurrent board write.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:someorg/dispatch-lab:pull-request:DISPATCH-ME",
                 "status": "open",
                 "created": "2026-06-20",
                 "dispatch_log": [],
@@ -1077,6 +1215,7 @@ def test_dispatch_serial_commit_survives_concurrent_board_write(
         ],
     )
     stale = load_limen_file(tasks_path)
+    local_cache_after_peer: list[bytes] = []
 
     def fold_then_succeed(agent, task, dry_run=False):
         _concurrent_fold(tasks_path)
@@ -1085,21 +1224,26 @@ def test_dispatch_serial_commit_survives_concurrent_board_write(
         dispatched["predicate"] = "pytest -q concurrent-owner-check"
         dispatched["receipt_target"] = "git:someorg/dispatch-lab:receipts/concurrent-owner.json"
         tasks_path.write_text(yaml.safe_dump(concurrent, sort_keys=False))
+        local_cache_after_peer.append(tasks_path.read_bytes())
         return True
 
     monkeypatch.setattr(D, "_down_lanes", lambda: set())
     monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))
     monkeypatch.setattr(D, "call_agent_dispatch", fold_then_succeed)
+    projections = capture_canonical_deltas(monkeypatch)
 
     dispatch_tasks(stale, tasks_path, agent="codex", dry_run=False)
 
-    tasks = {task["id"]: task for task in read_board(tasks_path)["tasks"]}
-    assert set(tasks) == {"DISPATCH-ME", "CONCURRENT-FOLD"}
-    assert tasks["DISPATCH-ME"]["status"] == "open"
-    assert tasks["DISPATCH-ME"]["dispatch_log"] == []
-    assert tasks["DISPATCH-ME"]["predicate"] == "pytest -q concurrent-owner-check"
-    assert tasks["DISPATCH-ME"]["receipt_target"].endswith("concurrent-owner.json")
-    assert tasks["CONCURRENT-FOLD"]["status"] == "open"
+    assert tasks_path.read_bytes() == local_cache_after_peer[-1]
+    local_tasks = {task["id"]: task for task in read_board(tasks_path)["tasks"]}
+    assert local_tasks["DISPATCH-ME"]["status"] == "open"
+    intended = {task.id: task for task in projections[-1].tasks}
+    assert set(intended) == {"DISPATCH-ME", "CONCURRENT-FOLD"}
+    assert intended["DISPATCH-ME"].status == "open"
+    assert intended["DISPATCH-ME"].dispatch_log == []
+    assert intended["DISPATCH-ME"].predicate == "pytest -q concurrent-owner-check"
+    assert intended["DISPATCH-ME"].receipt_target.endswith("concurrent-owner.json")
+    assert intended["CONCURRENT-FOLD"].status == "open"
     assert "FENCE DISPATCH-ME: execution or lifecycle ownership changed" in capsys.readouterr().out
 
 
@@ -1123,19 +1267,22 @@ def test_dispatch_budget_reset_persist_survives_concurrent_board_write(
     stale = load_limen_file(tasks_path)
 
     _concurrent_fold(tasks_path)
+    before = tasks_path.read_bytes()
 
     monkeypatch.setattr(D, "_down_lanes", lambda: set())
     monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))
+    projections = capture_canonical_deltas(monkeypatch)
 
     dispatch_tasks(stale, tasks_path, agent="codex", dry_run=False)
 
-    board = read_board(tasks_path)
-    assert "CONCURRENT-FOLD" in {task["id"] for task in board["tasks"]}
-    assert board["portal"]["budget"]["track"]["per_agent"]["codex"] == 0
+    assert tasks_path.read_bytes() == before
+    assert "CONCURRENT-FOLD" in {task.id for task in projections[-1].tasks}
+    assert projections[-1].portal.budget.track.per_agent["codex"] == 0
 
 
 def test_release_stale_apply_survives_concurrent_board_write(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
     """release-stale APPLY re-selects and mutates a FRESH board under the queue lock; saving
     the caller's snapshot would erase concurrent writes."""
@@ -1159,14 +1306,16 @@ def test_release_stale_apply_survives_concurrent_board_write(
     stale = load_limen_file(tasks_path)
 
     _concurrent_fold(tasks_path)
+    before = tasks_path.read_bytes()
+    force_broker_unavailable(monkeypatch)
 
-    report = release_stale_tasks(stale, tasks_path, hours=24, dry_run=False)
+    with pytest.raises(BrokerUnavailable, match="test conduct broker unavailable"):
+        release_stale_tasks(stale, tasks_path, hours=24, dry_run=False)
 
     tasks = {task["id"]: task for task in read_board(tasks_path)["tasks"]}
     assert set(tasks) == {"STALE-CLAIM", "CONCURRENT-FOLD"}
-    assert tasks["STALE-CLAIM"]["status"] == "open"
-    assert report["status"] == "applied"
-    assert report["released"] == ["STALE-CLAIM"]
+    assert tasks["STALE-CLAIM"]["status"] == "dispatched"
+    assert tasks_path.read_bytes() == before
 
 
 def test_lane_run_env_keeps_lane_specific_isolation(tmp_path: Path, monkeypatch) -> None:
@@ -1655,8 +1804,10 @@ def test_rate_limit_and_timeout_events_are_canonical_routes(monkeypatch) -> None
     )
     D._apply_result(rate_limited, "codex", D._RATELIMIT, now, BudgetTrack(date="2026-07-10"))
     assert rate_limited.status == "open"
+    assert rate_limited.target_agent == "codex"
     assert rate_limited.dispatch_log[-1].status == "open"
     assert rate_limited.dispatch_log[-1].route_to == "opencode"
+    assert D._effective_target_agent(rate_limited) == "opencode"
 
     timed_out = Task(
         id="TIME",
@@ -1667,8 +1818,10 @@ def test_rate_limit_and_timeout_events_are_canonical_routes(monkeypatch) -> None
     )
     D._apply_result(timed_out, "codex", D._TIMEOUT, now, BudgetTrack(date="2026-07-10"))
     assert timed_out.status == "open"
+    assert timed_out.target_agent == "codex"
     assert timed_out.dispatch_log[-1].status == "open"
     assert timed_out.dispatch_log[-1].route_to == "jules"
+    assert D._effective_target_agent(timed_out) == "jules"
     assert D.agent_can_run_task("codex", timed_out) is False
 
 
@@ -1889,6 +2042,29 @@ def test_pr_open_receipt_blocks_duplicate_dispatch_and_noop_demotion() -> None:
     assert "noop" not in task.labels
     assert task.dispatch_log[-1].status == "dispatched"
     assert task.dispatch_log[-1].session_id == "result-lifecycle-guard"
+
+
+def test_dispatchable_requires_explicit_work_loan_underwriting() -> None:
+    task = Task(
+        id="WORK-LOAN-DISPATCH",
+        title="Dispatch only underwritten work",
+        repo="organvm/limen",
+        target_agent="codex",
+        status="open",
+        created=date(2026, 7, 21),
+        predicate="pytest -q cli/tests/test_dispatch.py",
+        receipt_target="github:organvm/limen:pull-request:WORK-LOAN-DISPATCH",
+    )
+
+    assert D._dispatchable(task) is False
+
+    task.origin = "human_prompt"
+    task.horizon = "present"
+    task.value_case = "Spend one bounded run on the declared dispatch predicate"
+    task.owner_surface = "organvm/limen"
+    task.budget_cost = 1
+
+    assert D._dispatchable(task) is True
 
 
 def test_pr_open_receipt_wins_over_concurrent_successor_result() -> None:
@@ -2348,6 +2524,9 @@ def test_parallel_result_commit_fences_changed_workstream_contract(
                 "target_agent": "jules",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Workstream packet selected for parallel dispatch fence test.",
                 "status": "open",
                 "labels": [],
                 "predicate": "python3 scripts/check.py",
@@ -2405,6 +2584,9 @@ def test_parallel_result_commit_fences_newer_claim_and_cleans_receipts(
                 "target_agent": "codex",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Parallel dispatch with newer claim fencing test.",
                 "status": "open",
                 "labels": [],
                 "predicate": "python3 scripts/check.py",
@@ -2482,6 +2664,9 @@ def test_parallel_result_commit_lock_busy_cleans_owned_receipts(
                 "target_agent": "codex",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Parallel dispatch with queue lock busy receipt cleanup.",
                 "status": "open",
                 "labels": [],
                 "predicate": "python3 scripts/check.py",
@@ -2524,7 +2709,8 @@ def test_parallel_result_commit_lock_busy_cleans_owned_receipts(
     current = read_board(tasks_path)["tasks"][0]
     assert current["status"] == "dispatched"
     assert len(current["dispatch_log"]) == 1
-    assert current["dispatch_log"][0]["session_id"] == "reserve"
+    assert current["dispatch_log"][0]["session_id"] == "dispatch-parallel-reserve"
+    assert dispatch_session_id(current["dispatch_log"][0]) == "reserve"
     assert task_id not in D._MODEL_SELECTION_RECEIPTS
     assert task_id not in D._REMOTE_SUBMISSION_RECEIPTS
     assert "queue busy" in capsys.readouterr().out
@@ -2721,27 +2907,56 @@ def test_dispatch_parallel_records_blocked_without_counting_failure(tmp_path: Pa
                 "target_agent": "codex",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Blocked parallel task that records failure without counting it.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:organvm/missing:pull-request:BLOCKED-PARALLEL",
                 "status": "open",
                 "created": "2026-06-20",
                 "dispatch_log": [],
             }
         ],
     )
+    before = tasks_path.read_bytes()
     monkeypatch.setattr(
         D,
         "call_agent_dispatch",
         lambda agent, task, dry_run=False: D._blocked_result("repo unavailable: organvm/missing"),
     )
     monkeypatch.setattr(D, "_worktree_debt_gate", lambda: (False, ""))
+    projections = capture_canonical_deltas(monkeypatch)
 
     dispatch_parallel(load_limen_file(tasks_path), tasks_path, agents=["codex"], per_agent_limit=1, max_workers=1)
 
     output = capsys.readouterr().out
-    task = read_board(tasks_path)["tasks"][0]
-    assert task["status"] == "failed_blocked"
-    assert task["dispatch_log"][-1]["status"] == "failed_blocked"
+    assert tasks_path.read_bytes() == before
+    intended = {task.id: task for task in projections[-1].tasks}["BLOCKED-PARALLEL"]
+    assert intended.status == "failed_blocked"
+    assert intended.dispatch_log[-1].status == "failed_blocked"
     assert "1 blocked" in output
     assert "0 failed" in output
+
+    class RejectTerminalReceipt:
+        def register(self, _session):
+            return {"status": "registered"}
+
+        def submit(self, packet):
+            assert packet.intent["expected_status"] == "dispatched"
+            assert packet.intent["patch"]["status"] == "failed_blocked"
+            assert packet.intent["log"]["lifecycle_repair"] == "provider-terminal"
+            raise ConductError("remote terminal receipt rejected")
+
+    monkeypatch.setattr(T, "client_from_env", lambda: RejectTerminalReceipt())
+    with pytest.raises(ConductError, match="remote terminal receipt rejected"):
+        T.apply_limen_file_sync(
+            tasks_path,
+            projections[-1],
+            agent="dispatch-parallel",
+            session_id="results",
+            before=projections[-2],
+        )
+    assert tasks_path.read_bytes() == before
 
 
 def test_failed_result_skips_down_lane_in_default_cascade(tmp_path: Path, monkeypatch) -> None:
@@ -2782,7 +2997,8 @@ def test_failed_result_skips_down_lane_in_default_cascade(tmp_path: Path, monkey
     D._apply_result(task, "claude", False, now, BudgetTrack(date="2026-06-27"))
 
     assert task.status == "open"
-    assert task.target_agent == "jules"
+    assert task.target_agent == "claude"
+    assert D._effective_target_agent(task) == "jules"
     assert task.dispatch_log[-1].status == "open"
     assert task.dispatch_log[-1].route_to == "jules"
     assert "tried:claude" in task.labels
@@ -2809,7 +3025,8 @@ def test_remote_service_failure_skips_unarmed_ollama_floor(monkeypatch) -> None:
     D._apply_result(task, "jules", False, now, BudgetTrack(date="2026-07-09"))
 
     assert task.status == "open"
-    assert task.target_agent == "opencode"
+    assert task.target_agent == "jules"
+    assert D._effective_target_agent(task) == "opencode"
     assert task.dispatch_log[-1].status == "open"
     assert task.dispatch_log[-1].route_to == "opencode"
     assert task.dispatch_log[-1].output == "remote/service lane failed; reopened to healthy fleet cascade"
@@ -2839,7 +3056,8 @@ def test_remote_service_failure_can_use_armed_matching_ollama_floor(monkeypatch)
     D._apply_result(task, "jules", False, now, BudgetTrack(date="2026-07-09"))
 
     assert task.status == "open"
-    assert task.target_agent == "ollama"
+    assert task.target_agent == "jules"
+    assert D._effective_target_agent(task) == "ollama"
     assert task.dispatch_log[-1].status == "open"
     assert task.dispatch_log[-1].route_to == "ollama"
     assert "tried:jules" in task.labels
@@ -3038,7 +3256,7 @@ def test_release_stale_dry_run_does_not_mutate(tmp_path: Path) -> None:
     assert tasks_path.read_text() == before
 
 
-def test_release_stale_apply_reopens_task(tmp_path: Path) -> None:
+def test_release_stale_apply_reopens_task(tmp_path: Path, monkeypatch) -> None:
     tasks_path = tmp_path / "tasks.yaml"
     write_board(
         tasks_path,
@@ -3056,19 +3274,22 @@ def test_release_stale_apply_reopens_task(tmp_path: Path) -> None:
             }
         ],
     )
+    before = tasks_path.read_bytes()
+    projections = capture_canonical_deltas(monkeypatch)
 
     report = release_stale_tasks(load_limen_file(tasks_path), tasks_path, hours=24, dry_run=False)
 
-    task = read_board(tasks_path)["tasks"][0]
-    assert task["status"] == "open"
-    assert task["dispatch_log"][-1]["status"] == "open"
+    assert tasks_path.read_bytes() == before
+    task = projections[-1].tasks[0]
+    assert task.status == "open"
+    assert task.dispatch_log[-1].status == "open"
     assert report["status"] == "applied"
     assert report["count"] == 1
     assert report["released"] == ["LIMEN-002"]
     assert report["restored_done"] == []
 
 
-def test_release_stale_restores_prior_done_instead_of_reopening(tmp_path: Path) -> None:
+def test_release_stale_restores_prior_done_instead_of_reopening(tmp_path: Path, monkeypatch) -> None:
     tasks_path = tmp_path / "tasks.yaml"
     write_board(
         tasks_path,
@@ -3093,12 +3314,15 @@ def test_release_stale_restores_prior_done_instead_of_reopening(tmp_path: Path) 
             }
         ],
     )
+    before = tasks_path.read_bytes()
+    projections = capture_canonical_deltas(monkeypatch)
 
     report = release_stale_tasks(load_limen_file(tasks_path), tasks_path, hours=24, dry_run=False)
 
-    task = read_board(tasks_path)["tasks"][0]
-    assert task["status"] == "done"
-    assert task["dispatch_log"][-1]["status"] == "done"
+    assert tasks_path.read_bytes() == before
+    task = projections[-1].tasks[0]
+    assert task.status == "done"
+    assert task.dispatch_log[-1].status == "done"
     assert report["released"] == []
     assert report["restored_done"] == ["DONE-REOPENED"]
 
@@ -3119,6 +3343,11 @@ def test_dispatch_limit_and_per_agent_budget(tmp_path: Path, monkeypatch) -> Non
                 "target_agent": "external",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "First open external task for dispatch limit test.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:4444J99/limen:pull-request:LIMEN-003",
                 "status": "open",
                 "created": "2026-06-03",
                 "dispatch_log": [],
@@ -3130,6 +3359,11 @@ def test_dispatch_limit_and_per_agent_budget(tmp_path: Path, monkeypatch) -> Non
                 "target_agent": "external",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Second open external task for dispatch limit test.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:4444J99/limen:pull-request:LIMEN-004",
                 "status": "open",
                 "created": "2026-06-03",
                 "dispatch_log": [],
@@ -3141,19 +3375,26 @@ def test_dispatch_limit_and_per_agent_budget(tmp_path: Path, monkeypatch) -> Non
                 "target_agent": "external",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Third open external task for dispatch limit test.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:4444J99/limen:pull-request:LIMEN-005",
                 "status": "open",
                 "created": "2026-06-03",
                 "dispatch_log": [],
             },
         ],
     )
+    before = tasks_path.read_bytes()
+    projections = capture_canonical_deltas(monkeypatch)
 
     dispatch_tasks(load_limen_file(tasks_path), tasks_path, agent="external", dry_run=False, limit=3)
 
-    board = read_board(tasks_path)
-    statuses = {task["id"]: task["status"] for task in board["tasks"]}
+    assert tasks_path.read_bytes() == before
+    statuses = {task.id: task.status for task in projections[-1].tasks}
     assert statuses == {"LIMEN-003": "dispatched", "LIMEN-004": "dispatched", "LIMEN-005": "open"}
-    assert board["portal"]["budget"]["track"]["per_agent"]["external"] == 2
+    assert projections[-1].portal.budget.track.per_agent["external"] == 2
 
 
 def test_dispatch_skips_lane_marked_down_by_usage_meter(tmp_path: Path, monkeypatch) -> None:
@@ -3747,6 +3988,12 @@ def test_parallel_multi_lane_reserves_shared_checkout_room_only_when_selected(mo
                     "repo": "someorg/first",
                     "target_agent": "any",
                     "priority": "critical",
+                    "budget_cost": 1,
+                    "source_origin": "human_prompt",
+                    "horizon": "present",
+                    "value_case": "First small local checkout within room budget.",
+                    "predicate": "python3 scripts/check.py",
+                    "receipt_target": "github:someorg/first:pull-request:FIRST-SMALL",
                     "status": "open",
                     "created": "2026-07-12",
                 },
@@ -3756,6 +4003,12 @@ def test_parallel_multi_lane_reserves_shared_checkout_room_only_when_selected(mo
                     "repo": "someorg/second",
                     "target_agent": "any",
                     "priority": "high",
+                    "budget_cost": 1,
+                    "source_origin": "human_prompt",
+                    "horizon": "present",
+                    "value_case": "Second local checkout that exceeds available room.",
+                    "predicate": "python3 scripts/check.py",
+                    "receipt_target": "github:someorg/second:pull-request:SECOND-OVER-ROOM",
                     "status": "open",
                     "created": "2026-07-12",
                 },
@@ -4440,6 +4693,11 @@ def test_explicit_task_dispatch_still_obeys_admission(tmp_path: Path, capsys, mo
                 "target_agent": "codex",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Explicit local task that must obey worktree admission.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:someorg/dispatch-lab:pull-request:EXPLICIT-LOCAL",
                 "status": "open",
                 "created": "2026-06-20",
                 "dispatch_log": [],
@@ -4484,6 +4742,11 @@ def test_explicit_task_reserves_its_dynamic_checkout_estimate(tmp_path: Path, ca
                 "target_agent": "codex",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Explicit sized local task reserving dynamic checkout estimate.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:someorg/dispatch-lab:pull-request:EXPLICIT-SIZED",
                 "status": "open",
                 "created": "2026-06-20",
                 "dispatch_log": [],
@@ -4518,6 +4781,11 @@ def test_serial_live_dispatch_obeys_machine_local_slot_ceiling(tmp_path: Path, c
                 "target_agent": "codex",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Second serial task blocked by machine local slot ceiling.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:someorg/second:pull-request:SERIAL-SECOND",
                 "status": "open",
                 "created": "2026-06-20",
             }
@@ -4564,6 +4832,11 @@ def test_explicit_local_task_with_unknown_checkout_estimate_is_denied(tmp_path: 
                 "target_agent": "codex",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Explicit task with unknown checkout size estimate.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:someorg/missing:pull-request:EXPLICIT-UNKNOWN-SIZE",
                 "status": "open",
                 "created": "2026-06-20",
                 "dispatch_log": [],
@@ -4598,6 +4871,11 @@ def test_explicit_task_operator_override_gate_off(tmp_path: Path, capsys, monkey
                 "target_agent": "codex",
                 "priority": "critical",
                 "budget_cost": 1,
+                "source_origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Explicit local task verifying operator override gate.",
+                "predicate": "python3 scripts/check.py",
+                "receipt_target": "github:someorg/dispatch-lab:pull-request:EXPLICIT-LOCAL",
                 "status": "open",
                 "created": "2026-06-20",
                 "dispatch_log": [],

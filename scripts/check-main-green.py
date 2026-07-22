@@ -66,9 +66,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling scripts/ for _notify
 import _notify  # noqa: E402
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
 from limen.intake import IntakeContractError, contract_fields, github_main_green_contract  # noqa: E402
-from limen.models import Task, has_jules_landing_hold  # noqa: E402
+from limen.models import DispatchLogEntry, Task, has_jules_landing_hold  # noqa: E402
+from limen.tabularius import apply_limen_file_sync  # noqa: E402
 from limen.workstream_contract import WORKSTREAM_SUCCESSOR_REQUIRED_LABEL  # noqa: E402
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
@@ -535,6 +536,12 @@ def _emit_heal_task(head_sha: str, url: str, tasks_path: Path, impact_note: str 
             contract = contract_fields(github_main_green_contract(REPO, head_sha, WORKFLOW))
         except IntakeContractError:
             return None  # stale/partial cache cannot create an exact-head contract; retry after live refresh
+        collateral = {
+            "origin": "system_debt",
+            "horizon": "present",
+            "value_case": f"Restore {REPO} protected main to green at exact head {head_sha}",
+            "owner_surface": REPO,
+        }
         if existing is not None:
             if WORKSTREAM_SUCCESSOR_REQUIRED_LABEL in (existing.labels or []):
                 return None
@@ -545,6 +552,7 @@ def _emit_heal_task(head_sha: str, url: str, tasks_path: Path, impact_note: str 
                     "context": context,
                     "predicate": contract["predicate"],
                     "receipt_target": contract["receipt_target"],
+                    **collateral,
                 }.items():
                     if getattr(existing, key) != value:
                         setattr(existing, key, value)
@@ -554,19 +562,44 @@ def _emit_heal_task(head_sha: str, url: str, tasks_path: Path, impact_note: str 
                     changed = True
                 if changed:
                     existing.updated = _now()
-                    save_limen_file(tasks_path, lf)
+                    apply_limen_file_sync(
+                        tasks_path,
+                        lf,
+                        agent="check-main-green",
+                        session_id="refresh",
+                    )
                 return None  # already being worked — converge, idempotent
             # prior red episode healed; trunk is red again → reopen the SAME canonical ticket
+            prior_status = existing.status
             existing.status = "open"
             existing.title = title
             existing.context = context
             existing.priority = "critical"
             existing.predicate = contract["predicate"]
             existing.receipt_target = contract["receipt_target"]
+            for key, value in collateral.items():
+                setattr(existing, key, value)
             if url and url not in (existing.urls or []):
                 existing.urls = [*(existing.urls or []), url]
             existing.updated = _now()
-            save_limen_file(tasks_path, lf)
+            existing.dispatch_log.append(
+                DispatchLogEntry(
+                    timestamp=existing.updated,
+                    agent="check-main-green",
+                    session_id="recurrence-reopen",
+                    status="open",
+                    lifecycle_repair=("recurrence-reopen" if prior_status in {"done", "archived"} else None),
+                    recurrence_source=("main-green" if prior_status in {"done", "archived"} else None),
+                    recurrence_head_sha=(head_sha if prior_status in {"done", "archived"} else None),
+                    output=f"check-main-green: reopened recurring red trunk at {head_sha}",
+                )
+            )
+            apply_limen_file_sync(
+                tasks_path,
+                lf,
+                agent="check-main-green",
+                session_id="reopen",
+            )
             return tid
         lf.tasks.append(
             Task(
@@ -582,12 +615,18 @@ def _emit_heal_task(head_sha: str, url: str, tasks_path: Path, impact_note: str 
                 urls=[url] if url else [],
                 context=context,
                 **contract,
+                **collateral,
                 depends_on=[],
                 created=stamp,
                 dispatch_log=[],
             )
         )
-        save_limen_file(tasks_path, lf)
+        apply_limen_file_sync(
+            tasks_path,
+            lf,
+            agent="check-main-green",
+            session_id="create",
+        )
         return tid
     finally:
         try:

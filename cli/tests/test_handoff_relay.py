@@ -84,6 +84,12 @@ def _task(task_id, *, priority="medium", agent="codex", **extra):
         "target_agent": agent,
         "priority": priority,
         "budget_cost": 1,
+        "origin": "human_prompt",
+        "horizon": "present",
+        "value_case": f"Deliver the bounded handoff task {task_id}",
+        "owner_surface": "organvm/limen",
+        "predicate": "pytest -q cli/tests/test_handoff_relay.py",
+        "receipt_target": f"github:organvm/limen:pull-request:{task_id}",
         "status": "open",
         "labels": [],
         "depends_on": [],
@@ -102,7 +108,9 @@ def test_build_splits_ostensible_from_dispatchable_and_preserves_aliases(monkeyp
 
     assert payload["ostensible_next"]["id"] == "BLOCKED"
     assert payload["dispatchable_next"]["id"] == "READY"
-    assert payload["next_action"] == payload["ostensible_next"]
+    assert payload["next_action"] == payload["dispatchable_next"]
+    assert payload["dispatch_admission"]["admissible"] == 1
+    assert payload["dispatch_admission"]["reason_counts"] == {"provider_health": 1}
     assert payload["board_budget"] == {
         "daily": 10,
         "unit": "runs",
@@ -162,6 +170,21 @@ def test_dispatchable_next_skips_successor_required_open_row():
     providers = {"generated": "now", "vendors": {"codex": {"remaining": 2}}}
 
     assert mod._dispatchable_next(tasks, budget, providers)["id"] == "READY"
+
+
+def test_dispatchable_next_reports_stable_work_loan_denial() -> None:
+    mod = _load()
+    legacy = _task("LEGACY", priority="critical")
+    for field in ("origin", "horizon", "value_case"):
+        legacy.pop(field)
+    tasks = [legacy, _task("READY", priority="medium")]
+    budget = {"remaining": 3, "per_agent": {"codex": {"remaining": 3}}}
+    providers = {"generated": "now", "vendors": {"codex": {"remaining": 2}}}
+
+    admission = mod._dispatch_admission(tasks, budget, providers)
+
+    assert admission["dispatchable_next"]["id"] == "READY"
+    assert admission["reason_counts"] == {"task-not-underwritten:source_origin,horizon,value_case": 1}
 
 
 def test_dispatchable_next_rejects_live_low_health_even_with_remaining_capacity():
@@ -247,13 +270,65 @@ def test_check_rejects_missing_or_stale_provider_truth(monkeypatch, tmp_path, ca
     assert "provider headroom stale" in capsys.readouterr().out
 
 
-def test_handoff_refresh_is_wired_across_heartbeat_metabolize_and_session_end():
+def test_handoff_refresh_is_wired_across_heartbeat_metabolize_and_breadcrumb_consumer():
     heartbeat = (ROOT / "scripts" / "heartbeat-loop.sh").read_text(encoding="utf-8")
     metabolize = (ROOT / "scripts" / "metabolize.sh").read_text(encoding="utf-8")
     session_end = (ROOT / "scripts" / "hooks" / "session-closeout.sh").read_text(encoding="utf-8")
+    consumer = (ROOT / "scripts" / "consume-session-end-breadcrumbs.py").read_text(encoding="utf-8")
 
     # Observe-mode and normal dispatch beats both refresh; metabolize remains independently wired.
     assert heartbeat.count('python3 "$LIMEN_ROOT/scripts/handoff-relay.py"') >= 2
     assert 'python3 "$LIMEN_ROOT/scripts/handoff-relay.py"' in metabolize
-    # Every SessionEnd refreshes before the worktree-only early return.
-    assert session_end.index('python3 "$HANDOFF_ROOT/scripts/handoff-relay.py"') < session_end.index('case "$CWD" in')
+    assert "consume-session-end-breadcrumbs.py" in heartbeat
+    assert '"handoff-relay.py"' in consumer
+    # SessionEnd itself never performs the slow refresh.
+    assert "handoff-relay.py" not in session_end
+
+
+def test_heartbeat_sh_drains_only_after_singleton_acquisition():
+    heartbeat = (ROOT / "scripts" / "heartbeat.sh").read_text(encoding="utf-8")
+    drain_call = heartbeat.index("\ndrain_session_end_breadcrumbs\n")
+
+    assert heartbeat.index("flock -n 9") < drain_call
+    assert heartbeat.index('mkdir "$LOCK.d"') < drain_call
+    assert drain_call < heartbeat.index('MODE="$(python3 "$LIMEN_ROOT/scripts/autonomy-governor.py"')
+
+
+def test_heartbeat_drains_resolve_timeout_with_direct_fail_open_fallback():
+    scripts = {
+        "heartbeat.sh": "SESSION_END_TIMEOUT_BIN",
+        "heartbeat-loop.sh": "DISPATCH_TIMEOUT_BIN",
+    }
+
+    for filename, timeout_var in scripts.items():
+        source = (ROOT / "scripts" / filename).read_text(encoding="utf-8")
+        function_start = source.index("drain_session_end_breadcrumbs() {")
+        function_end = source.index("\n}", function_start)
+        function = source[function_start:function_end]
+        bounded, direct = function.split("  else\n", 1)
+
+        assert "command -v timeout || command -v gtimeout || true" in source
+        assert f'if [ -n "${timeout_var}" ]; then' in bounded
+        assert f'"${timeout_var}" "${{LIMEN_SESSION_END_CONSUMER_TIMEOUT:-90}}"' in bounded
+        assert 'python3 "$LIMEN_ROOT/scripts/consume-session-end-breadcrumbs.py"' in direct
+        assert f"${timeout_var}" not in direct
+        assert "--runway-seconds" in bounded
+        assert "--runway-seconds" in direct
+        assert "|| true" in bounded
+        assert "|| true" in direct
+
+
+def test_heartbeat_loop_drains_before_paused_and_offline_early_continues_once():
+    heartbeat = (ROOT / "scripts" / "heartbeat-loop.sh").read_text(encoding="utf-8")
+    lines = [line.strip() for line in heartbeat.splitlines()]
+    ownership = heartbeat.index('if [ "$(cat "$DAEMON_LOCK" 2>/dev/null)" != "$$" ]; then')
+    drain_call = heartbeat.index("\n  drain_session_end_breadcrumbs\n")
+    mode = heartbeat.index('  MODE="$(python3 "$LIMEN_ROOT/scripts/autonomy-governor.py"')
+    paused_continue = heartbeat.index("\n    continue\n", mode)
+    connectivity = heartbeat.index("  # CONNECTIVITY GATE", paused_continue)
+    offline_continue = heartbeat.index("\n    continue\n", connectivity)
+
+    assert heartbeat.index('echo $$ > "$DAEMON_LOCK"') < ownership < drain_call
+    assert drain_call < mode < paused_continue < connectivity < offline_continue
+    assert lines.count("drain_session_end_breadcrumbs") == 1
+    assert "consume-session-end-breadcrumbs.py" not in heartbeat[drain_call:]

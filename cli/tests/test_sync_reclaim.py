@@ -6,8 +6,8 @@
     divergence still stays fail-open (never force-moved).
 
   scripts/reclaim-worktrees.py — reap provably-dead fleet worktrees (clean +
-    content-preserved-on-default + idle), while keeping dirty / unique-unpushed /
-    unmerged / recently-active ones.
+    content-preserved-on-a-remote + idle), while keeping dirty / unique-unpushed /
+    active-process-owned / recently-active ones.
 
 Both run as real subprocesses against throwaway git repos, so the actual shell/Python ships.
 """
@@ -195,9 +195,8 @@ def test_parked_with_tracked_dirt_preserves_then_unparks(checkout, tmp_path):
     assert "uncommitted session work" in preserved  # dirt committed + pushed, not dropped
 
 
-def test_parked_unpark_preserves_live_tasks_yaml(checkout, tmp_path):
-    """The daemon-owned live queue is the ONE tracked-dirt exception: preserved across the
-    unpark switch AND the follow-on ff (the committed copies are stale snapshots)."""
+def test_parked_unpark_refuses_dirty_tasks_cache_without_copy_or_restore(checkout, tmp_path):
+    """A dirty remote-owned board cache blocks unpark without rewriting or carrying it."""
     clone, bare = checkout
     _commit(clone, "tasks.yaml", "queue: v0\n", "queue snapshot")
     _git("push", "-q", "origin", "main", cwd=clone)
@@ -205,12 +204,14 @@ def test_parked_unpark_preserves_live_tasks_yaml(checkout, tmp_path):
     _commit(clone, "tasks.yaml", "queue: branch-snapshot\n", "branch queue snapshot")
     _git("push", "-q", "-u", "origin", "work", cwd=clone)
     release = _origin_advance(bare, tmp_path, "rel.txt", "r\n", "release advances")
-    (clone / "tasks.yaml").write_text("queue: LIVE\n")  # daemon-owned dirt, the sole exception
+    (clone / "tasks.yaml").write_text("queue: LIVE\n")  # unsanctioned local cache drift
     r = _run_sync(clone)
     assert r.returncode == 0
-    assert "UNPARKED" in r.stdout, r.stdout + r.stderr
-    assert _git("rev-parse", "HEAD", cwd=clone).stdout.strip() == release
-    assert (clone / "tasks.yaml").read_text() == "queue: LIVE\n"  # live queue won end-to-end
+    assert "local tasks.yaml cache is dirty" in r.stdout
+    assert "refusing to copy/restore/discard it" in r.stdout
+    assert _git("rev-parse", "--abbrev-ref", "HEAD", cwd=clone).stdout.strip() == "work"
+    assert _git("rev-parse", "HEAD", cwd=clone).stdout.strip() != release
+    assert (clone / "tasks.yaml").read_text() == "queue: LIVE\n"
 
 
 def test_parked_unpark_clears_untracked_release_collision(checkout, tmp_path):
@@ -382,9 +383,8 @@ def test_reclaim_keeps_dirty_unpushed_and_active(tmp_path):
     assert "dirty" in r.stdout and "unpushed-commits" in r.stdout and "active" in r.stdout
 
 
-def test_reclaim_keeps_clean_pushed_unmerged_branch(tmp_path):
-    # Merge-before-reap rule (2026-07-09): pushed preservation is not closure. The branch must
-    # merge before the local checkout is eligible for removal.
+def test_reclaim_reaps_clean_pushed_unmerged_branch_by_default(tmp_path):
+    # Remote custody is enough to rehydrate the clean branch; the local worktree is disposable.
     main, bare, wtroot = _wt_root_with(tmp_path)
     (main / "logs").mkdir(exist_ok=True)
 
@@ -397,12 +397,12 @@ def test_reclaim_keeps_clean_pushed_unmerged_branch(tmp_path):
     r = _run_reclaim(wtroot, main, apply=True)
 
     assert r.returncode == 0, r.stderr
-    assert branch.exists(), r.stdout
-    assert "not-merged-to-default" in r.stdout
+    assert not branch.exists(), r.stdout
+    assert "clean+pushed+idle" in r.stdout
 
 
-def test_reclaim_keeps_pushed_unmerged_without_escape_hatch(tmp_path):
-    # Pushed-but-unmerged worktrees are kept as not-merged-to-default.
+def test_reclaim_keeps_pushed_unmerged_when_pushed_reap_disabled(tmp_path):
+    # The explicit opt-out restores the conservative merged-only gate.
     main, bare, wtroot = _wt_root_with(tmp_path)
     (main / "logs").mkdir(exist_ok=True)
 
@@ -412,7 +412,12 @@ def test_reclaim_keeps_pushed_unmerged_without_escape_hatch(tmp_path):
     _git("push", "-q", "origin", "HEAD:feature-off", cwd=branch)
     _age(branch, 5)
 
-    r = _run_reclaim(wtroot, main, apply=True)
+    r = _run_reclaim(
+        wtroot,
+        main,
+        apply=True,
+        extra_env={"LIMEN_RECLAIM_PUSHED_OK": "0"},
+    )
 
     assert r.returncode == 0, r.stderr
     assert branch.exists(), r.stdout

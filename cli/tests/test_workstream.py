@@ -11,7 +11,6 @@ from pathlib import Path
 
 from limen import tabularius
 from limen import workstream as ws
-from limen.io import load_limen_file
 from limen.models import LimenFile, Task
 
 
@@ -105,10 +104,26 @@ def test_group_and_filter(tmp_path):
     assert [t.id for t in filtered.tasks] == ["B"]
 
 
-def test_workstream_survives_tabularius_single_writer(tmp_path):
-    # The whole design rests on this: the field flows through the ONE record-keeper untouched.
+def test_workstream_survives_tabularius_single_writer(tmp_path, monkeypatch):
+    # The broker receipt, not a local YAML rewrite, is the canonical projection proof.
     board = tmp_path / "tasks.yaml"
     board.write_text('version: "1.0"\nportal:\n  name: x\ntasks: []\n')
+    before = board.read_bytes()
+    acknowledged = []
+
+    class Owner:
+        def register(self, _session):
+            return {"status": "registered"}
+
+        def submit(self, packet):
+            task = dict(packet.intent["task"])
+            acknowledged.append(task)
+            return {
+                "status": "accepted",
+                "projection_receipts": [{"task_id": task["id"], "task": task}],
+            }
+
+    monkeypatch.setattr(tabularius, "client_from_env", lambda: Owner())
     tabularius.submit_task_upsert(
         board,
         {
@@ -119,15 +134,21 @@ def test_workstream_survives_tabularius_single_writer(tmp_path):
             "workstream": "Revenue",
             "predicate": "pytest -q cli/tests/test_workstream.py",
             "receipt_target": "github:organvm/limen:pull-request:W1",
+            "origin": "human_prompt",
+            "horizon": "present",
+            "value_case": "Deliver the bounded workstream task",
+            "owner_surface": "organvm/limen",
             "created": "2026-07-01",
         },
         agent="tester",
         session_id="s",
     )
     res = tabularius.drain_once(board)
-    assert res.wrote
-    got = {t.id: t for t in load_limen_file(board).tasks}
-    assert got["W1"].workstream == "revenue"  # normalized on submit, preserved through the seal
+    assert res.applied == 1
+    assert res.wrote is False
+    assert board.read_bytes() == before
+    assert acknowledged[0]["workstream"] == "revenue"
+    assert (tabularius._archive(board) / f"{res.applied_ids[0]}.json").exists()
 
 
 def _pr(number, title, branch="", draft=False):

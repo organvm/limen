@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import pty
 import shlex
 import shutil
 import subprocess
@@ -34,7 +35,14 @@ def test_workstream_command_writes_private_kickstart_packet(tmp_path: Path, monk
     _git("add", "README.md", cwd=repo)
     _git("commit", "-qm", "init", cwd=repo)
 
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_opencode = fake_bin / "opencode"
+    fake_opencode.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+    fake_opencode.chmod(0o755)
     monkeypatch.setenv("LIMEN_ROOT", str(ROOT))
+    monkeypatch.setenv("LIMEN_AGENT", "opencode")
+    monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ['PATH']}")
     result = CliRunner().invoke(
         main,
         [
@@ -56,7 +64,10 @@ def test_workstream_command_writes_private_kickstart_packet(tmp_path: Path, monk
     assert intent.exists()
     assert kickstart.exists()
     assert receipt.exists()
-    assert "exec codex --ask-for-approval never --sandbox workspace-write" in kickstart.read_text(encoding="utf-8")
+    kickstart_text = kickstart.read_text(encoding="utf-8")
+    assert "workstream_launch_native_agent" in kickstart_text
+    assert "agent=opencode" in kickstart_text
+    assert "exec codex --ask-for-approval never --sandbox workspace-write" not in kickstart_text
     assert (
         json.loads((wt / ".limen-workstream" / "workstream.json").read_text(encoding="utf-8"))["runway"][
             "duration_seconds"
@@ -88,6 +99,66 @@ def test_workstream_command_writes_private_kickstart_packet(tmp_path: Path, monk
     assert "workstream contract is missing" in partial.output
 
 
+def test_shell_launcher_hands_off_to_generated_kickstart_without_a_tty(tmp_path: Path) -> None:
+    repo = tmp_path / "demo-repo"
+    repo.mkdir()
+    _git("init", "-q", "-b", "main", cwd=repo)
+    _git("config", "user.email", "test@example.invalid", cwd=repo)
+    _git("config", "user.name", "Test User", cwd=repo)
+    (repo / "README.md").write_text("demo\n", encoding="utf-8")
+    _git("add", "README.md", cwd=repo)
+    _git("commit", "-qm", "init", cwd=repo)
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_codex = fake_bin / "codex"
+    fake_codex.write_text(
+        (
+            "#!/usr/bin/env bash\n"
+            'printf "%s\\n" "$1" "$2" "$3" "$4" "$5" > "$SESSION_ARGS_CAPTURE"\n'
+            'last="${!#}"\n'
+            'printf "%s" "$last" > "$SESSION_PROMPT_CAPTURE"\n'
+        ),
+        encoding="utf-8",
+    )
+    fake_codex.chmod(0o755)
+    args_capture = tmp_path / "args.txt"
+    prompt_capture = tmp_path / "prompt.txt"
+    env = {
+        **os.environ,
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "SESSION_ARGS_CAPTURE": str(args_capture),
+        "SESSION_PROMPT_CAPTURE": str(prompt_capture),
+    }
+    launched = subprocess.run(
+        [
+            "bash",
+            str(ROOT / "scripts" / "start-worktree-session.sh"),
+            "--autonomous",
+            "--agent",
+            "codex",
+            "--prompt",
+            "Continue from the bounded capsule.",
+            str(repo),
+            "Agent Launch",
+        ],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=15,
+    )
+
+    assert launched.returncode == 0, launched.stdout + launched.stderr
+    assert args_capture.read_text(encoding="utf-8").splitlines() == [
+        "--ask-for-approval",
+        "never",
+        "--sandbox",
+        "workspace-write",
+        "exec",
+    ]
+    assert "# Continuation capsule: agent-launch" in prompt_capture.read_text(encoding="utf-8")
+
+
 def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(tmp_path: Path, monkeypatch) -> None:
     repo = tmp_path / "demo repo"
     repo.mkdir()
@@ -98,7 +169,17 @@ def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(
     _git("add", "README.md", cwd=repo)
     _git("commit", "-qm", "init", cwd=repo)
 
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_codex = fake_bin / "codex"
+    fake_codex.write_text(
+        '#!/usr/bin/env bash\nprintf "%s" "$1" > "$SESSION_PROMPT_CAPTURE"\n',
+        encoding="utf-8",
+    )
+    fake_codex.chmod(0o755)
     monkeypatch.setenv("LIMEN_ROOT", str(ROOT))
+    monkeypatch.setenv("LIMEN_AGENT", "codex")
+    monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ['PATH']}")
     missing = CliRunner().invoke(main, ["workstream", "--autonomous", str(repo), "No Prompt"])
     assert missing.exit_code == 2
     assert "requires --prompt or --prompt-file" in missing.output
@@ -176,6 +257,8 @@ def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(
     assert "Derive the next safe leaf from live receipts." in intent_text
     assert "Derive the next safe leaf from live receipts." not in readme_text
     assert "Autonomous: `yes`" in manifest_text
+    assert "Agent: `codex`" in manifest_text
+    assert "Conduct: `no`" in manifest_text
     assert "Runtime decision contract" in runtime_text
     assert "Reality determines the state" in runtime_text
     assert "Workstream: `substrate`" in manifest_text
@@ -188,11 +271,14 @@ def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(
     for module in (manifest, contract, intent, runtime, closeout):
         assert module.exists()
         assert module.name in readme_text
+    assert "workstream_export_context" in kickstart_text
+    assert "workstream_launch_native_agent" in kickstart_text
+    assert "if [[ -t 0 && -t 1 ]]; then" in kickstart_text
+    assert 'exec "$binary" "$capsule_prompt"' in kickstart_text
     assert "IFS= read -r -d '' capsule_prompt" in kickstart_text
-    assert 'exec codex --ask-for-approval never --sandbox workspace-write "$capsule_prompt"' in kickstart_text
-    assert "--ask-for-approval never --sandbox workspace-write" in kickstart_text
+    assert '"$agent" "$registry_binary" "1" "$readme" "$allow_shell_fallback"' in kickstart_text
     assert "run-bounded" in kickstart_text
-    assert kickstart_text.count("refresh_workstream_runway") >= 4
+    assert kickstart_text.count("refresh_workstream_runway") == 3
     assert "workstream-contract.py" in kickstart_text
     readme_assignment = next(line for line in kickstart_text.splitlines() if line.startswith("readme="))
     assert shlex.split(readme_assignment) == [f"readme={readme}"]
@@ -428,12 +514,13 @@ render_workstream_capsule \
     assert _git("status", "--short", cwd=wt).stdout == ""
 
     fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
+    fake_bin.mkdir(exist_ok=True)
     fake_codex = fake_bin / "codex"
     fake_codex.write_text(
         (
             "#!/usr/bin/env bash\n"
-            'printf "%s\\n" "$1" "$2" "$3" "$4" > "$SESSION_ARGS_CAPTURE"\n'
+            'for ((i = 1; i < $#; i++)); do printf "%s\\n" "${!i}"; done '
+            '> "$SESSION_ARGS_CAPTURE"\n'
             'printf "%s:%s:%s:%s:%s" "$LIMEN_WORKSTREAM_REQUESTED" '
             '"$LIMEN_WORKSTREAM_RUNWAY_SECONDS" "$LIMEN_WORKSTREAM_STARTED_EPOCH" '
             '"$LIMEN_WORKSTREAM_DEADLINE_EPOCH" "$LIMEN_WORKSTREAM_REMAINING_SECONDS" '
@@ -495,6 +582,31 @@ render_workstream_capsule \
     launched_prompt = prompt_capture.read_text(encoding="utf-8")
     assert launched_prompt == readme_text
     assert "intent.md" in launched_prompt
+    assert args_capture.read_text(encoding="utf-8").splitlines() == [
+        "--ask-for-approval",
+        "never",
+        "--sandbox",
+        "workspace-write",
+        "exec",
+    ]
+
+    master_fd, slave_fd = pty.openpty()
+    try:
+        tty_launch = subprocess.run(
+            ["bash", str(kickstart)],
+            cwd=wt,
+            env=env,
+            stdin=slave_fd,
+            stdout=slave_fd,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=15,
+        )
+    finally:
+        os.close(slave_fd)
+        os.close(master_fd)
+    assert tty_launch.returncode == 0, tty_launch.stderr
+    assert prompt_capture.read_text(encoding="utf-8") == readme_text
     assert args_capture.read_text(encoding="utf-8").splitlines() == [
         "--ask-for-approval",
         "never",

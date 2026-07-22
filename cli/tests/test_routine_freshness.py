@@ -191,6 +191,11 @@ def test_hang_down_atoms_creates_task(tmp_path, monkeypatch):
     assert "ASK-routine-atom-backlog-triage" in data
     assert "needs_human" in data
     assert "routine-freshness" in data
+    task = load_limen_file(tasks).tasks[0]
+    assert task.origin == "obligation"
+    assert task.horizon == "present"
+    assert task.value_case == "Restore delivery for the declared cloud routine atom-backlog-triage"
+    assert task.owner_surface == "organvm/limen"
 
 
 def test_hang_down_atoms_idempotent(tmp_path, monkeypatch):
@@ -243,6 +248,10 @@ def test_retire_recovered_atom_and_idempotent(tmp_path, monkeypatch):
     # routine no longer down → retire
     res1 = mod.retire_recovered_atoms(set(), ["omega-scorecard"])
     assert res1["retired"] == ["ASK-routine-omega-scorecard"]
+    retired = load_limen_file(tasks).tasks[0]
+    assert retired.dispatch_log[-1].lifecycle_repair == "routine-recovered"
+    assert retired.dispatch_log[-1].routine_name == "omega-scorecard"
+    assert retired.dispatch_log[-1].routine_observed_state == "recovered"
 
     # second run: already done → not retired again (idempotent)
     res2 = mod.retire_recovered_atoms(set(), ["omega-scorecard"])

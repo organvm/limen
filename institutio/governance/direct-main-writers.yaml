@@ -22,12 +22,15 @@ surfaces:
   cli/src/limen/dispatch.py:
     disposition: isolated-task-branch-pr
     expected: {push_literal: 2}
+  cli/src/limen/fanout_executor.py:
+    disposition: isolated-disposable-worktree-topic-branch-pr-default-refused
+    expected: {git_push: 1, push_literal: 1}
   cli/src/limen/jules_landing_custody.py:
     disposition: isolated-jules-branch-pr
     expected: {push_literal: 1}
   cli/src/limen/tabularius.py:
-    disposition: stable-board-projection-pr
-    expected: {push_literal: 1}
+    disposition: remote-keeper-relay-no-git-writer
+    expected: {}
   mcp/src/limen_mcp/server.py:
     disposition: repository-mutations-deferred-to-tabularius
     expected: {}
@@ -58,6 +61,12 @@ surfaces:
   scripts/reap_acceptance.py:
     disposition: receipt-string-only
     expected: {git_push: 1}
+  scripts/npm-audit-autofix.py:
+    disposition: generated-topic-branch-pr
+    expected: {git_push: 1}
+  scripts/estate-audit-heal.py:
+    disposition: generated-topic-branch-pr
+    expected: {git_push: 1}
   scripts/ship-docs.sh:
     disposition: generated-topic-branch-pr
     expected: {git_push: 1}
@@ -67,6 +76,9 @@ surfaces:
   scripts/sync-release.sh:
     disposition: parked-topic-branch-only-actual-default-refused
     expected: {git_push: 2}
+  scripts/task-writer-audit.py:
+    disposition: audit-regex-literal-only
+    expected: {git_push: 1}
   scripts/worktree-pr-receipts.py:
     disposition: nondefault-worktree-branch-pr-default-refused
     expected: {git_push: 1}

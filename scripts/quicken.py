@@ -434,9 +434,10 @@ def _hang_asks(entries: list[dict]) -> dict:
     try:
         sys.path.insert(0, str(ROOT / "cli" / "src"))
         from datetime import date, datetime, timezone
-        from limen.io import load_limen_file, queue_lock, save_limen_file
+        from limen.io import load_limen_file, queue_lock
         from limen.intake import contract_fields, github_issue_owner_contract
         from limen.models import Task, has_jules_landing_hold
+        from limen.tabularius import apply_limen_file_sync
         from limen.workstream_contract import WORKSTREAM_SUCCESSOR_REQUIRED_LABEL
     except Exception as e:  # never dead-stop the apply if the cli pkg isn't importable
         res["error"] = f"ledger unavailable ({e}); residue digest still written"
@@ -455,6 +456,12 @@ def _hang_asks(entries: list[dict]) -> dict:
         for entry in entries:
             tid = entry["tid"]
             contract = contract_fields(github_issue_owner_contract("organvm/limen", tid))
+            collateral = {
+                "origin": "human_prompt",
+                "horizon": "present",
+                "value_case": f"Resolve the irreducible operator atom: {entry['title']}",
+                "owner_surface": "organvm/limen",
+            }
             ex = index.get(tid)
             if (
                 ex
@@ -463,6 +470,10 @@ def _hang_asks(entries: list[dict]) -> dict:
                 and not has_jules_landing_hold(ex)
             ):
                 refreshed = False
+                for key, value in collateral.items():
+                    if getattr(ex, key) != value:
+                        setattr(ex, key, value)
+                        refreshed = True
                 if ex.status != "needs_human":
                     ex.status = "needs_human"
                     refreshed = True
@@ -490,6 +501,7 @@ def _hang_asks(entries: list[dict]) -> dict:
                         status="needs_human",
                         labels=entry["labels"],
                         context=entry["context"],
+                        **collateral,
                         **contract,
                         created=date.today(),
                         updated=now,
@@ -498,7 +510,7 @@ def _hang_asks(entries: list[dict]) -> dict:
                 changed = True
                 res["created"].append(tid)
         if changed:
-            save_limen_file(LEDGER, lf)
+            apply_limen_file_sync(LEDGER, lf, agent="quicken", session_id="hang-asks")
     return res
 
 

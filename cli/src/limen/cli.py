@@ -1,5 +1,6 @@
-import os
+import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -13,10 +14,14 @@ from limen.doctor import (
     readiness_report,
     write_report,
 )
+from limen.conduct.cli import conduct_group
 from limen.dispatch import dispatch_tasks, release_stale_tasks
+from limen.fanout_cli import fanout_group
 from limen.harvest import harvest_results
-from limen.io import load_limen_file, load_limen_text
+from limen.host_admission import AdmissionController, AdmissionStateError, process_identity, worktree_scope
+from limen.io import load_limen_file, load_limen_text, save_derived_limen_projection
 from limen.progress import build_progress_snapshot, render_progress
+from limen.progress_source_registry import build_source_registry
 from limen.status import print_status
 
 
@@ -57,11 +62,113 @@ def main():
     pass
 
 
+main.add_command(conduct_group)
+main.add_command(fanout_group)
+
+
+def _host_owner() -> tuple[str, int]:
+    pid = os.getppid()
+    label = os.environ.get("LIMEN_HOST_ADMISSION_OWNER") or os.environ.get("LIMEN_SESSION_ID")
+    if not label:
+        identity = process_identity(pid) or str(pid)
+        label = f"limen-cli-{hashlib.sha256(identity.encode()).hexdigest()[:24]}"
+    return label, pid
+
+
+def _emit_host_decision(decision: dict, *, json_output: bool) -> None:
+    if json_output:
+        click.echo(json.dumps(decision, indent=2, sort_keys=True))
+        return
+    state = "allowed" if decision.get("allowed") else "denied"
+    reasons = ",".join(decision.get("reasons") or [])
+    suffix = f" ({reasons})" if reasons else ""
+    click.echo(f"host-admission {decision.get('operation')}: {state}{suffix}")
+
+
+@click.group("host-admission")
+def host_admission_group():
+    """Inspect or mutate the machine-wide writer/heavy lease store."""
+
+
+@host_admission_group.command("acquire")
+@click.argument("kind", type=click.Choice(["execution", "heavy"]))
+@click.option("--cwd", type=click.Path(path_type=Path), default=None)
+@click.option("--json", "json_output", is_flag=True)
+def host_admission_acquire(kind: str, cwd: Path | None, json_output: bool) -> None:
+    owner, pid = _host_owner()
+    controller = AdmissionController()
+    try:
+        if kind == "execution":
+            scope = worktree_scope(cwd or Path.cwd())
+            if not scope.linked:
+                decision = {
+                    "schema": "limen.host_admission_decision.v1",
+                    "operation": "acquire",
+                    "allowed": False,
+                    "reasons": ["shared-checkout-write"],
+                    "lease": None,
+                    "leases": controller.status(probe=False).get("leases") or [],
+                }
+            else:
+                decision = controller.acquire(
+                    scope.lease_kind,
+                    owner=owner,
+                    surface="limen-host-admission-cli",
+                    pid=pid,
+                )
+        else:
+            decision = controller.acquire(kind, owner=owner, surface="limen-host-admission-cli", pid=pid)
+    except (AdmissionStateError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    _emit_host_decision(decision, json_output=json_output)
+    if not decision.get("allowed"):
+        raise click.exceptions.Exit(3)
+
+
+@host_admission_group.command("status")
+@click.option("--cwd", type=click.Path(path_type=Path), default=None)
+@click.option("--json", "json_output", is_flag=True)
+def host_admission_status(cwd: Path | None, json_output: bool) -> None:
+    controller = AdmissionController()
+    try:
+        decision = controller.status(probe=True)
+        if cwd is not None:
+            scope = worktree_scope(cwd)
+            decision["scope"] = {
+                "scope_hash": scope.scope_hash,
+                "linked": scope.linked,
+                "writer_held": any(lease.get("kind") == scope.lease_kind for lease in decision.get("leases") or []),
+            }
+    except (AdmissionStateError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    _emit_host_decision(decision, json_output=json_output)
+
+
+@host_admission_group.command("release")
+@click.argument("kind", type=click.Choice(["execution", "heavy"]))
+@click.option("--cwd", type=click.Path(path_type=Path), default=None)
+@click.option("--json", "json_output", is_flag=True)
+def host_admission_release(kind: str, cwd: Path | None, json_output: bool) -> None:
+    owner, pid = _host_owner()
+    controller = AdmissionController()
+    try:
+        lease_kind = worktree_scope(cwd or Path.cwd()).lease_kind if kind == "execution" else kind
+        decision = controller.release_owned(lease_kind, owner=owner, pid=pid)
+    except (AdmissionStateError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    _emit_host_decision(decision, json_output=json_output)
+    if not decision.get("allowed"):
+        raise click.exceptions.Exit(3)
+
+
+main.add_command(host_admission_group)
+
+
 @main.command()
 @click.option("--root", default=None, help="Where to create the portal")
 @click.option("--budget", default=100, type=int, help="Daily run budget")
 def init(root, budget):
-    """Scaffold a new tasks.yaml in LIMEN_ROOT or current directory."""
+    """Report the remote-owner bootstrap required for a new portal."""
     target = Path(root).expanduser().resolve() if root else resolve_root()
     tasks_file = target / "tasks.yaml"
 
@@ -69,27 +176,11 @@ def init(root, budget):
         click.echo(f"tasks.yaml already exists at {tasks_file}")
         return
 
-    target.mkdir(parents=True, exist_ok=True)
-    content = f"""version: "1.0"
-portal:
-  name: "Universal Task Intake"
-  description: "One file to aim every agent you have"
-  budget:
-    daily: {budget}
-    unit: "runs"
-    per_agent: {{}}
-    track:
-      date: ""
-      spent: 0
-      per_agent: {{}}
-tasks: []
-"""
-    tasks_file.write_text(content)
-    click.echo(f"Created {tasks_file} with daily budget of {budget}")
-    ag = target / "AGENTS.md"
-    if not ag.exists():
-        ag.write_text("# Limen Agent Protocol\n\nSee https://github.com/4444J99/limen\n")
-        click.echo(f"Created {ag}")
+    del budget
+    raise click.ClickException(
+        "local tasks.yaml bootstrap is retired: initialize the GitHub-backed "
+        "board through the authenticated conduct owner, then hydrate this cache"
+    )
 
 
 @main.command()
@@ -185,7 +276,7 @@ def status(agent, status):
 @main.command()
 @click.option(
     "--view",
-    type=click.Choice(["workstream", "origin", "horizon", "agent", "repo", "status"]),
+    type=click.Choice(["workstream", "source_lineage", "origin", "horizon", "agent", "repo", "status"]),
     default="workstream",
     show_default=True,
     help="Macro grouping and micro drill-down dimension.",
@@ -258,6 +349,56 @@ def progress(view, scope, level, limit, show_all, ascii_only, json_output, repor
         ),
         nl=False,
     )
+
+
+@main.command("progress-sources")
+@click.option(
+    "--registry-dir",
+    "registry_dirs",
+    multiple=True,
+    type=click.Path(path_type=Path),
+    help="Use an explicit registration root; repeat to combine roots.",
+)
+@click.option("--json-output", is_flag=True, help="Print the normalized source registry as JSON.")
+@click.option(
+    "--report-file",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Write the normalized registry to an explicit receipt path.",
+)
+def progress_sources(registry_dirs, json_output, report_file):
+    """Discover and validate work-universe source owner reports."""
+
+    root = resolve_root()
+    registry = build_source_registry(
+        root,
+        registration_dirs=[Path(path).expanduser() for path in registry_dirs] or None,
+    )
+    if report_file:
+        output = Path(report_file).expanduser()
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(registry, indent=2) + "\n", encoding="utf-8")
+    if json_output:
+        click.echo(json.dumps(registry, indent=2))
+        return
+    summary = registry["summary"]
+    discovery = registry["discovery"]
+    click.echo(
+        "WORK-UNIVERSE SOURCES "
+        f"status={registry['semantic_status']} "
+        f"sources={summary['source_count']} "
+        f"ready={summary['ready_required_source_count']}/{summary['required_source_count']} "
+        f"coverage_debt={summary['coverage_debt']} "
+        f"unknown_counts={summary['unknown_leaf_count_sources']} "
+        f"discovery_exhaustive={str(discovery['exhaustive']).lower()}"
+    )
+    for source in registry["sources"]:
+        count = source["normalized_leaf_count"]
+        click.echo(
+            f"{source['source_id']}\t{source['semantic_status']}\t"
+            f"owner={source['owner']['id']}:{source['owner']['surface']}\t"
+            f"exhaustive={str(source['exhaustive']).lower()}\tleaves={count if count is not None else 'unknown'}"
+        )
 
 
 def _open_prs_via_gh(limit: int = 200):
@@ -341,7 +482,6 @@ def channels(scope, emit, prs_mode, json_output):
     channel taxonomy to bucket the open-PR pile, so session/PR sprawl reads on the purpose axis too.
     """
     from limen import workstream as ws
-    from limen.io import save_limen_file
 
     root = resolve_root()
 
@@ -372,7 +512,11 @@ def channels(scope, emit, prs_mode, json_output):
         filtered = ws.filter_board(limen, scope, root)
         out = Path(emit).expanduser()
         out.parent.mkdir(parents=True, exist_ok=True)
-        save_limen_file(out, filtered, allow_shrink=True)  # a single channel is legitimately small
+        save_derived_limen_projection(
+            out,
+            filtered,
+            canonical_path=tasks_path,
+        )  # a single channel is an explicitly noncanonical read-only projection
         click.echo(f"wrote {len(filtered.tasks)} tasks for channel '{ws.canonical_handle(scope, root)}' to {out}")
         return
 
@@ -396,13 +540,19 @@ def harvest(agent):
 @click.option(
     "--autonomous",
     is_flag=True,
-    help="Require a prompt, render the modular live contract, and start Codex with the README index.",
+    help="Require a prompt and pass the modular live contract to the selected native agent.",
 )
 @click.option(
-    "--codex",
-    "launch_codex",
+    "--agent",
+    "agent_name",
+    default=None,
+    metavar="auto|LANE",
+    help="Select and launch a canonical native lane; auto derives an available installed CLI.",
+)
+@click.option(
+    "--conduct",
     is_flag=True,
-    help="Open Codex in the worktree after creating the packet.",
+    help="Register the launched direct session with the conduct broker as human-protected.",
 )
 @click.option(
     "--shell",
@@ -443,7 +593,8 @@ def harvest(agent):
 @click.argument("slug")
 def workstream(
     autonomous,
-    launch_codex,
+    agent_name,
+    conduct,
     launch_shell,
     from_ref,
     prompt_text,
@@ -460,8 +611,10 @@ def workstream(
     args = ["bash", str(script)]
     if autonomous:
         args.append("--autonomous")
-    if launch_codex:
-        args.append("--codex")
+    if agent_name:
+        args.extend(["--agent", agent_name])
+    if conduct:
+        args.append("--conduct")
     if launch_shell:
         args.append("--shell")
     if from_ref:
@@ -477,7 +630,7 @@ def workstream(
     if no_readme:
         args.append("--no-readme")
     args.extend([repo, slug])
-    if launch_codex or launch_shell:
+    if agent_name or launch_shell:
         result = subprocess.run(args)
     else:
         result = subprocess.run(args, text=True, capture_output=True)

@@ -213,9 +213,10 @@ def hang_down_atoms(down_rows: list[dict]) -> dict:
         from datetime import datetime as _datetime
         from datetime import timezone as _tz
 
-        from limen.io import load_limen_file, queue_lock, save_limen_file
+        from limen.io import load_limen_file, queue_lock
         from limen.intake import contract_fields, github_issue_owner_contract
-        from limen.models import Task, has_jules_landing_hold
+        from limen.models import DispatchLogEntry, Task, has_jules_landing_hold
+        from limen.tabularius import apply_limen_file_sync
         from limen.workstream_contract import WORKSTREAM_SUCCESSOR_REQUIRED_LABEL
     except Exception as e:
         res["error"] = f"ledger unavailable ({e}); atoms not hung"
@@ -254,6 +255,12 @@ def hang_down_atoms(down_rows: list[dict]) -> dict:
 
             ex = index.get(tid)
             contract = contract_fields(github_issue_owner_contract("organvm/limen", tid))
+            collateral = {
+                "origin": "obligation",
+                "horizon": "present",
+                "value_case": f"Restore delivery for the declared cloud routine {name}",
+                "owner_surface": "organvm/limen",
+            }
             if (
                 ex
                 and ex.status != "done"
@@ -261,14 +268,33 @@ def hang_down_atoms(down_rows: list[dict]) -> dict:
                 and not has_jules_landing_hold(ex)
             ):
                 refreshed = False
+                for key, value in collateral.items():
+                    if getattr(ex, key) != value:
+                        setattr(ex, key, value)
+                        refreshed = True
                 if ex.status != "needs_human":
                     ex.status = "needs_human"
+                    ex.dispatch_log.append(
+                        DispatchLogEntry(
+                            timestamp=now_dt,
+                            agent="routine-freshness",
+                            session_id="hang-down",
+                            status="needs_human",
+                            lifecycle_repair="human-gate-reconcile",
+                            routine_name=name,
+                            routine_observed_state="down",
+                            output=f"routine-freshness: routine '{name}' is down; reconciled human gate",
+                        )
+                    )
                     refreshed = True
                 if ex.context != ctx:
                     ex.context = ctx
                     refreshed = True
                 if "routine-freshness" not in (ex.labels or []):
                     ex.labels = list(ex.labels or []) + ["routine-freshness"]
+                    refreshed = True
+                if "needs-human" not in (ex.labels or []):
+                    ex.labels = list(ex.labels or []) + ["needs-human"]
                     refreshed = True
                 if refreshed:
                     ex.updated = now_dt
@@ -288,6 +314,7 @@ def hang_down_atoms(down_rows: list[dict]) -> dict:
                         status="needs_human",
                         labels=["routine-freshness", "needs-human"],
                         context=ctx,
+                        **collateral,
                         **contract,
                         created=_date.today(),
                         updated=now_dt,
@@ -297,7 +324,12 @@ def hang_down_atoms(down_rows: list[dict]) -> dict:
                 res["created"].append(tid)
 
         if changed:
-            save_limen_file(LEDGER, lf)
+            apply_limen_file_sync(
+                LEDGER,
+                lf,
+                agent="routine-freshness",
+                session_id="hang-down",
+            )
 
     return res
 
@@ -322,8 +354,9 @@ def retire_recovered_atoms(down_names: set[str], all_names: list[str]) -> dict:
         from datetime import datetime as _datetime
         from datetime import timezone as _tz
 
-        from limen.io import load_limen_file, queue_lock, save_limen_file
-        from limen.models import has_jules_landing_hold
+        from limen.io import load_limen_file, queue_lock
+        from limen.tabularius import apply_limen_file_sync
+        from limen.models import DispatchLogEntry, has_jules_landing_hold
     except Exception as e:
         res["error"] = f"ledger unavailable ({e}); atoms not retired"
         return res
@@ -356,11 +389,28 @@ def retire_recovered_atoms(down_names: set[str], all_names: list[str]) -> dict:
                     f"Auto-retired by routine-freshness-audit: routine '{name}' recovered / "
                     f"reclassified healthy (green or may_be_silent quiet) — no operator action needed."
                 )
+                ex.dispatch_log.append(
+                    DispatchLogEntry(
+                        timestamp=now_dt,
+                        agent="routine-freshness",
+                        session_id="retire-recovered",
+                        status="done",
+                        lifecycle_repair="routine-recovered",
+                        routine_name=name,
+                        routine_observed_state="recovered",
+                        output=ex.context,
+                    )
+                )
                 changed = True
                 res["retired"].append(tid)
 
         if changed:
-            save_limen_file(LEDGER, lf)
+            apply_limen_file_sync(
+                LEDGER,
+                lf,
+                agent="routine-freshness",
+                session_id="retire-recovered",
+            )
 
     return res
 

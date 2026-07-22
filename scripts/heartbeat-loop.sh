@@ -124,6 +124,22 @@ dispatch_bounded() {  # dispatch_bounded <cmd...> — run dispatch under the SIG
   fi
 }
 
+SESSION_END_SOURCE="${LIMEN_SESSION_END_BREADCRUMBS:-${XDG_STATE_HOME:-$HOME/.local/state}/limen/session-end-breadcrumbs.jsonl}"
+drain_session_end_breadcrumbs() {
+  if [ -n "$DISPATCH_TIMEOUT_BIN" ]; then
+    "$DISPATCH_TIMEOUT_BIN" "${LIMEN_SESSION_END_CONSUMER_TIMEOUT:-90}" \
+      python3 "$LIMEN_ROOT/scripts/consume-session-end-breadcrumbs.py" \
+        --source "$SESSION_END_SOURCE" \
+        --max-sessions "${LIMEN_SESSION_END_CONSUMER_BATCH:-8}" \
+        --runway-seconds "${LIMEN_SESSION_END_CONSUMER_RUNWAY:-60}" 2>&1 | tail -1 || true
+  else
+    python3 "$LIMEN_ROOT/scripts/consume-session-end-breadcrumbs.py" \
+      --source "$SESSION_END_SOURCE" \
+      --max-sessions "${LIMEN_SESSION_END_CONSUMER_BATCH:-8}" \
+      --runway-seconds "${LIMEN_SESSION_END_CONSUMER_RUNWAY:-60}" 2>&1 | tail -1 || true
+  fi
+}
+
 # SINGLETON GUARD (ATOMIC) — only one heartbeat-loop may run. mkdir is atomic, so two
 # near-simultaneous launchd respawns cannot both win (the pidfile read-then-write did).
 # Stale-lock (dead holder) is recovered with a single rmdir+retry; lose that race → exit.
@@ -291,6 +307,10 @@ while true; do
   VITALS_PRESSURE=0
   VITALS_THROTTLE=0
   echo "──── beat $c $(date '+%F %T') ────"
+  # Drain local SessionEnd work while this process owns the singleton, even when
+  # autonomy is paused or the network is offline. The consumer remains bounded
+  # and fail-open so lifecycle work cannot wedge the daemon.
+  drain_session_end_breadcrumbs
   MODE="$(python3 "$LIMEN_ROOT/scripts/autonomy-governor.py" mode 2>/dev/null || echo paused)"
   if [ "$MODE" = "paused" ]; then
     # Stay the singleton owner. Exiting here made launchd KeepAlive respawn a fresh
@@ -352,11 +372,10 @@ while true; do
     # (the 2026-06-26 halt). Idempotent: a healthy board is a fast no-op, no network. See
     # heal-board.py + the limen.io collapse-guard — "fix the handoff so it ain't broken".
     python3 "$LIMEN_ROOT/scripts/heal-board.py" 2>&1 | tail -1 || true
-    # RECORD-KEEPER (TABVLARIVS) — the single writer of the board. Drain the lock-free ticket inbox
-    # (logs/tickets/inbox), fold each worker's ticket onto the just-healed board under the queue
-    # lock, and seal via the collapse-guarded atomic write. Runs AFTER heal-board (fold onto a
-    # healthy board) and BEFORE the body's own queue mutation. Idempotent: an empty inbox is an
-    # instant no-op (no lock, no board I/O), so it is safe every beat while no producers exist yet.
+    # TABVLARIVS RELAY — submit the lock-free ticket inbox to the authenticated remote conduct
+    # keeper. Archive only tickets with canonical projection receipts; broker outages leave the
+    # unacknowledged suffix pending. The local tasks.yaml is read-only cache evidence, never a
+    # lifecycle writer. Idempotent: an empty inbox is an instant no-op.
     [ "${LIMEN_TABVLARIVS:-1}" = "1" ] && python3 "$LIMEN_ROOT/scripts/tabularius-organ.py" 2>&1 | tail -1 || true
     # ENACTMENT — surface any declared-ON fleet flag that is dark/stale in THIS running beat (memory:
     # enacted-not-declared). THE LIVE-LOOP HOME: metabolize.sh has the same advisory but the daemon
@@ -427,9 +446,11 @@ while true; do
                                        LIMEN_TICKETS_PRODUCE=1 timeout "${LIMEN_GENERATE_BACKLOG_TIMEOUT:-120}" python3 "$LIMEN_ROOT/scripts/generate-backlog.py" --apply 2>&1 | tail -1 || true  # SELF-FEED: build-out levers on the ranked tier
                                        [ "${LIMEN_STUDIUM:-0}" = "1" ] && timeout "${LIMEN_STUDIUM_TIMEOUT:-120}" python3 "$LIMEN_ROOT/scripts/ingest-backlog.py" --apply 2>&1 | tail -1 || true  # STUDIUM: re-emit the staged canon-breadth content tasks each beat so they SURVIVE the prune (a one-shot hand-apply gets clobbered; idempotent, gated, lockless)
                                        python3 "$LIMEN_ROOT/scripts/discover-value.py" --apply 2>&1 | tail -1 || true; }  # DISCOVER: no repo stays dark — surface latent value, burn the tank
-      play "$C_BALANCE"            && { python3 "$LIMEN_ROOT/scripts/route.py" --apply 2>&1 | tail -1 || true   # PLAN
+      # Routing is a live claim-time decision. target_agent is durable eligibility/ownership
+      # metadata, so a balance beat may inspect the plan but must never rewrite the tracked board.
+      play "$C_BALANCE"            && { python3 "$LIMEN_ROOT/scripts/route.py" 2>&1 | tail -1 || true   # PLAN
                                        if [ -n "$EFFECTIVE_LANES" ]; then
-                                         python3 "$LIMEN_ROOT/scripts/rebalance.py" --lanes "$EFFECTIVE_LANES" --apply 2>&1 | tail -1 || true
+                                         python3 "$LIMEN_ROOT/scripts/rebalance.py" --lanes "$EFFECTIVE_LANES" 2>&1 | tail -1 || true
                                        else
                                          echo "no live local lanes available for rebalance"
                                        fi; }

@@ -33,7 +33,7 @@ from limen.capacity import (
 )
 from limen.dispatch_ownership import ACTIVE_OWNER_STATUSES
 from limen.execution_contract import execution_contract_hash
-from limen.io import load_limen_file, save_limen_file, queue_lock as _queue_lock
+from limen.io import load_limen_file, queue_lock as _queue_lock
 from limen.intake import IntakeContractError, normalize_selected_legacy_task, validate_intake_contract
 from limen.host_admission import AdmissionDenied, hold_lease
 from limen.jules_remote import (
@@ -43,7 +43,16 @@ from limen.jules_remote import (
     probe_jules_remote_session_absences,
     task_jules_session_id,
 )
-from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task, has_jules_landing_hold
+from limen.models import (
+    BudgetTrack,
+    DispatchLogEntry,
+    LimenFile,
+    Task,
+    dispatch_agent,
+    dispatch_session_id,
+    has_jules_landing_hold,
+)
+from limen.tabularius import apply_limen_file_sync
 from limen.runtime_requirements import task_execution_ready
 from limen.doctor import stale_tasks
 from limen.provider_selection import (
@@ -84,10 +93,16 @@ from limen.worktree_debt import (
     take_admission_snapshot,
 )
 from limen.worktree_roots import dispatch_clone_cache_root, effective_worktree_root
+from limen.work_loan import task_work_loan_readiness
 from limen.workstream_contract import (
     ContractError as WorkstreamContractError,
     WORKSTREAM_SUCCESSOR_REQUIRED_LABEL,
     validate_packet_contract,
+)
+from limen.work_loan_journal import (
+    WorkLoanJournalError,
+    default_store as default_work_loan_journal_store,
+    work_loan_selection_key,
 )
 
 
@@ -813,7 +828,7 @@ def _has_pr_open_transition(task: Task) -> bool:
     """
     return any(
         str(entry.status or "") == "pr_open"
-        or (str(entry.status or "") == "dispatched" and "/pull/" in str(entry.session_id or "").lower())
+        or (str(entry.status or "") == "dispatched" and "/pull/" in dispatch_session_id(entry).lower())
         for entry in (task.dispatch_log or [])
     )
 
@@ -867,6 +882,7 @@ def _restore_done_status(
             agent=agent,
             session_id=session_id,
             status="done",
+            lifecycle_repair="prior-done",
             output=output,
         )
     )
@@ -885,7 +901,28 @@ def _dispatchable(task: Task) -> bool:
         return False
     if "needs-human" in (task.labels or []):
         return False
-    return task_execution_ready(task)
+    return task_work_loan_readiness(task).ready and task_execution_ready(task)
+
+
+def _effective_target_agent(task: Task) -> str:
+    """Return the live claim lane without mutating durable ownership metadata.
+
+    ``target_agent`` is the task's durable eligibility/ownership constraint. A
+    bounded provider failure may route the next claim through the latest OPEN
+    receipt; that executor lives in ``dispatch_log.route_to`` and does not
+    rewrite the task itself.
+    """
+
+    if task.status == "open" and task.dispatch_log:
+        latest = task.dispatch_log[-1]
+        if latest.status == "open" and latest.route_to:
+            return canonical_agent(latest.route_to)
+    return canonical_agent(task.target_agent)
+
+
+def _task_targets_agent(task: Task, agent: str) -> bool:
+    target = _effective_target_agent(task)
+    return target in {canonical_agent(agent), "any"}
 
 
 def _entry_text(entry: DispatchLogEntry) -> str:
@@ -894,9 +931,9 @@ def _entry_text(entry: DispatchLogEntry) -> str:
         for part in (
             entry.status,
             entry.route_to,
-            entry.session_id,
+            dispatch_session_id(entry),
             entry.output,
-            entry.agent,
+            dispatch_agent(entry),
         )
     ).lower()
 
@@ -921,7 +958,7 @@ def _has_fresh_owner_state(task: Task) -> bool:
     for entry in (task.dispatch_log or [])[-4:]:
         text = _entry_text(entry)
         if str(entry.status or "") in {"done", "pr_open"} or (
-            str(entry.status or "") == "dispatched" and "/pull/" in str(entry.session_id or "").lower()
+            str(entry.status or "") == "dispatched" and "/pull/" in dispatch_session_id(entry).lower()
         ):
             return True
         if "pull/" in text or "new head" in text or "checks green" in text or "check passed" in text:
@@ -951,8 +988,8 @@ def chronic_dispatch_reason(task: Task) -> str | None:
     missing_session_entries = [
         entry
         for entry in last_two
-        if not str(entry.session_id or "").strip()
-        or str(entry.session_id or "").strip().lower() in {"none", "null", "undefined", "undefined#undefined"}
+        if not dispatch_session_id(entry).strip()
+        or dispatch_session_id(entry).strip().lower() in {"none", "null", "undefined", "undefined#undefined"}
     ]
     if len(missing_session_entries) == 2:
         return "missing-session-id-loop"
@@ -1155,6 +1192,7 @@ def sort_value_gate_candidates(
         key=lambda task: (
             _dispatch_focus_bucket(task, value_repos),
             _PRIORITY_ORDER.get(task.priority, 99),
+            *work_loan_selection_key(task),
             str(task.id),
         ),
     )
@@ -1561,14 +1599,6 @@ def call_agent_dispatch(agent: str, task: Task, dry_run: bool) -> bool | str:
         owner = f"limen-dispatch-{agent}-{task_key}-{os.getpid()}"
         try:
             with ExitStack() as leases:
-                if agent == "codex":
-                    leases.enter_context(
-                        hold_lease(
-                            "execution",
-                            owner=owner,
-                            surface="limen-codex-dispatch",
-                        )
-                    )
                 leases.enter_context(
                     hold_lease(
                         "heavy",
@@ -1581,6 +1611,52 @@ def call_agent_dispatch(agent: str, task: Task, dry_run: bool) -> bool | str:
             reasons = ",".join(exc.decision.get("reasons") or ["host-admission-denied"])
             return _blocked_result(f"host admission denied local {agent} execution: {reasons}")
     return _run_cmd(["agent-dispatch", agent, _build_prompt(task)], task, dry_run)
+
+
+def _journaled_agent_dispatch(
+    agent: str,
+    task: Task,
+    dry_run: bool,
+    reservation_id: str,
+    journal_root: Path | None = None,
+) -> bool | str:
+    """Run one provider only after its work-capacity reservation is durable."""
+
+    if dry_run:
+        return call_agent_dispatch(agent, task, dry_run=True)
+    store = default_work_loan_journal_store() if journal_root is None else default_work_loan_journal_store(journal_root)
+    try:
+        store.record_reservation(task, agent=canonical_agent(agent), reservation_id=reservation_id)
+    except WorkLoanJournalError as exc:
+        return _blocked_result(f"work-loan reservation failed: {exc}")
+    started = time.monotonic()
+    try:
+        result = call_agent_dispatch(agent, task, dry_run=False)
+    except Exception:
+        elapsed_seconds = max(0.0, time.monotonic() - started)
+        store.record_actual(
+            task,
+            agent=canonical_agent(agent),
+            reservation_id=reservation_id,
+            elapsed_seconds=elapsed_seconds,
+            local_host=canonical_agent(agent) in LOCAL_CHECKOUT_AGENTS,
+            metrics={"runs": 1},
+        )
+        raise
+    elapsed_seconds = max(0.0, time.monotonic() - started)
+    launched_runs = 0 if _is_blocked_result(result) or _is_workstream_successor_result(result) else 1
+    try:
+        store.record_actual(
+            task,
+            agent=canonical_agent(agent),
+            reservation_id=reservation_id,
+            elapsed_seconds=elapsed_seconds,
+            local_host=canonical_agent(agent) in LOCAL_CHECKOUT_AGENTS,
+            metrics={"runs": launched_runs},
+        )
+    except WorkLoanJournalError as exc:
+        return _blocked_result(f"work-loan actual accounting failed after provider launch: {exc}")
+    return result
 
 
 def _remote_receipt_store() -> ReceiptStore:
@@ -3303,7 +3379,7 @@ def _isolated_safe_task(task: Task) -> bool:
 
 def _agent_timed_out_on_task(agent: str, task: Task) -> bool:
     return any(
-        canonical_agent(str(entry.agent or "")) == agent
+        canonical_agent(dispatch_agent(entry)) == agent
         and (
             str(entry.status or "").startswith("timeout->")
             or (bool(getattr(entry, "route_to", None)) and "timeout" in str(entry.output or "").lower())
@@ -4778,7 +4854,7 @@ def _commit_dispatch_results(
                 _apply_result(ft, agent, res, now, ftrack)
             finally:
                 _clear_result_receipts(tid)
-        save_limen_file(tasks_path, fresh)
+        apply_limen_file_sync(tasks_path, fresh, agent="dispatch", session_id="serial-results")
 
 
 def dispatch_tasks(
@@ -4846,7 +4922,7 @@ def dispatch_tasks(
     for t in tasks:
         if not _dispatchable(t):
             continue
-        if t.target_agent != agent_filter and t.target_agent != "any":
+        if not _task_targets_agent(t, agent_filter):
             continue
         if not agent_can_run_task(agent_filter, t):
             continue
@@ -4911,7 +4987,13 @@ def dispatch_tasks(
         selected_contract_hash = execution_contract_hash(task)
         selected_lifecycle_token = _lifecycle_ownership_token(task)
         try:
-            result = call_agent_dispatch(agent_filter, task, dry_run)
+            result = _journaled_agent_dispatch(
+                agent_filter,
+                task,
+                dry_run,
+                selected_lifecycle_token,
+                tasks_path.parent,
+            )
         finally:
             if not dry_run:
                 _release_machine_admission(task.id)
@@ -4952,6 +5034,10 @@ def _apply_result(
 ) -> None:
     """Apply one dispatch result to a task (same semantics as the serial path):
     success → dispatched + spend; no-op/fail → recoverable failed; rate-limit → cascade."""
+    prior_status = task.status
+    prior_entry = task.dispatch_log[-1] if task.dispatch_log else None
+    prior_reservation = dispatch_session_id(prior_entry) if prior_entry is not None else ""
+    prior_contract_hash = str(prior_entry.execution_contract_hash or "") if prior_entry is not None else ""
     if task.status in {"done", "archived"} and _has_done_transition(task):
         return
     if _restore_done_status(
@@ -4996,7 +5082,6 @@ def _apply_result(
         entry.status = "open"
         entry.route_to = nxt
         entry.output = f"rate limited on {agent}; reopened to live fleet route"
-        task.target_agent = nxt
         task.status = "open"
     elif result == _TIMEOUT:
         if _control_host_task(task):
@@ -5018,7 +5103,6 @@ def _apply_result(
             entry.status = "open"
             entry.route_to = "jules"
             entry.output = f"timeout on {agent}; reopened to asynchronous lane"
-            task.target_agent = "jules"
             task.status = "open"
             if "slow" not in task.labels:
                 task.labels.append("slow")
@@ -5050,17 +5134,33 @@ def _apply_result(
             entry.status = "open"
             entry.route_to = fallback
             entry.output = "remote/service lane failed; reopened to healthy fleet cascade"
-            task.target_agent = fallback
             task.status = "open"
         elif next_lane := _next_lane(agent):
             entry.status = "open"
             entry.route_to = next_lane
             entry.output = f"{agent} lane failed; reopened to healthy fleet cascade"
-            task.target_agent = next_lane
             task.status = "open"
         else:
             entry.status = "failed"
             task.status = "failed"
+    if (
+        prior_status == "dispatched"
+        and entry.status in {"done", "failed", "failed_blocked"}
+        and prior_entry is not None
+        and prior_entry.status == "dispatched"
+        and prior_reservation
+        and re.fullmatch(r"[0-9a-f]{64}", prior_contract_hash)
+    ):
+        entry.lifecycle_repair = "provider-terminal"
+        entry.execution_started = True
+        entry.execution_contract_hash = prior_contract_hash
+        entry.execution_reservation_id = prior_reservation
+        if entry.status == "done":
+            entry.execution_result_kind = "done"
+        elif entry.status == "failed":
+            entry.execution_result_kind = "failed"
+        else:
+            entry.execution_result_kind = "failed_blocked"
     if consume_receipts and (selection := _MODEL_SELECTION_RECEIPTS.pop(task.id, None)):
         entry.execution_profile = selection.get("execution_profile")
         entry.selected_model = selection.get("selected_model")
@@ -5383,7 +5483,7 @@ def _select_parallel_reservations(
         for t in limen.tasks:
             if not _dispatchable(t):
                 continue
-            if t.target_agent != agent and t.target_agent != "any":
+            if not _task_targets_agent(t, agent):
                 continue
             if not agent_can_run_task(agent, t):
                 continue
@@ -5474,6 +5574,7 @@ def _select_parallel_reservations(
             if dry_run:
                 picked.append((agent, t.id))
                 continue
+            selected_contract_hash = execution_contract_hash(t)
             t.status = "dispatched"  # reserve so nothing else grabs it
             t.updated = now
             t.dispatch_log.append(
@@ -5482,6 +5583,7 @@ def _select_parallel_reservations(
                     agent=agent,
                     session_id="reserve",
                     status="dispatched",
+                    execution_contract_hash=selected_contract_hash,
                     output="dispatch-parallel: reserved before agent execution",
                 )
             )
@@ -5502,6 +5604,7 @@ def dispatch_parallel(
     process (serial), the slow agent runs happen concurrently in a thread pool, and a
     lane that hits its real rate-limit is cooled (its remaining reserved tasks re-queued)."""
     now = datetime.now(timezone.utc)
+    reservation_materialized_local = False
     admission = dispatch_admission_check(tasks_path)
     if not admission.get("allow", False):
         print_dispatch_admission_block("dispatch-parallel", admission)
@@ -5554,11 +5657,28 @@ def dispatch_parallel(
             )
             if not picked:
                 if reset:
-                    save_limen_file(tasks_path, fresh)
+                    apply_limen_file_sync(
+                        tasks_path,
+                        fresh,
+                        agent="dispatch-parallel",
+                        session_id="reserve-reset",
+                    )
                 print(f"── PARALLEL: nothing to dispatch for {agents} within budget")
                 return
             try:
-                save_limen_file(tasks_path, fresh)  # reserve commit (atomic vs supervisor writes)
+                reservation = apply_limen_file_sync(
+                    tasks_path,
+                    fresh,
+                    agent="dispatch-parallel",
+                    session_id="reserve",
+                )
+                projected = getattr(reservation, "projected_tasks", None)
+                reservation_materialized_local = bool(getattr(reservation, "wrote", False))
+                if isinstance(projected, dict) and projected:
+                    fresh.tasks = [
+                        Task.model_validate(projected.get(task.id, task.model_dump(mode="json")))
+                        for task in fresh.tasks
+                    ]
             except Exception:
                 for agent, tid in picked:
                     if canonical_agent(agent) in LOCAL_CHECKOUT_AGENTS:
@@ -5575,7 +5695,13 @@ def dispatch_parallel(
     def run_one(at: tuple[str, str]) -> DispatchResult:
         agent, tid = at
         try:
-            res = call_agent_dispatch(agent, id2task[tid], dry_run=False)
+            res = _journaled_agent_dispatch(
+                agent,
+                id2task[tid],
+                False,
+                selected_lifecycle_tokens[tid],
+                tasks_path.parent,
+            )
         except Exception as e:  # never let one task kill the pool
             print(f"  ERROR {agent} {tid}: {str(e)[:160]}")
             res = False
@@ -5604,7 +5730,8 @@ def dispatch_parallel(
                 "harvest reconciles from PR state (self-corrects next beat)"
             )
             return
-        fresh = load_limen_file(tasks_path)
+        fresh = load_limen_file(tasks_path) if reservation_materialized_local else limen.model_copy(deep=True)
+        commit_base = fresh.model_copy(deep=True)
         fid = {t.id: t for t in fresh.tasks}
         ftrack = fresh.portal.budget.track
         for agent, tid, res, selected_contract_hash, selected_lifecycle_token in results:
@@ -5635,7 +5762,13 @@ def dispatch_parallel(
                 n_pr += 1
             else:
                 n_fail += 1
-        save_limen_file(tasks_path, fresh)
+        apply_limen_file_sync(
+            tasks_path,
+            fresh,
+            agent="dispatch-parallel",
+            session_id="results",
+            before=commit_base,
+        )
     print(
         f"── PARALLEL done: {len(results)} ran · {n_pr} dispatched/PR · {n_noop} no-op · "
         f"{n_fail} failed→cascade · {n_successor} successor-required · {n_blocked} blocked · "
@@ -5855,7 +5988,12 @@ def release_stale_tasks(
                 released.append(task.id)
                 print(f"  RELEASE: {task.id} remote={remote_status} — {task.title}")
             if released or restored_done:
-                save_limen_file(tasks_path, fresh)
+                apply_limen_file_sync(
+                    tasks_path,
+                    fresh,
+                    agent="release-stale",
+                    session_id="release-stale",
+                )
     else:
         for task in candidates:
             if has_jules_landing_hold(task):

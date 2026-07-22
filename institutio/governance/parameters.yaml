@@ -129,6 +129,12 @@ parameters:
     self_update: none
     owner: dispatch
     note: "Seconds allowed for a directly owned probe server to exit after TERM before its isolated process group receives KILL."
+  LIMEN_PROBE_CAPABILITY_SECRET:
+    default: "probe-capability-secret-at-least-24-chars"
+    env: LIMEN_PROBE_CAPABILITY_SECRET
+    self_update: none
+    owner: dispatch
+    note: "Disposable local-only HMAC secret used by the Worker runtime probe to mint executor capabilities. It is written only to the private temporary probe environment and is never a production credential."
 
   LIMEN_LOCAL_FLOOR:
     default: 0
@@ -189,6 +195,18 @@ parameters:
     self_update: none
     owner: vitals
     note: "Finite lease TTL for execution and heavy-surface admission. Bounded entrypoints refresh live leases; dead PID, PID-start mismatch, and TTL cleanup never signal or restart peers."
+  LIMEN_HOST_ADMISSION_OWNER:
+    default: ""
+    env: LIMEN_HOST_ADMISSION_OWNER
+    self_update: none
+    owner: vitals
+    note: "Optional stable caller label for the public host-admission CLI. Blank derives a private label from the parent process-start identity; the persisted label never contains a checkout path."
+  LIMEN_CODEX_PRETOOL_DENIAL_SUPPORTED:
+    default: "auto"
+    env: LIMEN_CODEX_PRETOOL_DENIAL_SUPPORTED
+    self_update: none
+    owner: vitals
+    note: "Startup compatibility escape hatch for Codex action admission. Auto probes the installed client's stable-hooks capability; true enables action-level PreToolUse denial and false retains the legacy one-root lock."
   LIMEN_HOST_ADMISSION_PROBE_TIMEOUT:
     default: 5
     env: LIMEN_HOST_ADMISSION_PROBE_TIMEOUT
@@ -598,12 +616,36 @@ parameters:
     self_update: none
     owner: continuity
     note: "Per-root directory visit cap for external/archive session inventory roots."
-  LIMEN_CURRENT_SESSION_JSONL:
+  LIMEN_CURRENT_SESSION:
     default: ""
-    env: LIMEN_CURRENT_SESSION_JSONL
+    env: LIMEN_CURRENT_SESSION
     self_update: none
     owner: continuity
-    note: "Optional explicit Codex session JSONL for current-session fanout. Blank means derive the latest local Codex transcript."
+    note: "Optional native session locator for agent-neutral current-session fanout. Blank means discover the newest supported Codex, Claude, Copilot, Agy, or OpenCode session."
+  LIMEN_SESSION_SOURCE_AGENT:
+    default: "auto"
+    env: LIMEN_SESSION_SOURCE_AGENT
+    self_update: none
+    owner: continuity
+    note: "Native session corpus to inspect for current-session fanout. Auto derives the newest healthy supported source without replacing its agent identity."
+  LIMEN_MIN_PLANNERS:
+    default: 10
+    env: LIMEN_MIN_PLANNERS
+    self_update: none
+    owner: continuity
+    note: "Minimum capability-selected planner packets emitted by current-session fanout before executor routing. This supersedes the Codex-specific planner knob."
+  LIMEN_PLANNER_LANES:
+    default: "auto"
+    env: LIMEN_PLANNER_LANES
+    self_update: none
+    owner: continuity
+    note: "Comma-separated planner lane preference for current-session fanout. Auto derives eligible lanes from the live capability registry."
+  LIMEN_FANOUT_RUNWAY_SECONDS:
+    default: 3600
+    env: LIMEN_FANOUT_RUNWAY_SECONDS
+    self_update: none
+    owner: continuity
+    note: "Finite 1..86400 second deadline applied to the reserved current-session fanout graph."
   LIMEN_ORIENT_TASKS:
     default: ""
     env: LIMEN_ORIENT_TASKS
@@ -621,7 +663,13 @@ parameters:
     env: LIMEN_SESSION_CLOSEOUT
     self_update: none
     owner: censor
-    note: "Dark gate for the closeout-reconciliation sensor (scripts/reconcile-closeouts.py). When 1, the beat runs --check (probe every claimed-done outcome vs GitHub/board ground truth) and closeout-fast enforces it; default 0 ships the organ dark (classifier self-test only). Arming is a separate lever."
+    note: "OBSERVE gate for the closeout-reconciliation organ (scripts/reconcile-closeouts.py). When 1, the beat sensor and closeout-fast run --check (probe every claimed-done outcome vs GitHub/board ground truth) and surface findings; default 0 ships the organ dark (classifier self-test only). Observing is decoupled from failing: closeout-fast hard-fails on a finding only when LIMEN_SESSION_CLOSEOUT_ENFORCE=1, so the beat can observe-live before the board's known false-closeouts clear."
+  LIMEN_SESSION_CLOSEOUT_ENFORCE:
+    default: "0"
+    env: LIMEN_SESSION_CLOSEOUT_ENFORCE
+    self_update: none
+    owner: censor
+    note: "ENFORCE gate for the closeout-reconciliation organ. Only meaningful when LIMEN_SESSION_CLOSEOUT=1 (observe). When 1, a --check finding (DONE_UNVERIFIED / PR_MISSING) hard-fails closeout-fast.sh; default 0 keeps --check advisory (findings print, closeout still passes). This is the deliberate second flip AFTER the board's outstanding false-closeouts are cleared — never arm it while known findings exist."
   LIMEN_ORIENT_NO_WRITE:
     default: "0"
     env: LIMEN_ORIENT_NO_WRITE
@@ -634,12 +682,6 @@ parameters:
     self_update: none
     owner: continuity
     note: "Optional retained sandbox root for done-insight-cadence.sh verification. Blank means create a private temporary proof root and retain it for inspection instead of deleting it."
-  LIMEN_MIN_CODEX_PLANNERS:
-    default: 10
-    env: LIMEN_MIN_CODEX_PLANNERS
-    self_update: none
-    owner: continuity
-    note: "Minimum Codex planner packets emitted by current-session fanout before executor waterfalling."
   LIMEN_CURRENT_SESSION_FANOUT_REPO:
     default: "organvm/limen"
     env: LIMEN_CURRENT_SESSION_FANOUT_REPO
@@ -687,13 +729,37 @@ parameters:
     env: LIMEN_SESSION_LIFECYCLE_TIMEOUT
     self_update: none
     owner: continuity
-    note: "Hard process-group timeout for the low-priority SessionEnd lifecycle-pressure refresh. Timeout is fail-open and never kills an unrelated peer."
+    note: "Legacy standalone lifecycle-pressure wrapper ceiling. Project SessionEnd no longer invokes that wrapper; the heartbeat consumer owns deferred refresh timing."
   LIMEN_SESSION_WORKTREE_DEBT_TIMEOUT:
     default: 30
     env: LIMEN_SESSION_WORKTREE_DEBT_TIMEOUT
     self_update: none
     owner: continuity
-    note: "Narrow worktree-debt subprocess timeout injected only by the SessionEnd lifecycle-pressure hook."
+    note: "Narrow worktree-debt subprocess timeout propagated by the heartbeat lifecycle-pressure consumer and retained by the legacy standalone wrapper."
+  LIMEN_SESSION_END_BREADCRUMBS:
+    default: "${XDG_STATE_HOME:-$HOME/.local/state}/limen/session-end-breadcrumbs.jsonl"
+    env: LIMEN_SESSION_END_BREADCRUMBS
+    self_update: none
+    owner: continuity
+    note: "One host-stable, private JSONL queue shared by project and installed global Claude SessionEnd producers across runtime upgrades. It must not live under a versioned runtime or checkout; cursor and consumer receipts remain in the live Limen logs directory."
+  LIMEN_SESSION_END_CONSUMER_TIMEOUT:
+    default: 90
+    env: LIMEN_SESSION_END_CONSUMER_TIMEOUT
+    self_update: none
+    owner: continuity
+    note: "Outer heartbeat process timeout in seconds for one bounded SessionEnd breadcrumb drain. Timeout is fail-open; per-session receipts retain finite retry state for the next beat."
+  LIMEN_SESSION_END_CONSUMER_BATCH:
+    default: 8
+    env: LIMEN_SESSION_END_CONSUMER_BATCH
+    self_update: none
+    owner: continuity
+    note: "Maximum session receipts selected by one heartbeat breadcrumb drain before later receipts roll to a future beat."
+  LIMEN_SESSION_END_CONSUMER_RUNWAY:
+    default: 60
+    env: LIMEN_SESSION_END_CONSUMER_RUNWAY
+    self_update: none
+    owner: continuity
+    note: "Internal monotonic-time runway in seconds for one breadcrumb drain; no new slow consumer begins after this deadline."
   LIMEN_LIFECYCLE_SIZE_SCAN_MAX_ROOTS:
     default: 50
     env: LIMEN_LIFECYCLE_SIZE_SCAN_MAX_ROOTS
@@ -827,11 +893,11 @@ parameters:
     owner: continuity
     note: "Honor the covenant standing grant (2026-07-09): clean+merged+idle worktree roots are pre-accepted for removal without a per-root ledger event. Set 0 to restore per-root human acceptance for that class (docs/removal-acceptance-covenant.md)."
   LIMEN_RECLAIM_PUSHED_OK:
-    default: "0"
+    default: "1"
     env: LIMEN_RECLAIM_PUSHED_OK
     self_update: none
     owner: continuity
-    note: "Pushed-reap escape hatch — DEFAULT OFF. The standing policy is merge-before-reap (pushed preservation is not closure), so a clean, idle, pushed-but-unmerged worktree is KEPT as not-merged-to-default (enacted by test_reclaim_keeps_clean_pushed_unmerged_branch). Set 1 to flip that class to reapable: reachable_from_remote ⇒ every byte is on origin and re-cloneable, so removing the local checkout loses zero work and the branch + its PR/babysitting lifecycle continue on origin. This is the opt-in lever that drains the pushed-but-unmerged backlog (the dominant boot-disk pin — hundreds of roots) toward the free-space target; classified clean+pushed+idle under the standing grant. Enabling it is an operator policy decision (it overrides merge-before-reap), homed as a lever, not defaulted on. The unpushed/dirty/active guardrails are unchanged — unpreserved work is NEVER reaped."
+    note: "Pushed-reap policy — DEFAULT ON. A clean, inactive worktree whose exact HEAD is reachable from a remote ref is disposable local cache: removing it loses zero work while the branch and PR lifecycle continue on the remote owner. Set 0 only for a bounded diagnostic hold. Dirty, unpushed, process-owned, or explicitly locked roots remain fail-closed."
   LIMEN_RECLAIM_ORPHANS:
     default: "1"
     env: LIMEN_RECLAIM_ORPHANS
@@ -1078,6 +1144,207 @@ parameters:
     self_update: none
     owner: continuity
     note: "The opaque session ID recorded in the dispatch log during task claims."
+
+  # --- peer conduct broker and runtime identity envelope -----------------------
+  LIMEN_CONDUCT_URL:
+    default: ""
+    env: LIMEN_CONDUCT_URL
+    self_update: none
+    owner: dispatch
+    note: "Authenticated remote conduct-broker endpoint. Blank fails closed for new conduct transitions unless the explicit local test adapter is configured."
+  LIMEN_CONDUCT_TOKEN:
+    default: ""
+    env: LIMEN_CONDUCT_TOKEN
+    self_update: "credential wall rotation only"
+    owner: dispatch
+    note: "Credential-wall-owned bearer for exactly one authenticated conduct principal. The Worker derives principal, native lane, surface, and roles from LIMEN_CONDUCT_PRINCIPAL_REGISTRY; this client-side value is consumed by the adapter and removed before launching a model process."
+  LIMEN_CONDUCT_EXECUTOR_TOKEN:
+    default: ""
+    env: LIMEN_CONDUCT_EXECUTOR_TOKEN
+    self_update: "credential wall rotation only"
+    owner: dispatch
+    note: "Credential-wall bearer for a dynamically discovered executor plugin that explicitly declares this environment reference. It must bind an executor-only principal and is never reused as the conductor token or by another adapter."
+  LIMEN_CONDUCT_TOKEN_JULES:
+    default: ""
+    env: LIMEN_CONDUCT_TOKEN_JULES
+    self_update: "credential wall rotation only"
+    owner: dispatch
+    note: "Executor-only conduct bearer for the authenticated Jules service pump. The value remains private and is passed only to the detached executor process."
+  LIMEN_CONDUCT_TOKEN_CODEX_CLOUD:
+    default: ""
+    env: LIMEN_CONDUCT_TOKEN_CODEX_CLOUD
+    self_update: "credential wall rotation only"
+    owner: dispatch
+    note: "Executor-only conduct bearer for the Codex Cloud service pump. It is eligible only when live environment discovery proves repository support."
+  LIMEN_CODEX_BIN:
+    default: "codex"
+    env: LIMEN_CODEX_BIN
+    self_update: none
+    owner: dispatch
+    note: "Executable reference used only for live Codex Cloud capability discovery and receipt retrieval."
+  LIMEN_CODEX_CLOUD_ENVIRONMENTS:
+    default: "{}"
+    env: LIMEN_CODEX_CLOUD_ENVIRONMENTS
+    self_update: "credential wall rotation only"
+    owner: dispatch
+    note: "Private repository-to-current-environment-ID map used to prove Codex Cloud eligibility at runtime. An absent mapping excludes the adapter; it never selects a model or tier."
+  LIMEN_FANOUT_WORKER_DEADLINE:
+    default: ""
+    env: LIMEN_FANOUT_WORKER_DEADLINE
+    self_update: runtime
+    owner: dispatch
+    note: "Server-derived finite campaign deadline passed only to a detached executor service. It is not operator configuration and cannot extend the packet deadline."
+  LIMEN_CONDUCT_PRINCIPAL_REGISTRY:
+    default: ""
+    env: LIMEN_CONDUCT_PRINCIPAL_REGISTRY
+    self_update: "credential wall rotation only"
+    owner: dispatch
+    note: "Secret JSON registry installed only in the remote keeper. Each entry binds one bearer to a stable principal ID, native agent, surface, and observer/conductor/executor/compatibility roles. Values never enter git, logs, responses, or receipts."
+  LIMEN_CONDUCT_CAPABILITY_SECRET:
+    default: ""
+    env: LIMEN_CONDUCT_CAPABILITY_SECRET
+    self_update: "credential wall rotation only"
+    owner: dispatch
+    note: "Remote-keeper HMAC secret for loss-recoverable executor lease capabilities bound to lease ID, generation, and executor principal. It is never returned; only the derived executor capability is delivered by the authenticated claim route."
+  LIMEN_CONDUCT_STATE:
+    default: ""
+    env: LIMEN_CONDUCT_STATE
+    self_update: none
+    owner: dispatch
+    note: "Explicit local SQLite conduct adapter used by tests and isolated development only. Blank prevents a local broker from silently replacing the remote keeper."
+  LIMEN_API_CONDUCT_SESSION_ID:
+    default: "limen-web-api-compat"
+    env: LIMEN_API_CONDUCT_SESSION_ID
+    self_update: none
+    owner: dispatch
+    note: "Stable server-owned session identity used by Web API compatibility mutations submitted through the conduct broker."
+  LIMEN_INITIATOR_AGENT:
+    default: null
+    env: LIMEN_INITIATOR_AGENT
+    self_update: "injected from the immutable parent work packet"
+    owner: dispatch
+    note: "Native identity of the agent that initiated a conducted graph. Unset outside conducted execution."
+  LIMEN_CONDUCTOR_AGENT:
+    default: "auto"
+    env: LIMEN_CONDUCTOR_AGENT
+    self_update: "injected at conducted packet or protected workstream launch"
+    owner: dispatch
+    note: "Temporary conductor identity for the current graph edge. Auto lets fanout derive an eligible conductor from live capabilities."
+  LIMEN_CONDUCTOR_SESSION_ID:
+    default: null
+    env: LIMEN_CONDUCTOR_SESSION_ID
+    self_update: "injected at conducted packet or protected workstream launch"
+    owner: dispatch
+    note: "Opaque registered conductor session that owns cooperative graph operations; it conveys no authority beyond the packet envelope."
+  LIMEN_ROOT_RUN_ID:
+    default: null
+    env: LIMEN_ROOT_RUN_ID
+    self_update: "injected from the immutable conduct graph"
+    owner: dispatch
+    note: "Root run identity shared by every descendant in one bounded conduct DAG."
+  LIMEN_PARENT_RUN_ID:
+    default: null
+    env: LIMEN_PARENT_RUN_ID
+    self_update: "injected from the immutable conduct graph"
+    owner: dispatch
+    note: "Immediate parent run identity for a conducted child. Blank only at the graph root."
+  LIMEN_RUN_ID:
+    default: null
+    env: LIMEN_RUN_ID
+    self_update: "assigned by the conduct broker"
+    owner: dispatch
+    note: "Current broker-assigned run identity; never inherited as an initiator identity for a different child."
+  LIMEN_NATIVE_RUN_ID:
+    default: null
+    env: LIMEN_NATIVE_RUN_ID
+    self_update: "injected from the native provider receipt"
+    owner: dispatch
+    note: "Provider-native run identity retained alongside the canonical conduct run."
+  LIMEN_NATIVE_SESSION_ID:
+    default: null
+    env: LIMEN_NATIVE_SESSION_ID
+    self_update: "injected from the native provider session"
+    owner: dispatch
+    note: "Provider-native session identity retained without replacing canonical agent or conduct identities."
+  LIMEN_SURFACE:
+    default: "cli"
+    env: LIMEN_SURFACE
+    self_update: "set by the launching adapter"
+    owner: dispatch
+    note: "Native transport surface recorded for a registered conduct session, such as cli, workstream, MCP, or relay."
+  LIMEN_WORKTREE:
+    default: null
+    env: LIMEN_WORKTREE
+    self_update: "set to the isolated checkout owned by the registered session"
+    owner: dispatch
+    note: "Exact worktree path bound to the active conduct session; unset for non-filesystem remote lanes."
+  LIMEN_AGENT_CAPABILITIES:
+    default: ""
+    env: LIMEN_AGENT_CAPABILITIES
+    self_update: "derived from the live canonical lane registry"
+    owner: dispatch
+    note: "Space-separated live capability set injected into a native workstream session; never a static provider catalog."
+  LIMEN_LEASE_ID:
+    default: null
+    env: LIMEN_LEASE_ID
+    self_update: "assigned by the conduct broker"
+    owner: dispatch
+    note: "Active resource-lease identity for the current bounded work packet."
+  LIMEN_LEASE_GENERATION:
+    default: null
+    env: LIMEN_LEASE_GENERATION
+    self_update: "assigned monotonically by the conduct broker"
+    owner: dispatch
+    note: "Fencing generation for the active lease. Late generations remain evidence but cannot mutate current state."
+  LIMEN_LEASE_TOKEN:
+    default: ""
+    env: LIMEN_LEASE_TOKEN
+    self_update: "issued per lease by the conduct broker"
+    owner: dispatch
+    note: "Ephemeral capability token for heartbeat or report operations on one exact lease; never persisted in a receipt."
+  LIMEN_EXECUTION_HASH:
+    default: null
+    env: LIMEN_EXECUTION_HASH
+    self_update: "injected from the immutable work packet"
+    owner: dispatch
+    note: "Canonical execution-envelope hash used to bind a child process and its receipt to the reserved packet."
+  LIMEN_HUMAN_PROTECTED:
+    default: "0"
+    env: LIMEN_HUMAN_PROTECTED
+    self_update: "set to 1 only by direct protected-session registration"
+    owner: dispatch
+    note: "Marks a direct human session protected from peer steal, retune, cancellation, signaling, or reaping."
+  LIMEN_CAPSULE_ID:
+    default: null
+    env: LIMEN_CAPSULE_ID
+    self_update: "derived from the admitted workstream contract"
+    owner: continuity
+    note: "Stable slug for the currently admitted continuation capsule."
+  LIMEN_CAPSULE_DIR:
+    default: null
+    env: LIMEN_CAPSULE_DIR
+    self_update: "derived from the admitted workstream contract"
+    owner: continuity
+    note: "Tracked directory containing the active continuation capsule and its machine-readable workstream contract."
+  LIMEN_CAPSULE_README:
+    default: null
+    env: LIMEN_CAPSULE_README
+    self_update: "derived from the admitted capsule directory"
+    owner: continuity
+    note: "Tracked capsule README supplied as the native successor agent's initial prompt."
+  LIMEN_CLI_BIN:
+    default: "limen"
+    env: LIMEN_CLI_BIN
+    self_update: none
+    owner: continuity
+    note: "Optional path or command name for the Limen CLI used to register a protected workstream session."
+  LIMEN_WORKSTREAM_SESSION_ID:
+    default: null
+    env: LIMEN_WORKSTREAM_SESSION_ID
+    self_update: "inherited from an admitted successor or generated once at launch"
+    owner: continuity
+    note: "Optional opaque session override for one workstream successor; blank derives a finite launch identity."
+
   LIMEN_CONTINUATION:
     default: "1"
     env: LIMEN_CONTINUATION
@@ -1496,6 +1763,12 @@ parameters:
     self_update: none
     owner: mail
     note: "Maximum accepted age for UMA mail status receipts before wrappers refresh."
+  LIMEN_MAIL_STATUS_TIMEOUT:
+    default: 120
+    env: LIMEN_MAIL_STATUS_TIMEOUT
+    self_update: none
+    owner: mail
+    note: "Hard wall-clock bound in seconds for the read-only UMA mail-status subprocess so a provider or report stall cannot wedge the heartbeat packet boundary."
   LIMEN_MAIL_SWEEP:
     default: 1
     env: LIMEN_MAIL_SWEEP
@@ -1544,6 +1817,30 @@ parameters:
     self_update: none
     owner: mail
     note: "Safety cap on how many SAFE-tier replies send_drafts.py may send per run, so an armed run can never blast the whole ledger."
+  LIMEN_MAIL_UMA_SYNC:
+    default: 1
+    env: LIMEN_MAIL_UMA_SYNC
+    self_update: none
+    owner: mail
+    note: "Gate for the C_MAIL beat's UMA-checkout auto-sync (mail-beat.sh step 0). 1 (default) = fast-forward $UMA_ROOT to origin/main each beat so the beat never runs stale mail code (the drift that ran the pre-merge tree). Only a clean, on-main, fast-forwardable checkout is advanced — a dirty tree or work branch is left untouched (never a merge/rebase; untracked files don't count as dirty). 0 disables the sync (run whatever checkout is present)."
+  LIMEN_MAIL_ARCHIVED_SCAN:
+    default: 1
+    env: LIMEN_MAIL_ARCHIVED_SCAN
+    self_update: none
+    owner: mail
+    note: "Gate for the C_MAIL archived-but-unanswered scan (mail-beat.sh step 1c → archived_scan.py). 1 (default) = one account per beat, round-robin via a persisted cursor, writes a READ-ONLY per-account receipt (audit/archived_scan-*.json) that obligations_build folds into the ledger — surfacing owed replies on threads that were archived out of the INBOX. Flags/moves nothing. Needs the macOS Automation grant (self-skips when absent). 0 disables the scan."
+  LIMEN_MAIL_ARCHIVED_LIMIT:
+    default: 500
+    env: LIMEN_MAIL_ARCHIVED_LIMIT
+    self_update: none
+    owner: mail
+    note: "Max messages archived_scan.py reads per mailbox (Archive + Sent) each beat — bounds the AppleScript enumeration so a large All-Mail never full-materializes. Paired with the scanner's --since-days window."
+  LIMEN_MAIL_ARCHIVED_CURSOR:
+    default: "~/Workspace/limen/logs/.mail-archived-scan-cursor"
+    env: LIMEN_MAIL_ARCHIVED_CURSOR
+    self_update: none
+    owner: mail
+    note: "Path of the round-robin cursor file for the archived-scan (mail-beat.sh step 1c): holds the last-scanned account index so each beat advances to the next account and every account is covered over a full cycle. A missing/corrupt cursor restarts the cycle at account 0 (fail-open)."
   LIMEN_MAIL_HOLD_SEND:
     default: "safe_only"
     env: LIMEN_MAIL_HOLD_SEND
@@ -2495,6 +2792,12 @@ parameters:
     self_update: none
     owner: gitvs
     note: "Path to the GITVS estate registry (the desired-state resource graph). Overridable so scripts/tests/gitvs.test.sh can point the parity predicate at drift fixtures; production reads the committed institutio/github/estate.yaml."
+  LIMEN_PROGRESS_SOURCE_REGISTRY_DIRS:
+    default: ""
+    env: LIMEN_PROGRESS_SOURCE_REGISTRY_DIRS
+    self_update: none
+    owner: progress-universe
+    note: "Path-separated additional runtime registration roots for the work-universe source registry. The tracked config/progress-sources root is always discovered; missing or unreadable additional roots remain explicit coverage debt."
   LIMEN_MOAT_GUARD:
     default: "moat-guard.json"
     env: LIMEN_MOAT_GUARD
@@ -2705,6 +3008,48 @@ parameters:
     self_update: none
     owner: observatory
     note: "Per-run timeout (seconds) resolved by the generic sensor runner for the OBSERVATORY loop. The runner kills the command group on overrun and the beat continues fail-open. 480 covers the full-field pass (~50 light snapshots + 17 estate surfaces on top of the deep winners; the 3-winner loop measured 106s)."
+  LIMEN_DEPENDABOT_GUARD:
+    default: "1"               # ON — detect drift in the Tier-2 deferral owner (Dependabot security-updates)
+    env: LIMEN_DEPENDABOT_GUARD
+    self_update: none
+    owner: gitvs
+    note: "Beat gate for the dependabot-security-guard sensor (scripts/dependabot-security-guard.py). estate-audit-heal defers framework-major (Tier-2) audit advisories to Dependabot; this guards that the deferral's owner stays enabled — the org's npm/pnpm audit-CI repos must keep Dependabot security-updates + alerts ON. On drift (a posture OFF) the sensor exits non-zero. Read-only (API reads). Set 0 to silence."
+  LIMEN_DEPENDABOT_GUARD_APPLY:
+    default: "0"               # OFF (DARK) — detection-only until armed; then re-enables drifted repos
+    env: LIMEN_DEPENDABOT_GUARD_APPLY
+    self_update: none
+    owner: gitvs
+    note: "Effector arm for dependabot-security-guard (observable-before-autonomous, the LIMEN_MAIN_GREEN_APPLY pattern, read internally). When 0 (default) drift is only detected + printed. When 1, the guard re-ENABLES (ON only, never disables — a benign reversible safety setting) each drifted repo's Dependabot security-updates (`gh repo edit --enable-automated-security-fixes`) + vulnerability-alerts (PUT), capped by LIMEN_DEPENDABOT_GUARD_MAX. Arm after watching the detection log prove out."
+  LIMEN_BEAT_DEPENDABOT_GUARD:
+    default: 24
+    env: LIMEN_BEAT_DEPENDABOT_GUARD
+    self_update: none
+    owner: gitvs
+    note: "Cadence (every N heartbeat beats) of the dependabot-security-guard sensor. Security-update posture is low-churn (rarely toggles), so a daily-class cadence is honest; the check is a handful of read-only API calls."
+  LIMEN_DEPENDABOT_GUARD_TIMEOUT:
+    default: 300
+    env: LIMEN_DEPENDABOT_GUARD_TIMEOUT
+    self_update: none
+    owner: gitvs
+    note: "Per-run timeout (seconds) for the dependabot-security-guard sensor; a handful of gh API reads/enables. The runner kills the group on overrun and the beat continues fail-open."
+  LIMEN_DEPENDABOT_GUARD_MAX:
+    default: 10
+    env: LIMEN_DEPENDABOT_GUARD_MAX
+    self_update: none
+    owner: gitvs
+    note: "Per-run cap on how many drifted repos the guard re-enables in one armed pass — a first arming can't fan out uncontrolled. The audit-CI scope is small (~8), so 10 covers it; remaining drift heals next beat."
+  LIMEN_DEPENDABOT_GUARD_OWNER:
+    default: "organvm"
+    env: LIMEN_DEPENDABOT_GUARD_OWNER
+    self_update: none
+    owner: gitvs
+    note: "GitHub owner/org whose audit-CI repos the guard enumerates via `gh search code`. Default organvm."
+  LIMEN_DEPENDABOT_GUARD_REPOS:
+    default: ""
+    env: LIMEN_DEPENDABOT_GUARD_REPOS
+    self_update: none
+    owner: gitvs
+    note: "Test/override hook for dependabot-security-guard: colon-separated full repo names (owner/repo) instead of the derived `gh search code` discovery. Empty (default) → discover. Used by the hermetic test and bounded armed rehearsals; never set in production."
   OBSERVATORY_FIELD_LIMIT:
     default: 50
     env: OBSERVATORY_FIELD_LIMIT
@@ -3252,6 +3597,86 @@ parameters:
     self_update: none
     owner: tabularius
     note: "Effector arm for the trunk-green sensor (observable-before-autonomous, the LIMEN_CENSOR_APPLY pattern). When 0 (default) a RED main is only detected + surfaced in the beat log. When 1, check-main-green.py also emits ONE idempotent SYMPTOM-scoped HEAL-mainred-organvm-limen task (id scoped to the symptom, not the head SHA — the SHA lives in the title/context) via the daemon's queue-lock (the safe shared-append path self-heal.py uses) so every lane AND every successive red commit converges on a single canonical heal task instead of duplicating (the #869-vs-#871 gap, limen#895); a recurrence after a prior heal re-opens the same ticket. Arm after watching the detection log prove out."
+
+  LIMEN_NPM_AUDIT_AUTOFIX:
+    default: "1"               # ON — detect npm-audit high/critical each beat (§0g3b)
+    env: LIMEN_NPM_AUDIT_AUTOFIX
+    self_update: none
+    owner: tabularius
+    note: "Beat gate for the npm-audit-autofix sensor (scripts/npm-audit-autofix.py) run each beat by metabolize.sh section 0g3b. Closes the 2026-07-22 gap: ci.yml runs `npm audit --audit-level=high` as a hard-fail step in web/app + web/worker, so a newly-published high/critical TRANSITIVE advisory deterministically reds under the frozen lockfile and jams the whole PR queue — a class neither Renovate (bumps) nor Dependabot (security-only) fixes, because the only non-breaking fix is an npm `overrides` pin. On a present advisory the sensor exits non-zero so the beat surfaces it. Fail-open when npm is absent/offline. Set 0 to silence."
+  LIMEN_NPM_AUDIT_AUTOFIX_APPLY:
+    default: "0"               # OFF (DARK) — detection-only until armed; then opens an overrides fix PR
+    env: LIMEN_NPM_AUDIT_AUTOFIX_APPLY
+    self_update: none
+    owner: tabularius
+    note: "Effector arm for the npm-audit-autofix sensor (observable-before-autonomous, the LIMEN_MAIN_GREEN_APPLY pattern). When 0 (default) a high/critical npm advisory is only detected + printed. When 1, npm-audit-autofix.py resolves the minimal leaf `overrides` pin(s) (looping to catch unmasked advisories), regenerates the lockfile, verifies 0 high/critical, and opens a fix PR via the ship-docs worktree recipe — gated by merge-policy.sh (web/app is a deploy trigger → HOLD until CI green; a pin that breaks the build reds only the fix PR, never the queue). Idempotent on the advisory-set signature. Arm after watching the detection log prove out."
+  LIMEN_NPM_AUDIT_DIRS:
+    default: ""
+    env: LIMEN_NPM_AUDIT_DIRS
+    self_update: none
+    owner: tabularius
+    note: "Test/override hook for npm-audit-autofix.py: colon-separated npm project dirs (relative-to-root or absolute) to audit instead of the derived web/* subdirs holding a package-lock.json. Empty (default) → derive. Used only by the hermetic test and ad-hoc fixture runs; never set in production."
+
+  LIMEN_ESTATE_AUDIT_HEAL:
+    default: "1"               # ON — detect other-repo audit-CI reds on the slow heartbeat cadence
+    env: LIMEN_ESTATE_AUDIT_HEAL
+    self_update: none
+    owner: gitvs
+    note: "Beat gate for the estate-audit-heal sensor (scripts/estate-audit-heal.py). The estate-wide v2 of npm-audit-autofix: heals the OTHER organvm repos whose CI runs npm/pnpm audit (npm-audit-autofix covers limen itself). Verify-gated: applies overrides, re-audits, keeps only pins whose advisory measurably cleared (Tier-1); framework-major-held residue is deferred to Dependabot (Tier-2). Detection-only until armed. Set 0 to silence."
+  LIMEN_ESTATE_AUDIT_HEAL_APPLY:
+    default: "0"               # OFF (DARK) — detection-only until armed; then opens cross-repo fix PRs (NO merge)
+    env: LIMEN_ESTATE_AUDIT_HEAL_APPLY
+    self_update: none
+    owner: gitvs
+    note: "Effector arm for estate-audit-heal (observable-before-autonomous, the LIMEN_MAIN_GREEN_APPLY pattern, read internally). When 0 (default) other-repo advisories are only detected + printed. When 1, the healer clones each repo (capped by LIMEN_ESTATE_AUDIT_MAX), applies verify-gated Tier-1 overrides, and opens a fix PR in that repo — never auto-merged (mass cross-repo merges are a human-gated lever; the repo's own CI + owner adjudicate). Arm after watching the detection log prove out."
+  LIMEN_BEAT_ESTATE_AUDIT:
+    default: 24
+    env: LIMEN_BEAT_ESTATE_AUDIT
+    self_update: none
+    owner: gitvs
+    note: "Cadence (every N heartbeat beats) of the estate-audit-heal sensor. Deliberately SLOW — the pass clones + installs multiple repos, so it is a rotating daily-class job, not an every-beat check (contrast the local npm-audit-autofix sensor, which is fast + every-beat for limen itself)."
+  LIMEN_ESTATE_AUDIT_TIMEOUT:
+    default: 1200
+    env: LIMEN_ESTATE_AUDIT_TIMEOUT
+    self_update: none
+    owner: gitvs
+    note: "Per-run timeout (seconds) for the estate-audit-heal sensor; generous because it clones + runs full npm/pnpm installs across up to LIMEN_ESTATE_AUDIT_MAX repos. The runner kills the group on overrun and the beat continues fail-open."
+  LIMEN_ESTATE_AUDIT_MAX:
+    default: 5
+    env: LIMEN_ESTATE_AUDIT_MAX
+    self_update: none
+    owner: gitvs
+    note: "Per-run repo cap for estate-audit-heal — a first arming can't fan out uncontrolled across the estate. Repos rotate across runs; blocking-audit repos are healed first. Raise once the detection log + first PRs prove out."
+  LIMEN_ESTATE_AUDIT_OWNER:
+    default: "organvm"
+    env: LIMEN_ESTATE_AUDIT_OWNER
+    self_update: none
+    owner: gitvs
+    note: "GitHub owner/org whose audit-CI repos estate-audit-heal enumerates via `gh search code`. Default organvm (the canonical org). Override for a different owner scope."
+  LIMEN_ESTATE_AUDIT_REPOS:
+    default: ""
+    env: LIMEN_ESTATE_AUDIT_REPOS
+    self_update: none
+    owner: gitvs
+    note: "Test/override hook for estate-audit-heal: colon-separated full repo names (owner/repo) to process instead of the derived `gh search code` discovery. Empty (default) → discover. Used by the hermetic test and bounded armed rehearsals (e.g. cap=1 against one repo); never set in production."
+  LIMEN_ESTATE_AUDIT_POSTURE:
+    default: "1"               # ON — the single rollup: one line for the whole estate dependency-audit posture
+    env: LIMEN_ESTATE_AUDIT_POSTURE
+    self_update: none
+    owner: gitvs
+    note: "Beat gate for the estate-audit-posture rollup (scripts/estate-audit-posture.py). Composes the three ownership organs into ONE view + ONE exit code: RED iff a Tier-2 owner (Dependabot security-updates) is OFF somewhere — the only way an advisory rots UNOWNED. The Tier-1 organs' latest verdicts fold in as telemetry (read from their stamps, never re-run here). Read-only; no arm. Set 0 to silence."
+  LIMEN_BEAT_ESTATE_AUDIT_POSTURE:
+    default: 12
+    env: LIMEN_BEAT_ESTATE_AUDIT_POSTURE
+    self_update: none
+    owner: gitvs
+    note: "Cadence (every N heartbeat beats) of the estate-audit-posture rollup. Light — one API-only Tier-2 check plus two stamp reads (it never re-runs the heavy estate-audit-heal clone pass) — so twice-daily is honest without redundant fan-out."
+  LIMEN_ESTATE_AUDIT_POSTURE_TIMEOUT:
+    default: 480
+    env: LIMEN_ESTATE_AUDIT_POSTURE_TIMEOUT
+    self_update: none
+    owner: gitvs
+    note: "Per-run timeout (seconds) for the estate-audit-posture rollup; margin over the inner dependabot-security-guard live check. The runner kills the group on overrun and the beat continues fail-open."
 
   LIMEN_MAIN_GREEN_THROTTLE:
     default: "1800"            # seconds between live gh queries; cached verdict surfaces every beat
