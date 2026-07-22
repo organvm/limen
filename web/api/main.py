@@ -154,7 +154,7 @@ class TaskCreate(BaseModel):
     type: str = Field(default="code", max_length=64, pattern=LABEL_PATTERN)
     target_agent: str = Field(default="jules", pattern=r"^[a-z][a-z_]*$")
     priority: str = "medium"
-    budget_cost: int = Field(default=1, ge=1, le=100)
+    budget_cost: int | None = Field(default=None, ge=1, le=100)
     status: str = "open"
     labels: list[str] = Field(default_factory=list, max_length=MAX_TASK_LIST_LENGTH)
     urls: list[str] = Field(default_factory=list, max_length=MAX_TASK_LIST_LENGTH)
