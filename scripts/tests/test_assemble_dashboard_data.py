@@ -37,7 +37,7 @@ def task(index: int, *, status: str = "open") -> dict[str, object]:
     }
 
 
-def test_high_cardinality_dashboard_stays_below_ratchet_with_two_latest_logs(tmp_path: Path) -> None:
+def test_high_cardinality_dashboard_stays_below_ratchet_with_latest_log(tmp_path: Path) -> None:
     app = tmp_path / "web" / "app"
     generated = app / ".generated" / "surfaces"
     generated.mkdir(parents=True)
@@ -52,7 +52,7 @@ def test_high_cardinality_dashboard_stays_below_ratchet_with_two_latest_logs(tmp
 
     result = MODULE.assemble(app, repo_root=tmp_path, write_public=True)
 
-    assert result["max_dispatch_log_entries"] == 2
+    assert result["max_dispatch_log_entries"] == 1
     assert result["dashboard_bytes"] < result["max_dashboard_bytes"]
     prior_dashboard, _ = MODULE.payloads(
         internal={"summary": {}},
@@ -62,7 +62,7 @@ def test_high_cardinality_dashboard_stays_below_ratchet_with_two_latest_logs(tmp
     assert len(MODULE.encoded(prior_dashboard)) > result["max_dashboard_bytes"]
     dashboard = json.loads((app / "out" / "dashboard.json").read_text(encoding="utf-8"))
     assert len(dashboard["tasks"]) == 1_250
-    assert [entry["session_id"] for entry in dashboard["tasks"][0]["dispatch_log"]] == ["session-3", "session-2"]
+    assert [entry["session_id"] for entry in dashboard["tasks"][0]["dispatch_log"]] == ["session-3"]
     done = json.loads((app / "public" / "done-tasks.json").read_text(encoding="utf-8"))
     assert done["total_done"] == 1
     assert done["tasks"][0]["id"] == "DASH-9999"
