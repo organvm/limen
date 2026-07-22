@@ -241,6 +241,24 @@ sensors:
         tier: live
         command: "python3 scripts/seo-audit.py --check"
 
+  estate-audit-heal:
+    section: "heartbeat"
+    title: "estate audit-heal — the OTHER org repos' npm/pnpm audit CI must not sit red (verify-gated overrides fix PRs; dark until armed)"
+    gate: LIMEN_ESTATE_AUDIT_HEAL
+    default: "1"
+    source: [heartbeat]
+    owner: gitvs
+    cadence:
+      env: LIMEN_BEAT_ESTATE_AUDIT
+      default: 24
+    timeout:
+      env: LIMEN_ESTATE_AUDIT_TIMEOUT
+      default: 1200
+    steps:
+      - command: "python3 scripts/estate-audit-heal.py"
+        severity: advisory
+        escalation: "an org repo's npm/pnpm audit CI is red on a verify-fixable transitive advisory — the estate healer opens a verify-gated overrides fix PR (no auto-merge) once LIMEN_ESTATE_AUDIT_HEAL_APPLY=1 arms it (env lever, read internally; framework-major residue is deferred to Dependabot); until armed it is detection-only. Heavy (clones+installs); slow cadence + repo cap (LIMEN_ESTATE_AUDIT_MAX). See scripts/estate-audit-heal.py"
+
   observatory-run:
     section: "heartbeat"
     title: "run the OBSERVATORY legibility-and-traction loop (ships dark; armed by L-OBSERVATORY-ACTIVATE)"
@@ -432,6 +450,21 @@ sensors:
       - command: "python3 scripts/check-main-green.py"
         severity: advisory
         escalation: "main trunk RED above — a heal PR is needed (arm LIMEN_MAIN_GREEN_APPLY=1 to auto-emit one canonical HEAL-mainred task); see scripts/check-main-green.py"
+
+  npm-audit-autofix:
+    section: "0g3b"
+    title: "npm-audit autofix — a new high/critical transitive advisory auto-produces an overrides fix PR, never a queue jam"
+    gate: LIMEN_NPM_AUDIT_AUTOFIX
+    default: "1"
+    source: [metabolize]
+    owner: tabularius
+    # No cadence — like its sibling trunk-green (§0g3), this runs every metabolize beat. A
+    # [metabolize]-source sensor WITH a cadence fires in neither beat path (the launch-agent-liveness
+    # incident); every-beat is also the right latency for keeping the queue unjammed.
+    steps:
+      - command: "python3 scripts/npm-audit-autofix.py"
+        severity: advisory
+        escalation: "a new high/critical npm advisory is red on ci.yml (web/app or web/worker) — the effector pins the patched transitive via overrides and opens a fix PR once LIMEN_NPM_AUDIT_AUTOFIX_APPLY=1 arms it (env lever, read internally like LIMEN_MAIN_GREEN_APPLY; merge-policy gates web/app until CI green); until armed it is detection-only. See scripts/npm-audit-autofix.py"
 
   launch-agent-liveness:
     section: "0g4"
