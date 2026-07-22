@@ -83,13 +83,25 @@ def test_invalid_policy_fails_closed(tmp_path: Path) -> None:
 
 def test_dashboard_consumers_share_the_checked_in_policy() -> None:
     workflow = (ROOT / ".github" / "workflows" / "deploy.yml").read_text(encoding="utf-8")
+    ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     refresh = (ROOT / "scripts" / "refresh-web.sh").read_text(encoding="utf-8")
+    verify_whole = (ROOT / "scripts" / "verify-whole.sh").read_text(encoding="utf-8")
+    gates = (ROOT / "institutio" / "governance" / "gates.yaml").read_text(encoding="utf-8")
     generator = (ROOT / "web" / "app" / "scripts" / "generate-static-data.mjs").read_text(encoding="utf-8")
     validator = (ROOT / "web" / "app" / "scripts" / "validate-exported-pages.mjs").read_text(encoding="utf-8")
     assert "scripts/assemble-dashboard-data.py --app web/app" in workflow
+    assert "scripts/assemble-dashboard-data.py --app web/app" in ci
     assert "assemble-dashboard-data.py" in refresh
+    assert "assemble-dashboard-data.py" in verify_whole
+    assert "scripts/assemble-dashboard-data.py" in gates
+    assert "scripts/tests/test_assemble_dashboard_data.py" in gates
+    assert ci.index("scripts/assemble-dashboard-data.py") < ci.index("validate-exported-pages.mjs")
+    assert verify_whole.index("assemble-dashboard-data.py") < verify_whole.index("validate-exported-pages.mjs")
+    assert gates.index("scripts/assemble-dashboard-data.py --app web/app") < gates.index(
+        "web/app/scripts/validate-exported-pages.mjs"
+    )
     assert "dashboard-export-policy.json" in generator
     assert "dashboard-export-policy.json" in validator
-    for source in (workflow, refresh, generator, validator):
+    for source in (workflow, ci, refresh, verify_whole, gates, generator, validator):
         assert "MAX_LOG = 3" not in source
         assert "dispatch_log<=3" not in source
