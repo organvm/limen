@@ -47,6 +47,7 @@ from pathlib import Path
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path(__file__).resolve().parents[1]))
 REGISTRY = Path(os.environ.get("LIMEN_DECORUM_SURFACES", ROOT / "institutio" / "governance" / "decorum-surfaces.yaml"))
 OUT = ROOT / "logs" / "decorum.json"
+FACE = ROOT / "logs" / "decorum.html"
 VOICE = ROOT / "logs" / ".voice" / "decorum"
 SCHEMA = "limen.decorum.v1"
 
@@ -259,6 +260,39 @@ def sweep(reg: dict, offline: bool) -> dict:
     }
 
 
+def _esc(s) -> str:
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _write_face(verdict: dict) -> None:
+    """A minimal public-safe HTML face — the estate's professionalization mirror (siblings organ-health.html)."""
+    c = verdict["counts"]
+    status = "green — no egg-face" if verdict["pass"] else f"{c['blocking']} blocking finding(s)"
+    color = "#137333" if verdict["pass"] else "#c5221f"
+    rows = "".join(
+        f"<tr><td><code>{_esc(f['severity'])}</code></td><td>{_esc(f['lane'])}</td>"
+        f"<td>{_esc(f['surface'])}</td><td>{_esc(f['detail'])}</td></tr>"
+        for f in verdict["egg_face_findings"]
+    ) or "<tr><td colspan=4>— nothing to answer for —</td></tr>"
+    depts = ", ".join(f"{k}:{v}" for k, v in verdict["departments"].items())
+    html = f"""<!doctype html><meta charset=utf-8><title>DECORVM — professionalization keeper</title>
+<style>body{{font:14px/1.5 -apple-system,system-ui,sans-serif;margin:2rem;color:#202124}}
+h1{{font-size:1.3rem}} .badge{{color:{color};font-weight:600}}
+table{{border-collapse:collapse;margin-top:1rem;width:100%}} td,th{{border:1px solid #dadce0;padding:.4rem .6rem;text-align:left;vertical-align:top}}
+th{{background:#f1f3f4}} .meta{{color:#5f6368}}</style>
+<h1>DECORVM — the professionalization keeper</h1>
+<p class=badge>{_esc(status)}</p>
+<p class=meta>{c['findings']} findings ({c['blocking']} at/above floor '{_esc(verdict['verdict_floor'])}') ·
+{c['measured']} departments measured, {c['skipped']} skipped (fail-open) · generated {_esc(verdict['generated_at'])}</p>
+<p class=meta>departments: {_esc(depts)}</p>
+<table><tr><th>severity</th><th>lane</th><th>surface</th><th>detail</th></tr>{rows}</table>
+"""
+    try:
+        FACE.write_text(html)
+    except Exception:
+        pass
+
+
 def _stamp_voice() -> None:
     try:
         VOICE.parent.mkdir(parents=True, exist_ok=True)
@@ -327,6 +361,7 @@ def main() -> int:
         OUT.write_text(json.dumps(verdict, indent=2) + "\n")
     except Exception as e:
         print(f"DECORVM: could not write {OUT}: {e}", file=sys.stderr)
+    _write_face(verdict)
     _stamp_voice()
 
     if args.json:
