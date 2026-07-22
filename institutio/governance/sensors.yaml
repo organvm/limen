@@ -985,7 +985,13 @@ sensors:
     owner: tabularius
     cadence:
       env: LIMEN_BEAT_RELATIONSHIP_REVIEW
-      default: 168
+      # daily-active (was 168 ≈ weekly, effectively dormant): this is a read-only,
+      # side-effect-free detector (surfaces a PII-clean review-due COUNT — no send, no
+      # draft, no outreach), so it can fire often at zero account-safety cost. At the
+      # slowest quiet tempo (~30min/beat) 24 beats ≈ 12h → the warm-network re-engagement
+      # signal surfaces at least twice a day instead of ~weekly. Half as frequent as the
+      # time-critical opportunity sensors (cadence 12), which is the right priority tier.
+      default: 24
     timeout:
       env: LIMEN_RELATIONSHIP_REVIEW_TIMEOUT
       default: 300
@@ -1023,6 +1029,24 @@ sensors:
             armed_valve_type: safety
         severity: silent
         escalation: "opportunity sync skipped or exceeded its bound (reads obligations-ledger.json; fails open)"
+
+  opportunity-brief:
+    section: heartbeat
+    title: "the engine's daily VOICE — once per day compose a plain-text opportunity brief (inbound leads, what you owe, LinkedIn mirror status, correspondence, engine freshness) and EMAIL it to the operator's own inbox so the continuous engine is felt, not buried in a log"
+    gate: LIMEN_OPPORTUNITY_BRIEF
+    default: "1"
+    source: [heartbeat]
+    owner: mail
+    cadence:
+      env: LIMEN_BEAT_OPPORTUNITY_BRIEF
+      default: 12
+    timeout:
+      env: LIMEN_OPPORTUNITY_BRIEF_TIMEOUT
+      default: 180
+    steps:
+      - command: "python3 scripts/opportunity-brief.py"
+        severity: silent
+        escalation: "daily brief skipped or send failed (reads status/ledger, emails self via mail-send; idempotent once/day; fails open)"
 
   closeout-reconcile:
     section: "0z"
