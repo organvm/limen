@@ -314,6 +314,38 @@ def polish_findings(reg: dict) -> tuple[list, bool]:
                 if age > max_days:
                     findings.append(_finding("polish", rel, sev, f"stale positioning prose: {int(age)}d since last edit (max {max_days})", "staleness"))
 
+    # 2b) voice-judge change detection (Phase 3, hybrid: linters above + LLM-judge ON CHANGE here).
+    # The beat cannot reliably call a model synchronously, so — like the experience-judge skill — the
+    # SCORING is model-in-the-loop; the beat's job is to detect when a surface's prose changed and no
+    # current voice-judgment covers the new content, and queue it. First sighting records a baseline
+    # silently (no finding); only a real change with no matching judgment surfaces a review request.
+    judge = pol.get("llm_judge") or {}
+    if judge.get("enabled") and judge.get("on", "change") == "change":
+        import hashlib
+        state = _load_json(ROOT / ".limen-private" / "decorum" / "prose-hashes.json") or {}
+        judgments = (_load_yaml(ROOT / "institutio" / "observatory" / "decorum-judgments.yaml") or {}).get("judgments") or {}
+        new_state = {}
+        for rel, path in _prose_files(pol):
+            try:
+                h = hashlib.sha256(path.read_bytes()).hexdigest()
+            except Exception:
+                continue
+            new_state[rel] = h
+            prior = state.get(rel)
+            if prior is None or prior == h:
+                continue  # baseline or unchanged → quiet
+            measured = True
+            rows = judgments.get(rel) or []
+            if not (rows and rows[-1].get("content_sha256") == h and str(rows[-1].get("verdict")).lower() == "pass"):
+                findings.append(_finding("polish", rel, judge.get("severity", "medium"),
+                                         f"prose changed since last voice judgment — re-review tone/brand-voice (run the decorum voice-judge on {rel})", "voice-judge"))
+        try:
+            p = ROOT / ".limen-private" / "decorum" / "prose-hashes.json"
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(new_state, indent=2))
+        except Exception:
+            pass
+
     # 3) narrative accuracy — profile claims vs contribution mix (fail-open when the mix is absent)
     nar = pol.get("narrative_accuracy") or {}
     if nar.get("enabled"):
