@@ -439,6 +439,7 @@ def test_github_storage_create_task_reads_projection_without_direct_put(monkeypa
             "horizon": "present",
             "value_case": "Create the task through the authenticated conduct keeper",
             "owner_surface": "organvm/limen",
+            "budget_cost": 1,
         },
     )
 
@@ -629,6 +630,7 @@ def test_mutation_fails_closed_without_conduct_broker_and_leaves_projection_unch
             "horizon": "present",
             "value_case": "Prove task creation fails closed without its broker",
             "owner_surface": "organvm/limen",
+            "budget_cost": 1,
         },
     )
 
@@ -1505,6 +1507,7 @@ def test_create_and_open_update_enforce_typed_intake_contract(client: TestClient
             "horizon": "present",
             "value_case": "Create one fully underwritten API task",
             "owner_surface": "organvm/limen",
+            "budget_cost": 1,
         },
     )
     assert created.status_code == 200
