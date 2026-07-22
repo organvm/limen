@@ -15,6 +15,7 @@ import {
   applyTaskPacketProjectionEvent,
   commitTaskCompatibilityEvent,
   readInlineProjectionForTest,
+  renderTaskBoardProjection,
 } from "../src/conduct/projection.js";
 import {
   canonicalHash,
@@ -2304,7 +2305,18 @@ test("GitHub projection reads large boards, retries SHA conflicts, and writes th
   let sha = "sha-1";
   let puts = 0;
   let rawReads = 0;
+  let reconciles = 0;
   const fetchImpl = async (url, init) => {
+    if (init.method === "POST") {
+      reconciles += 1;
+      assert.match(String(url), /\/repos\/organvm\/limen\/merges$/);
+      assert.deepEqual(JSON.parse(init.body), {
+        base: "tabularius/board-projection",
+        head: "main",
+        commit_message: "tabularius: reconcile projection branch with current main",
+      });
+      return new Response(null, { status: 204 });
+    }
     if (init.method === "GET") {
       assert.match(String(url), /ref=tabularius%2Fboard-projection/);
       if (init.headers.accept === "application/vnd.github.raw+json") {
@@ -2350,7 +2362,41 @@ test("GitHub projection reads large boards, retries SHA conflicts, and writes th
   assert.equal(result.status, "committed");
   assert.equal(puts, 2);
   assert.equal(rawReads, 2);
+  assert.equal(reconciles, 2);
   assert.equal(board.tasks[0].status, "dispatched");
+});
+
+test("GitHub task projection preserves unrelated board bytes", async () => {
+  const source = [
+    "version: '1.0'",
+    "portal:",
+    "  name: \"Preserve this spelling\"",
+    "tasks:",
+    "- id: OTHER",
+    "  title: 'Leave this task byte-for-byte alone'",
+    "  status: open",
+    "  dispatch_log: []",
+    "",
+  ].join("\n");
+  const before = (await import("yaml")).default.parse(source);
+  const after = structuredClone(before);
+  after.tasks.push({
+    id: "TASK-NEW",
+    title: "Append one bounded task",
+    status: "open",
+    dispatch_log: [],
+  });
+
+  const rendered = renderTaskBoardProjection(source, before, after, "TASK-NEW");
+  assert.equal(rendered.slice(0, source.length), source);
+  assert.deepEqual((await import("yaml")).default.parse(rendered), after);
+
+  const changed = structuredClone(after);
+  changed.tasks[1].status = "dispatched";
+  changed.tasks[1].dispatch_log.push({ status: "dispatched" });
+  const changedText = renderTaskBoardProjection(rendered, after, changed, "TASK-NEW");
+  assert.equal(changedText.slice(0, source.length), source);
+  assert.deepEqual((await import("yaml")).default.parse(changedText), changed);
 });
 
 test("Durable Object HTTP routes match the authenticated client surface and survive recreation", async () => {

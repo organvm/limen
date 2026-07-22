@@ -733,6 +733,10 @@ function githubContentsUrl(env) {
   return `${GITHUB_API}/repos/${repo}/contents/${path}`;
 }
 
+function githubRepositoryUrl(env) {
+  return `${GITHUB_API}/repos/${String(env.LIMEN_GITHUB_REPO || "")}`;
+}
+
 const BOARD_PUBLICATION_BRANCH = "tabularius/board-projection";
 
 function githubProjectionBranch(env) {
@@ -748,6 +752,96 @@ function githubHeaders(env, withBody = false, raw = false) {
     "x-github-api-version": "2022-11-28",
     ...(withBody ? { "content-type": "application/json" } : {}),
   };
+}
+
+async function reconcileProjectionBranch(env, fetchImpl) {
+  const branch = githubProjectionBranch(env);
+  const response = await fetchImpl(`${githubRepositoryUrl(env)}/merges`, {
+    method: "POST",
+    headers: githubHeaders(env, true),
+    body: JSON.stringify({
+      base: branch,
+      head: String(env.LIMEN_GITHUB_DEFAULT_BRANCH || "main"),
+      commit_message: "tabularius: reconcile projection branch with current main",
+    }),
+  });
+  const text = await response.text();
+  if (![201, 204].includes(response.status)) {
+    throw new ConductProjectionError(
+      `GitHub projection reconciliation failed (${response.status}): ${text.slice(0, 300)}`,
+      response.status === 409 ? 409 : 503,
+    );
+  }
+}
+
+function renderedTaskBlock(task, indent = "") {
+  const rendered = YAML.stringify({ tasks: [task] }, { indentSeq: false, lineWidth: 0 });
+  const marker = "tasks:\n";
+  if (!rendered.startsWith(marker)) {
+    throw new ConductProjectionError("task projection serializer emitted an invalid document");
+  }
+  return rendered.slice(marker.length).split("\n").map((line) => line ? `${indent}${line}` : line).join("\n");
+}
+
+function taskBlockRanges(yamlText) {
+  const header = /^tasks:\s*(?:#.*)?$/m.exec(yamlText);
+  if (!header) throw new ConductProjectionError("canonical board has no top-level tasks sequence", 409);
+  const bodyStart = header.index + header[0].length;
+  const candidates = [];
+  const pattern = /^( *)- id:\s*(.+?)\r?$/gm;
+  pattern.lastIndex = bodyStart;
+  for (let match = pattern.exec(yamlText); match; match = pattern.exec(yamlText)) {
+    let id;
+    try {
+      id = YAML.parse(`id: ${match[2]}`).id;
+    } catch (error) {
+      throw new ConductProjectionError(`canonical board task id could not be parsed: ${error.message}`, 409);
+    }
+    candidates.push({ id: String(id), start: match.index, indent: match[1] });
+  }
+  const minimumIndent = Math.min(...candidates.map((entry) => entry.indent.length));
+  const starts = candidates.filter((entry) => entry.indent.length === minimumIndent);
+  return starts.map((entry, index) => ({
+    ...entry,
+    end: starts[index + 1]?.start ?? yamlText.length,
+  }));
+}
+
+function replacePortal(yamlText, portal) {
+  const portalHeader = /^portal:\s*(?:#.*)?$/m.exec(yamlText);
+  const tasksHeader = /^tasks:\s*(?:#.*)?$/m.exec(yamlText);
+  if (!portalHeader || !tasksHeader || portalHeader.index >= tasksHeader.index) {
+    throw new ConductProjectionError("canonical board top-level portal/tasks layout is invalid", 409);
+  }
+  const rendered = YAML.stringify({ portal }, { indentSeq: false, lineWidth: 0 });
+  return `${yamlText.slice(0, portalHeader.index)}${rendered}${yamlText.slice(tasksHeader.index)}`;
+}
+
+export function renderTaskBoardProjection(yamlText, before, after, taskId) {
+  let rendered = String(yamlText);
+  if (JSON.stringify(before.portal) !== JSON.stringify(after.portal)) {
+    rendered = replacePortal(rendered, after.portal);
+  }
+
+  const ranges = taskBlockRanges(rendered);
+  const range = ranges.find((candidate) => candidate.id === String(taskId));
+  const task = (after.tasks || []).find((candidate) => candidate.id === String(taskId));
+  if (!task) throw new ConductProjectionError(`projected task ${taskId} is missing`, 409);
+  const block = renderedTaskBlock(task, range?.indent ?? ranges[0]?.indent ?? "");
+  if (range) {
+    rendered = `${rendered.slice(0, range.start)}${block}${rendered.slice(range.end)}`;
+  } else {
+    if ((before.tasks || []).some((candidate) => candidate.id === String(taskId))) {
+      throw new ConductProjectionError(`canonical task ${taskId} could not be located in source text`, 409);
+    }
+    rendered = `${rendered.endsWith("\n") ? rendered : `${rendered}\n`}${block}`;
+  }
+
+  const reparsed = YAML.parse(rendered) || { portal: {}, tasks: [] };
+  if (JSON.stringify(reparsed) !== JSON.stringify(after)) {
+    throw new ConductProjectionError(`surgical projection for ${taskId} changed canonical board semantics`, 409);
+  }
+  return rendered;
 }
 
 async function githubGet(env, fetchImpl) {
@@ -780,17 +874,18 @@ async function githubGet(env, fetchImpl) {
   return {
     board: YAML.parse(yamlText) || { portal: {}, tasks: [] },
     sha: raw.sha,
+    yamlText,
   };
 }
 
-async function githubPut(env, fetchImpl, board, sha, event) {
+async function githubPut(env, fetchImpl, yamlText, sha, event) {
   const branch = githubProjectionBranch(env);
   const response = await fetchImpl(githubContentsUrl(env), {
     method: "PUT",
     headers: githubHeaders(env, true),
     body: JSON.stringify({
       message: `limen conduct: ${event.kind} ${event.task_id}`,
-      content: encodeBase64(YAML.stringify(board)),
+      content: encodeBase64(yamlText),
       branch,
       sha,
     }),
@@ -821,6 +916,7 @@ export async function commitTaskCompatibilityEvent(env, event, { fetchImpl = fet
   }
   let lastConflict = "";
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    await reconcileProjectionBranch(env, fetchImpl);
     const document = await githubGet(env, fetchImpl);
     const applied = applyTaskCompatibilityEvent(document.board, event);
     if (applied.duplicate) {
@@ -832,7 +928,13 @@ export async function commitTaskCompatibilityEvent(env, event, { fetchImpl = fet
         event_id: event.event_id,
       };
     }
-    const written = await githubPut(env, fetchImpl, applied.board, document.sha, event);
+    const yamlText = renderTaskBoardProjection(
+      document.yamlText,
+      document.board,
+      applied.board,
+      event.task_id,
+    );
+    const written = await githubPut(env, fetchImpl, yamlText, document.sha, event);
     if (written.ok) {
       return {
         status: "committed",
