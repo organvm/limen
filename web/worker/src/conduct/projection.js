@@ -807,6 +807,25 @@ function taskBlockRanges(yamlText) {
   }));
 }
 
+function minimalBoardFromSource(yamlText, taskId) {
+  const tasksHeader = /^tasks:\s*(?:#.*)?$/m.exec(yamlText);
+  if (!tasksHeader) throw new ConductProjectionError("canonical board has no top-level tasks sequence", 409);
+  const prefix = YAML.parse(yamlText.slice(0, tasksHeader.index)) || {};
+  const range = taskBlockRanges(yamlText).find((candidate) => candidate.id === String(taskId));
+  let task = null;
+  if (range) {
+    const parsed = YAML.parse(`tasks:\n${yamlText.slice(range.start, range.end)}`) || {};
+    task = parsed.tasks?.[0] || null;
+    if (!task || String(task.id) !== String(taskId)) {
+      throw new ConductProjectionError(`canonical task ${taskId} could not be parsed from source text`, 409);
+    }
+  }
+  return {
+    portal: prefix.portal || {},
+    tasks: task ? [task] : [],
+  };
+}
+
 function replacePortal(yamlText, portal) {
   const portalHeader = /^portal:\s*(?:#.*)?$/m.exec(yamlText);
   const tasksHeader = /^tasks:\s*(?:#.*)?$/m.exec(yamlText);
@@ -837,14 +856,15 @@ export function renderTaskBoardProjection(yamlText, before, after, taskId) {
     rendered = `${rendered.endsWith("\n") ? rendered : `${rendered}\n`}${block}`;
   }
 
-  const reparsed = YAML.parse(rendered) || { portal: {}, tasks: [] };
-  if (JSON.stringify(reparsed) !== JSON.stringify(after)) {
+  const reparsed = minimalBoardFromSource(rendered, taskId);
+  const expected = { portal: after.portal || {}, tasks: [task] };
+  if (JSON.stringify(reparsed) !== JSON.stringify(expected)) {
     throw new ConductProjectionError(`surgical projection for ${taskId} changed canonical board semantics`, 409);
   }
   return rendered;
 }
 
-async function githubGet(env, fetchImpl) {
+async function githubGet(env, fetchImpl, taskId) {
   const branch = githubProjectionBranch(env);
   const url = `${githubContentsUrl(env)}?ref=${encodeURIComponent(branch)}`;
   const response = await fetchImpl(url, {
@@ -872,7 +892,7 @@ async function githubGet(env, fetchImpl) {
     }
   }
   return {
-    board: YAML.parse(yamlText) || { portal: {}, tasks: [] },
+    board: minimalBoardFromSource(yamlText, taskId),
     sha: raw.sha,
     yamlText,
   };
@@ -917,7 +937,7 @@ export async function commitTaskCompatibilityEvent(env, event, { fetchImpl = fet
   let lastConflict = "";
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     await reconcileProjectionBranch(env, fetchImpl);
-    const document = await githubGet(env, fetchImpl);
+    const document = await githubGet(env, fetchImpl, event.task_id);
     const applied = applyTaskCompatibilityEvent(document.board, event);
     if (applied.duplicate) {
       return {
