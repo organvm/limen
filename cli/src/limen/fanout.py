@@ -25,6 +25,7 @@ from limen.conduct.models import (
     canonical_hash,
 )
 from limen.conduct.resources import parse_resource
+from limen.work_loan import WorkLoanV1, packet_work_loan_missing, work_loan_denial
 
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -100,6 +101,9 @@ class FanoutLeafV1(ProtocolModel):
     effect: Literal["read", "write"] = "write"
     predicate: str
     receipt_target: str
+    # Optional while historical manifests remain readable. The enforcement
+    # layer activates admission separately after sanctioned producers adopt it.
+    work_loan: WorkLoanV1 | None = None
     deadline: datetime
     retry: RetryPolicyV1 = Field(default_factory=RetryPolicyV1)
     spend: SpendEnvelopeV1 = Field(default_factory=SpendEnvelopeV1)
@@ -171,6 +175,10 @@ class FanoutLeafV1(ProtocolModel):
             raise ValueError("fanout execution spend must use the runs unit")
         if self.spend.limit < self.retry.max_attempts:
             raise ValueError("fanout spend limit must cover every permitted attempt")
+        if self.work_loan is not None and self.work_loan.budget_cost != self.spend.limit:
+            raise ValueError("fanout leaf work-loan budget must equal its spend limit")
+        if self.work_loan is not None and self.work_loan.owner_surface != self.owner_repository:
+            raise ValueError("fanout leaf work-loan owner must equal owner_repository")
         return self
 
 
@@ -184,6 +192,8 @@ class FanoutManifestV1(ProtocolModel):
     conductor: AgentIdentityV1
     predicate: str
     receipt_target: str
+    # Optional for compatibility reads until the enforcement PR lands.
+    work_loan: WorkLoanV1 | None = None
     deadline: datetime
     leaves: tuple[FanoutLeafV1, ...]
 
@@ -227,6 +237,8 @@ class FanoutManifestV1(ProtocolModel):
                 raise ValueError(f"{leaf.work_id} has unknown dependencies: {sorted(missing)}")
             if leaf.deadline > self.deadline:
                 raise ValueError(f"{leaf.work_id} exceeds the manifest deadline")
+        if self.work_loan is not None and self.work_loan.budget_cost != sum(leaf.spend.limit for leaf in self.leaves):
+            raise ValueError("manifest work-loan budget must equal aggregate leaf spend")
         _topological_order(self.leaves)
         return self
 
@@ -237,6 +249,30 @@ class FanoutManifestV1(ProtocolModel):
 
 class FanoutError(RuntimeError):
     """A fail-closed manifest, route, or receipt error."""
+
+
+def _require_manifest_work_loans(manifest: FanoutManifestV1) -> None:
+    subjects = [
+        {
+            "work_loan": manifest.work_loan,
+            "predicate": manifest.predicate,
+            "receipt_target": manifest.receipt_target,
+            "spend": {"limit": sum(leaf.spend.limit for leaf in manifest.leaves)},
+        },
+        *(
+            {
+                "work_loan": leaf.work_loan,
+                "predicate": leaf.predicate,
+                "receipt_target": leaf.receipt_target,
+                "spend": leaf.spend,
+            }
+            for leaf in manifest.leaves
+        ),
+    ]
+    for subject in subjects:
+        missing = packet_work_loan_missing(subject)
+        if missing:
+            raise FanoutError(work_loan_denial(missing))
 
 
 def load_manifest(path: Path) -> FanoutManifestV1:
@@ -505,6 +541,7 @@ def compile_packets(
     routing: dict[str, Any],
 ) -> tuple[WorkPacketV1, ...]:
     canonical = serialize_resource_conflicts(manifest)
+    _require_manifest_work_loans(canonical)
     route_by_work = {row["work_id"]: row for row in routing["routes"]}
     repositories = frozenset(leaf.owner_repository for leaf in canonical.leaves)
     all_paths = frozenset(path for leaf in canonical.leaves for path in leaf.allowed_paths)
@@ -526,6 +563,7 @@ def compile_packets(
         required_capabilities=frozenset({"conduct"}),
         predicate=canonical.predicate,
         receipt_target=canonical.receipt_target,
+        work_loan=canonical.work_loan,
         authority=AuthorityEnvelopeV1(
             actions=frozenset({"read", "write"}),
             repositories=repositories,
@@ -584,6 +622,7 @@ def compile_packets(
                 resource_claims=leaf.resource_claims,
                 predicate=leaf.predicate,
                 receipt_target=leaf.receipt_target,
+                work_loan=leaf.work_loan,
                 authority=AuthorityEnvelopeV1(
                     actions=frozenset({"read", "write"} if leaf.effect == "write" else {"read"}),
                     repositories=frozenset({leaf.owner_repository}),
@@ -620,6 +659,7 @@ def start_manifest(
     if isinstance(keeper, LocalConductClient) and not allow_development_keeper:
         raise FanoutError("production fanout start requires the authenticated remote keeper")
     canonical = serialize_resource_conflicts(manifest)
+    _require_manifest_work_loans(canonical)
     repositories = frozenset(leaf.owner_repository for leaf in canonical.leaves)
     executors = execution_adapters if execution_adapters is not None else discover_execution_adapters(repositories)
     if not executors:
