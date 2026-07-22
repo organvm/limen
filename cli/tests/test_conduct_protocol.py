@@ -861,7 +861,7 @@ def test_child_authority_attenuates_and_cycles_are_rejected() -> None:
             "work_id": "extended",
             "work_key": "extended",
             "deadline": NOW + timedelta(hours=2),
-            "spend": SpendEnvelopeV1(limit=0),
+            "spend": SpendEnvelopeV1(limit=1),
         }
     )
     with pytest.raises(ConductConflict, match="deadline"):
@@ -872,7 +872,7 @@ def test_child_authority_attenuates_and_cycles_are_rejected() -> None:
             "work_id": "wider-fanout",
             "work_key": "wider-fanout",
             "fanout": FanoutBoundsV1(max_children=3, max_depth=3),
-            "spend": SpendEnvelopeV1(limit=0),
+            "spend": SpendEnvelopeV1(limit=1),
         }
     )
     with pytest.raises(ConductConflict, match="fanout"):
