@@ -1,14 +1,14 @@
 # Overnight Watch
 
 - Status: `alert`
-- Updated: `2026-07-18T08:13:08+00:00`
-- Log age: `30` seconds
+- Updated: `2026-07-22T21:32:51+00:00`
+- Log age: `164` seconds
 - Launchd: `active`
-- Latest tick: `tick emitted: 2026-07-18T08:03:46+00:00 total=2668 open=402 spent=4/600`
+- Latest tick: `tick emitted: 2026-07-22T21:30:06+00:00 total=3029 open=754 spent=4/600`
 - Latest async: `async: reaped 0 dead · harvested 0 · 0 still running · launched 0`
 - Stale tick samples: `0`
 - Active workers: `0`
-- Heartbeat child processes: `2`
+- Heartbeat child processes: `1`
 
 ## Overnight Summary
 
@@ -30,10 +30,9 @@
 
 ## Throughput
 
-- Recent per-60min completions: `[0, 0, 0]` (derived floor `0.0`, median `0`).
+- Recent per-60min completions: `[0, 0, 0]` (derived floor `0.0`, median `0.0`).
 - Below floor: `false`; suppressed: `no`.
-  - child `65112` `R` `00:30` `/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -m limen release-stale --agent jules --hours 24 --apply`
-  - child `65113` `S` `00:30` `tail -1`
+  - child `90444` `S` `02:45` `sleep 1800`
 
 ## WATCH_ALERT
 - `overnight-lane-switch-blocked`: blocker=overnight-owner-packets-gated owner=organvm/limen reason=all bounded owner packets are closed by current capability, lifecycle, owner gate(s)

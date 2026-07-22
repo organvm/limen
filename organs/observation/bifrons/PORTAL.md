@@ -9,7 +9,7 @@
 
 | stars | dossiers | resonance edges | transmutation proposals |
 |---:|---:|---:|---:|
-| 419 | 20 | 0 | 0 |
+| 419 | 59 | 0 | 0 |
 
 ## Exchange lifecycle
 

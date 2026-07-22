@@ -124,6 +124,22 @@ dispatch_bounded() {  # dispatch_bounded <cmd...> — run dispatch under the SIG
   fi
 }
 
+SESSION_END_SOURCE="${LIMEN_SESSION_END_BREADCRUMBS:-${XDG_STATE_HOME:-$HOME/.local/state}/limen/session-end-breadcrumbs.jsonl}"
+drain_session_end_breadcrumbs() {
+  if [ -n "$DISPATCH_TIMEOUT_BIN" ]; then
+    "$DISPATCH_TIMEOUT_BIN" "${LIMEN_SESSION_END_CONSUMER_TIMEOUT:-90}" \
+      python3 "$LIMEN_ROOT/scripts/consume-session-end-breadcrumbs.py" \
+        --source "$SESSION_END_SOURCE" \
+        --max-sessions "${LIMEN_SESSION_END_CONSUMER_BATCH:-8}" \
+        --runway-seconds "${LIMEN_SESSION_END_CONSUMER_RUNWAY:-60}" 2>&1 | tail -1 || true
+  else
+    python3 "$LIMEN_ROOT/scripts/consume-session-end-breadcrumbs.py" \
+      --source "$SESSION_END_SOURCE" \
+      --max-sessions "${LIMEN_SESSION_END_CONSUMER_BATCH:-8}" \
+      --runway-seconds "${LIMEN_SESSION_END_CONSUMER_RUNWAY:-60}" 2>&1 | tail -1 || true
+  fi
+}
+
 # SINGLETON GUARD (ATOMIC) — only one heartbeat-loop may run. mkdir is atomic, so two
 # near-simultaneous launchd respawns cannot both win (the pidfile read-then-write did).
 # Stale-lock (dead holder) is recovered with a single rmdir+retry; lose that race → exit.
@@ -291,6 +307,10 @@ while true; do
   VITALS_PRESSURE=0
   VITALS_THROTTLE=0
   echo "──── beat $c $(date '+%F %T') ────"
+  # Drain local SessionEnd work while this process owns the singleton, even when
+  # autonomy is paused or the network is offline. The consumer remains bounded
+  # and fail-open so lifecycle work cannot wedge the daemon.
+  drain_session_end_breadcrumbs
   MODE="$(python3 "$LIMEN_ROOT/scripts/autonomy-governor.py" mode 2>/dev/null || echo paused)"
   if [ "$MODE" = "paused" ]; then
     # Stay the singleton owner. Exiting here made launchd KeepAlive respawn a fresh
@@ -352,11 +372,10 @@ while true; do
     # (the 2026-06-26 halt). Idempotent: a healthy board is a fast no-op, no network. See
     # heal-board.py + the limen.io collapse-guard — "fix the handoff so it ain't broken".
     python3 "$LIMEN_ROOT/scripts/heal-board.py" 2>&1 | tail -1 || true
-    # RECORD-KEEPER (TABVLARIVS) — the single writer of the board. Drain the lock-free ticket inbox
-    # (logs/tickets/inbox), fold each worker's ticket onto the just-healed board under the queue
-    # lock, and seal via the collapse-guarded atomic write. Runs AFTER heal-board (fold onto a
-    # healthy board) and BEFORE the body's own queue mutation. Idempotent: an empty inbox is an
-    # instant no-op (no lock, no board I/O), so it is safe every beat while no producers exist yet.
+    # TABVLARIVS RELAY — submit the lock-free ticket inbox to the authenticated remote conduct
+    # keeper. Archive only tickets with canonical projection receipts; broker outages leave the
+    # unacknowledged suffix pending. The local tasks.yaml is read-only cache evidence, never a
+    # lifecycle writer. Idempotent: an empty inbox is an instant no-op.
     [ "${LIMEN_TABVLARIVS:-1}" = "1" ] && python3 "$LIMEN_ROOT/scripts/tabularius-organ.py" 2>&1 | tail -1 || true
     # ENACTMENT — surface any declared-ON fleet flag that is dark/stale in THIS running beat (memory:
     # enacted-not-declared). THE LIVE-LOOP HOME: metabolize.sh has the same advisory but the daemon
@@ -377,6 +396,25 @@ while true; do
     fi
     EFFECTIVE_DISPATCH_LANES="$(dispatch_lanes "$DISPATCH_LANES")"
     echo "  dispatch lanes: ${EFFECTIVE_DISPATCH_LANES:-none} from selector [$DISPATCH_LANES]"
+
+    # MONITORING SENSORS — hoisted ABOVE the observe/dispatch split so read-only telemetry (mail
+    # sweep, inbound-opportunity detect, launch-agent liveness, drift monitors) runs on EVERY live
+    # beat, observe mode included. Previously this block sat below the observe branch's `continue`,
+    # so whenever the session-value-gate throttled MODE→observe the whole monitoring apparatus went
+    # dark: 2026-07-21 → 22h blind (opportunity + all scheduled sensors 22-24h stale while the beat
+    # idled at MAX tempo). Monitoring must NOT be gated by dispatch mode. Cheap, cadence-gated, and
+    # timeout-bounded per sensors.yaml; the expensive dispatch/mine/route work stays gated below.
+    # Loop-body edit — effective only after `launchctl kickstart -k gui/$(id -u)/com.limen.heartbeat`.
+    if [ "${LIMEN_BEAT_DERIVE:-1}" = "1" ]; then
+      python3 "$LIMEN_ROOT/scripts/beat-sensors.py" --run --source heartbeat --scheduled-only \
+        --beat "$c" --loop-max "$MAX" --voice-dir "$VOICED" || true
+    fi
+    # COMMS monitoring — the inbox sweep + obligations-ledger rebuild is monitoring, NOT queue
+    # mutation (it flags/archives reversibly and writes its own ledger, never tasks.yaml; the send
+    # stays gated by LIMEN_MAIL_SEND inside mail-beat.sh). It too lived below the observe-branch
+    # `continue`, so observe mode stopped sweeping email entirely for 22h (2026-07-21). Hoisted here,
+    # still cadence-gated by C_MAIL, so "monitor my email" holds in observe mode too.
+    play "$C_MAIL"    && { bash "$LIMEN_ROOT/scripts/mail-beat.sh" 2>&1 | tail -3 || true; stamp mail; }
 
     if [ "$MODE" != "dispatch" ]; then
       echo "autonomy mode=$MODE — telemetry/status only; queue mutation and dispatch skipped"
@@ -427,9 +465,11 @@ while true; do
                                        LIMEN_TICKETS_PRODUCE=1 timeout "${LIMEN_GENERATE_BACKLOG_TIMEOUT:-120}" python3 "$LIMEN_ROOT/scripts/generate-backlog.py" --apply 2>&1 | tail -1 || true  # SELF-FEED: build-out levers on the ranked tier
                                        [ "${LIMEN_STUDIUM:-0}" = "1" ] && timeout "${LIMEN_STUDIUM_TIMEOUT:-120}" python3 "$LIMEN_ROOT/scripts/ingest-backlog.py" --apply 2>&1 | tail -1 || true  # STUDIUM: re-emit the staged canon-breadth content tasks each beat so they SURVIVE the prune (a one-shot hand-apply gets clobbered; idempotent, gated, lockless)
                                        python3 "$LIMEN_ROOT/scripts/discover-value.py" --apply 2>&1 | tail -1 || true; }  # DISCOVER: no repo stays dark — surface latent value, burn the tank
-      play "$C_BALANCE"            && { python3 "$LIMEN_ROOT/scripts/route.py" --apply 2>&1 | tail -1 || true   # PLAN
+      # Routing is a live claim-time decision. target_agent is durable eligibility/ownership
+      # metadata, so a balance beat may inspect the plan but must never rewrite the tracked board.
+      play "$C_BALANCE"            && { python3 "$LIMEN_ROOT/scripts/route.py" 2>&1 | tail -1 || true   # PLAN
                                        if [ -n "$EFFECTIVE_LANES" ]; then
-                                         python3 "$LIMEN_ROOT/scripts/rebalance.py" --lanes "$EFFECTIVE_LANES" --apply 2>&1 | tail -1 || true
+                                         python3 "$LIMEN_ROOT/scripts/rebalance.py" --lanes "$EFFECTIVE_LANES" 2>&1 | tail -1 || true
                                        else
                                          echo "no live local lanes available for rebalance"
                                        fi; }
@@ -530,17 +570,11 @@ while true; do
                       # LIMEN_SELF_HEAL=0.
                       [ "${LIMEN_SELF_HEAL:-1}" = "1" ] && timeout "${LIMEN_SELF_HEAL_TIMEOUT:-150}" python3 "$LIMEN_ROOT/scripts/self-heal.py" --scan "${LIMEN_SELF_HEAL_SCAN:-30}" 2>&1 | tail -1 || true; }
   due_voice heal "$C_HEAL"    && stamp heal
-  # Scheduled registry sensors — cadence, timeout, conditional argv, voice id, and gate all come
-  # from sensors.yaml. The runner knows no sensor names, so a rename or a newly-declared scheduled
-  # sensor needs no shell edit. Default-ON: the fallback matches the parameter-panel default and
-  # metabolize.sh (the :-0/:-1/"1" three-way drift kept this lane dark — github-estate-reconcile and
-  # the 0g4 liveness rung never executed live). Released by the 2026-07-13 canary receipts (dry +
-  # one live-parity pass; PR #1013 body). Loop-body edit:
-  # takes effect only after `launchctl kickstart -k gui/$(id -u)/com.limen.heartbeat`.
-  if [ "${LIMEN_BEAT_DERIVE:-1}" = "1" ]; then
-    python3 "$LIMEN_ROOT/scripts/beat-sensors.py" --run --source heartbeat --scheduled-only \
-      --beat "$c" --loop-max "$MAX" --voice-dir "$VOICED" || true
-  fi
+  # Scheduled registry sensors (cadence/timeout/argv/gate all from sensors.yaml, no sensor names in
+  # the runner) were HOISTED above the observe/dispatch split — see the block right before
+  # `if [ "$MODE" != "dispatch" ]`. They must run every live beat (observe mode included), not only
+  # on dispatch beats; the 2026-07-21 22h-blind incident was exactly this block sitting below the
+  # observe-branch `continue`. Do not re-add a dispatch-gated copy here.
   # DISK PRESSURE — when the data volume is past high-water, run hygiene (clone-maintenance:
   # capture→reap→node_modules) EVERY beat, not just every C_HYGIENE, until it drains back under
   # target. Reclaim intensity tracks real fullness instead of a fixed clock (the "creeps back to
@@ -606,7 +640,9 @@ while true; do
   play "$C_WEB"     && python3 "$LIMEN_ROOT/scripts/omni-view.py" 2>&1 | tail -1 || true   # THE ONE SURFACE: value verdict + board + fleet + revenue + everything, past/present/future (no network)
   play "$C_WEB"     && python3 "$LIMEN_ROOT/scripts/obligations-view.py" 2>&1 | tail -1 || true   # mail obligations face refresh (no network)
   play "$C_WEB"     && python3 "$LIMEN_ROOT/scripts/pillars-view.py" 2>&1 | tail -1 || true   # platform-of-pillars convergence map: program ladder + per-pillar live/stale status (no network)
-  play "$C_MAIL"    && { bash "$LIMEN_ROOT/scripts/mail-beat.sh" 2>&1 | tail -3 || true; stamp mail; }   # COMMS: sweep inbound (flag fires/archive noise, reversible) + rebuild obligations ledger
+  # (COMMS mail voice was HOISTED above the observe/dispatch split — see the block right before
+  # `if [ "$MODE" != "dispatch" ]` — so the inbox sweep runs every live beat, observe mode included.
+  # Do not re-add a dispatch-gated copy here.)
   due_voice continuation "$C_CONTINUATION" && [ "${LIMEN_CONTINUATION:-1}" = "1" ] && \
     { if [ -n "$DISPATCH_TIMEOUT_BIN" ]; then
         "$DISPATCH_TIMEOUT_BIN" -s KILL "${LIMEN_CONTINUATION_TIMEOUT:-600}" python3 "$LIMEN_ROOT/scripts/continuation-beat.py" --apply 2>&1 | tail -6 || true
