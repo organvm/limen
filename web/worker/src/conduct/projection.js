@@ -733,6 +733,13 @@ function githubContentsUrl(env) {
   return `${GITHUB_API}/repos/${repo}/contents/${path}`;
 }
 
+const BOARD_PUBLICATION_BRANCH = "tabularius/board-projection";
+
+function githubProjectionBranch(env) {
+  const configured = String(env.LIMEN_GITHUB_BRANCH || "").trim();
+  return !configured || configured === "main" ? BOARD_PUBLICATION_BRANCH : configured;
+}
+
 function githubHeaders(env, withBody = false) {
   return {
     authorization: `Bearer ${env.LIMEN_GITHUB_TOKEN}`,
@@ -744,7 +751,7 @@ function githubHeaders(env, withBody = false) {
 }
 
 async function githubGet(env, fetchImpl) {
-  const branch = env.LIMEN_GITHUB_BRANCH || "main";
+  const branch = githubProjectionBranch(env);
   const response = await fetchImpl(`${githubContentsUrl(env)}?ref=${encodeURIComponent(branch)}`, {
     method: "GET",
     headers: githubHeaders(env),
@@ -761,7 +768,7 @@ async function githubGet(env, fetchImpl) {
 }
 
 async function githubPut(env, fetchImpl, board, sha, event) {
-  const branch = env.LIMEN_GITHUB_BRANCH || "main";
+  const branch = githubProjectionBranch(env);
   const response = await fetchImpl(githubContentsUrl(env), {
     method: "PUT",
     headers: githubHeaders(env, true),

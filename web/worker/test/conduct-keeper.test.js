@@ -2303,8 +2303,9 @@ test("GitHub projection retries SHA conflicts and always writes the observed SHA
   };
   let sha = "sha-1";
   let puts = 0;
-  const fetchImpl = async (_url, init) => {
+  const fetchImpl = async (url, init) => {
     if (init.method === "GET") {
+      assert.match(String(url), /ref=tabularius%2Fboard-projection/);
       return new Response(JSON.stringify({
         sha,
         content: btoa(unescape(encodeURIComponent((await import("yaml")).default.stringify(board)))),
@@ -2313,6 +2314,7 @@ test("GitHub projection retries SHA conflicts and always writes the observed SHA
     puts += 1;
     const payload = JSON.parse(init.body);
     assert.equal(payload.sha, sha);
+    assert.equal(payload.branch, "tabularius/board-projection");
     if (puts === 1) {
       sha = "sha-2";
       return new Response(JSON.stringify({ message: "sha does not match" }), { status: 409 });
