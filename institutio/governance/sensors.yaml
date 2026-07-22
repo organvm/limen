@@ -1088,6 +1088,12 @@ sensors:
     # files tasks/issues from findings is a separate gate (LIMEN_DECORUM_APPLY), dry-run until armed.
     steps:
       - command: "python3 scripts/decorum-keeper.py --sweep"
+        args_when:
+          - env: LIMEN_DECORUM_APPLY
+            default: "0"
+            equals: "1"
+            args: ["--apply"]
+            armed_valve_type: deliverable
         severity: advisory
         escalation: "DECORVM found a public egg-face — see logs/decorum.json (blocking finding at/above floor 'high')"
     omega_eligible:

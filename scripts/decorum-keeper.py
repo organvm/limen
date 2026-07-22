@@ -424,6 +424,94 @@ th{{background:#f1f3f4}} .meta{{color:#5f6368}}</style>
         pass
 
 
+def _task_id(lane: str, surface: str) -> str:
+    """Stable, idempotent task id for a (lane, surface) group — NO date, so a re-run never re-files."""
+    import re
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", f"{lane}-{surface}").strip("-").lower()
+    return f"DECORUM-{slug}"
+
+
+def apply_effector(reg: dict, verdict: dict, armed: bool) -> dict:
+    """The mentor: fold each open finding into ONE bounded, idempotent ticket per (lane, surface),
+    submitted through the tabularius broker (never a direct tasks.yaml write). Dry-run by default;
+    mutates only when armed (LIMEN_DECORUM_APPLY=1). Fail-open: if the limen intake stack can't be
+    imported, report and skip — the keeper's read-only verdict is unaffected."""
+    plan = {"armed": armed, "planned": [], "filed": [], "skipped_existing": 0, "note": None}
+    findings = verdict.get("egg_face_findings") or []
+    if not findings:
+        return plan
+    cap = int(os.environ.get("LIMEN_DECORUM_MAX", "8"))
+    receipt_repo = (reg.get("effector") or {}).get("receipt_repo", "organvm/limen")
+    prio_map = {"critical": "high", "high": "high", "medium": "medium", "low": "low"}
+
+    # group findings by (lane, surface) → one ticket, details listed in context
+    groups: dict = {}
+    for f in findings:
+        groups.setdefault((f["lane"], f["surface"]), []).append(f)
+
+    try:
+        import sys as _sys
+        _sys.path.insert(0, str(ROOT / "cli" / "src"))
+        from limen.intake import contract_fields, github_pr_contract  # noqa: E402
+        from limen.io import load_limen_file  # noqa: E402
+        from limen.models import Task  # noqa: E402
+        from limen.tabularius import submit_task_upsert, pending_task_ids  # noqa: E402
+    except Exception as e:  # fail-open — verdict stands, effector just can't file
+        plan["note"] = f"limen intake stack unavailable ({e}); tickets not filed"
+        return plan
+
+    board = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
+    try:
+        lf = load_limen_file(board)
+        have = {t.id for t in lf.tasks} | set(pending_task_ids(board))
+    except Exception as e:
+        plan["note"] = f"board unreadable ({e}); tickets not filed"
+        return plan
+
+    stamp = datetime.now(timezone.utc).date().isoformat()
+    order = ((reg.get("verdict") or {}).get("severity_order")) or ["low", "medium", "high", "critical"]
+    for (lane, surface), fs in sorted(groups.items(), key=lambda kv: -max(_sev_index(order, f["severity"]) for f in kv[1])):
+        tid = _task_id(lane, surface)
+        if tid in have:
+            plan["skipped_existing"] += 1
+            continue
+        if len(plan["planned"]) >= cap:
+            break
+        top = max(fs, key=lambda f: _sev_index(order, f["severity"]))
+        # SEO findings name a real "owner/name" repo; everything else is homed in the keeper's repo.
+        repo = surface if (lane == "seo" and "/" in surface) else receipt_repo
+        details = " · ".join(f["detail"] for f in fs)
+        plan["planned"].append({"id": tid, "repo": repo, "priority": prio_map.get(top["severity"], "medium"), "lane": lane, "surface": surface})
+        if not armed:
+            continue
+        try:
+            task = Task(
+                id=tid,
+                title=f"Fix public egg-face on {surface} ({lane})",
+                repo=repo,
+                type="code",
+                target_agent="any",
+                priority=prio_map.get(top["severity"], "medium"),
+                budget_cost=1,
+                status="open",
+                origin="system_debt",
+                horizon="present",
+                value_case=f"Remove a professionalization defect a visitor can see on {surface}",
+                labels=["decorum", "professionalization", lane, "generated"],
+                urls=[],
+                context=f"DECORVM found: {details}. Fix at the surface's source and re-run scripts/decorum-keeper.py --sweep; done ⟺ this finding no longer appears in logs/decorum.json. [decorum {stamp}]",
+                **contract_fields(github_pr_contract(repo, tid)),
+                depends_on=[],
+                created=stamp,
+                dispatch_log=[],
+            )
+            submit_task_upsert(board, task, agent="decorum-keeper", session_id=os.environ.get("LIMEN_SESSION_ID", "decorum-keeper"))
+            plan["filed"].append(tid)
+        except Exception as e:
+            plan.setdefault("errors", []).append(f"{tid}: {e}")
+    return plan
+
+
 def _stamp_voice() -> None:
     try:
         VOICE.parent.mkdir(parents=True, exist_ok=True)
@@ -469,6 +557,16 @@ def _print_summary(verdict: dict) -> None:
     extra = len(verdict["egg_face_findings"]) - 20
     if extra > 0:
         print(f"    … +{extra} more (see {OUT})")
+    plan = verdict.get("effector") or {}
+    if plan.get("note"):
+        print(f"  effector: {plan['note']}")
+    elif plan.get("planned"):
+        if plan.get("armed"):
+            print(f"  effector: filed {len(plan.get('filed', []))} ticket(s), {plan['skipped_existing']} already on board")
+        else:
+            print(f"  effector: DRY-RUN — would file {len(plan['planned'])} ticket(s) ({plan['skipped_existing']} already on board); arm with LIMEN_DECORUM_APPLY=1 --apply")
+        for p in plan["planned"][:8]:
+            print(f"      → {p['id']} [{p['priority']}] {p['repo']}")
 
 
 def main() -> int:
@@ -476,6 +574,7 @@ def main() -> int:
     ap.add_argument("--sweep", action="store_true", help="federate every department → logs/decorum.json (default)")
     ap.add_argument("--doctor", action="store_true", help="offline: validate the registry + schema, run no network")
     ap.add_argument("--json", action="store_true", help="emit the machine verdict to stdout instead of a summary")
+    ap.add_argument("--apply", action="store_true", help="file a ticket per finding (armed only when LIMEN_DECORUM_APPLY=1; dry-run otherwise)")
     args = ap.parse_args()
 
     reg = _load_yaml(REGISTRY)
@@ -487,6 +586,11 @@ def main() -> int:
         return doctor(reg)
 
     verdict = sweep(reg, offline=False)
+
+    # the effector (mentor) — dry-run plan by default; mutates only when the valve is armed.
+    armed = args.apply and os.environ.get("LIMEN_DECORUM_APPLY") == "1"
+    plan = apply_effector(reg, verdict, armed)
+    verdict["effector"] = plan
     try:
         OUT.parent.mkdir(parents=True, exist_ok=True)
         OUT.write_text(json.dumps(verdict, indent=2) + "\n")

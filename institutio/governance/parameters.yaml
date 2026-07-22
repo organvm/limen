@@ -2894,6 +2894,12 @@ parameters:
     self_update: none
     owner: decorum
     note: "Per-run timeout (seconds) resolved by the generic sensor runner for the DECORVM keeper sweep (which spawns the moat-audit subprocess). The runner kills the full command group on overrun and the beat continues fail-open."
+  LIMEN_DECORUM_APPLY:
+    default: 0
+    env: LIMEN_DECORUM_APPLY
+    self_update: none
+    owner: decorum
+    note: "Arms the DECORVM effector (the mentor): 0 (default) plans one bounded ticket per (lane, surface) finding and files nothing; 1 submits each through the tabularius broker as an idempotent create-only upsert (id DECORUM-<lane>-<surface>, so a re-run never re-files), capped by LIMEN_DECORUM_MAX (default 8). Never sends and never wipes — filing a ticket is the only mutation. Ships DARK; observe the DRY plan in the beat log first, and add fleet_runtime: \"1\" here when arming so enactment-audit locks it live."
   LIMEN_GITVS_PORTAL_STARS:
     default: 3
     env: LIMEN_GITVS_PORTAL_STARS
