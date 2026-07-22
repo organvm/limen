@@ -623,7 +623,7 @@ def _local_budget_debit(
 
 def _local_budget_refund(board: dict[str, Any], task: dict[str, Any], event: dict[str, Any]) -> None:
     amount = task.get("budget_cost", 0)
-    claim = next(
+    claim: dict[str, Any] = next(
         (entry for entry in reversed(task.get("dispatch_log") or []) if entry.get("status") == "dispatched"),
         {},
     )
