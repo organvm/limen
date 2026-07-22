@@ -2283,7 +2283,7 @@ tasks: []
   assert.equal(readInlineProjectionForTest(env).tasks[0].dispatch_log.length, 1);
 });
 
-test("GitHub projection retries SHA conflicts and always writes the observed SHA", async () => {
+test("GitHub projection reads large boards, retries SHA conflicts, and writes the observed SHA", async () => {
   let board = {
     portal: { budget: { daily: 10, per_agent: { codex: 10 }, track: { spent: 0, per_agent: {} } } },
     tasks: [{
@@ -2303,12 +2303,17 @@ test("GitHub projection retries SHA conflicts and always writes the observed SHA
   };
   let sha = "sha-1";
   let puts = 0;
+  let rawReads = 0;
   const fetchImpl = async (url, init) => {
     if (init.method === "GET") {
       assert.match(String(url), /ref=tabularius%2Fboard-projection/);
+      if (init.headers.accept === "application/vnd.github.raw+json") {
+        rawReads += 1;
+        return new Response((await import("yaml")).default.stringify(board), { status: 200 });
+      }
       return new Response(JSON.stringify({
         sha,
-        content: btoa(unescape(encodeURIComponent((await import("yaml")).default.stringify(board)))),
+        content: "",
       }), { status: 200 });
     }
     puts += 1;
@@ -2344,6 +2349,7 @@ test("GitHub projection retries SHA conflicts and always writes the observed SHA
   }, event, { fetchImpl });
   assert.equal(result.status, "committed");
   assert.equal(puts, 2);
+  assert.equal(rawReads, 2);
   assert.equal(board.tasks[0].status, "dispatched");
 });
 

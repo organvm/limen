@@ -740,10 +740,10 @@ function githubProjectionBranch(env) {
   return !configured || configured === "main" ? BOARD_PUBLICATION_BRANCH : configured;
 }
 
-function githubHeaders(env, withBody = false) {
+function githubHeaders(env, withBody = false, raw = false) {
   return {
     authorization: `Bearer ${env.LIMEN_GITHUB_TOKEN}`,
-    accept: "application/vnd.github+json",
+    accept: raw ? "application/vnd.github.raw+json" : "application/vnd.github+json",
     "user-agent": "limen-conduct-keeper",
     "x-github-api-version": "2022-11-28",
     ...(withBody ? { "content-type": "application/json" } : {}),
@@ -752,7 +752,8 @@ function githubHeaders(env, withBody = false) {
 
 async function githubGet(env, fetchImpl) {
   const branch = githubProjectionBranch(env);
-  const response = await fetchImpl(`${githubContentsUrl(env)}?ref=${encodeURIComponent(branch)}`, {
+  const url = `${githubContentsUrl(env)}?ref=${encodeURIComponent(branch)}`;
+  const response = await fetchImpl(url, {
     method: "GET",
     headers: githubHeaders(env),
   });
@@ -761,8 +762,23 @@ async function githubGet(env, fetchImpl) {
     throw new ConductProjectionError(`GitHub projection read failed (${response.status}): ${text.slice(0, 300)}`);
   }
   const raw = text ? JSON.parse(text) : {};
+  let yamlText;
+  if (raw.content) {
+    yamlText = decodeBase64(raw.content);
+  } else {
+    const rawResponse = await fetchImpl(url, {
+      method: "GET",
+      headers: githubHeaders(env, false, true),
+    });
+    yamlText = await rawResponse.text();
+    if (!rawResponse.ok) {
+      throw new ConductProjectionError(
+        `GitHub raw projection read failed (${rawResponse.status}): ${yamlText.slice(0, 300)}`,
+      );
+    }
+  }
   return {
-    board: YAML.parse(decodeBase64(raw.content || "")) || { portal: {}, tasks: [] },
+    board: YAML.parse(yamlText) || { portal: {}, tasks: [] },
     sha: raw.sha,
   };
 }
