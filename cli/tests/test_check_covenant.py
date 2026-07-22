@@ -96,9 +96,7 @@ def test_no_other_writer_allowlisted_writer_is_ignored(tmp_path):
     scripts.mkdir(parents=True)
     # The same rogue write, but at an allowlisted path → tolerated.
     (scripts / "memory-ticket.py").write_text(
-        "from pathlib import Path\n\n\n"
-        "def leak(memdir):\n"
-        "    Path(memdir, 'MEMORY.md').write_text('legit\\n')\n",
+        "from pathlib import Path\n\n\ndef leak(memdir):\n    Path(memdir, 'MEMORY.md').write_text('legit\\n')\n",
         encoding="utf-8",
     )
     mod = _mod()
