@@ -542,6 +542,72 @@ def test_current_reader_migrates_valid_scoped_records_out_of_legacy_store(tmp_pa
     assert [lease["kind"] for lease in scoped_after["leases"]] == [scope.lease_kind]
 
 
+def test_interrupted_migration_write_converges_on_scoped_record(tmp_path: Path) -> None:
+    """_load() heals a crash between scoped and legacy writes during migration."""
+    _main, first, _second = make_linked_worktrees(tmp_path)
+    service = controller(tmp_path / "state")
+    scope = worktree_scope(first)
+
+    # Acquire a legacy execution lease (state.json has kind="execution").
+    acquired = service.acquire("execution", owner="codex", surface="turn", pid=101)
+    lease_id = acquired["lease"]["lease_id"]
+
+    # Simulate the crash window: scoped write completed (kind upgraded) but the
+    # subsequent legacy write that would have emptied state.json did not.
+    scoped_lease = dict(acquired["lease"])
+    scoped_lease["kind"] = scope.lease_kind
+    service.scoped_state_path.write_text(
+        json.dumps({"schema": "limen.host_admission_scoped_state.v1", "leases": [scoped_lease]}),
+        encoding="utf-8",
+    )
+    # state.json still holds the old "execution" kind — the crash window.
+
+    # _load() must converge automatically without raising AdmissionStateError.
+    result = service.status(probe=False)
+
+    assert result["allowed"] is not None  # no exception raised
+    leases = result["leases"]
+    assert len(leases) == 1
+    assert leases[0]["lease_id"] == lease_id
+    assert leases[0]["kind"] == scope.lease_kind
+
+
+def test_interrupted_migration_unrelated_duplicate_still_raises(tmp_path: Path) -> None:
+    """_load() still raises AdmissionStateError on a genuine (non-migration) duplicate."""
+    root = tmp_path / "state"
+    root.mkdir(mode=0o700)
+    shared_id = "deadbeef" * 4  # 32-char lease_id
+    scope_hash = "a" * 64  # valid scoped kind hash
+    base = {
+        "lease_id": shared_id,
+        "owner": "codex-a",
+        "surface": "turn",
+        "pid": 101,
+        "process_identity": "start-101",
+        "expires_epoch": 9999.0,
+    }
+    # Legacy store: execution kind, owner=codex-a.
+    (root / "state.json").write_text(
+        json.dumps({
+            "schema": "limen.host_admission_state.v1",
+            "leases": [{**base, "kind": "execution"}],
+            "pressure": None,
+        }),
+        encoding="utf-8",
+    )
+    # Scoped store: scoped kind but different owner — not a plausible migration pair.
+    (root / "scoped-state.json").write_text(
+        json.dumps({
+            "schema": "limen.host_admission_scoped_state.v1",
+            "leases": [{**base, "kind": f"execution:{scope_hash}", "owner": "codex-b"}],
+        }),
+        encoding="utf-8",
+    )
+    svc = controller(root)
+    with pytest.raises(AdmissionStateError, match="duplicated"):
+        svc.status(probe=False)
+
+
 def test_malformed_scoped_store_is_preserved_with_protocol_diagnostic(tmp_path: Path) -> None:
     root = tmp_path / "state"
     root.mkdir(mode=0o700)

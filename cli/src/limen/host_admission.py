@@ -150,6 +150,27 @@ def _is_execution_kind(kind: object) -> bool:
     return isinstance(kind, str) and (kind == "execution" or bool(SCOPED_EXECUTION_RE.fullmatch(kind)))
 
 
+def _is_interrupted_migration(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """Return True when two records with the same lease_id are a plausible crash-interrupted migration pair.
+
+    A write crash between the two ``_write_file()`` calls in ``_write()`` can
+    leave the same lease_id in both stores with only the ``kind`` field
+    differing: the legacy store retains the old ``"execution"`` kind and the
+    scoped store already holds the promoted ``"execution:<sha256>"`` kind.  All
+    other fields are identical in that case, so ``_load()`` can converge
+    automatically instead of permanently wedging the admission surface.
+    """
+    kinds = {str(a.get("kind", "")), str(b.get("kind", ""))}
+    if "execution" not in kinds:
+        return False
+    if not any(SCOPED_EXECUTION_RE.fullmatch(k) for k in kinds):
+        return False
+    # Every field except 'kind' must be identical for a plausible migration.
+    rest_a = {k: v for k, v in a.items() if k != "kind"}
+    rest_b = {k: v for k, v in b.items() if k != "kind"}
+    return rest_a == rest_b
+
+
 def worktree_scope(cwd: str | os.PathLike[str]) -> WorktreeScope:
     """Resolve a stable linked-worktree scope, folding symlink aliases together."""
 
@@ -761,11 +782,20 @@ class AdmissionController:
             prior = by_id.get(lease_id)
             if prior is not None:
                 if prior != lease:
-                    raise AdmissionStateError(
-                        "host admission lease identity is duplicated with different records; preserved for inspection",
-                        invalid_field=f"leases[{lease_id}].duplicate",
-                        writer_protocol=f"{STATE_SCHEMA}+{SCOPED_STATE_SCHEMA}",
-                        state_path=self.scoped_state_path,
+                    if not _is_interrupted_migration(prior, lease):
+                        raise AdmissionStateError(
+                            "host admission lease identity is duplicated with different records; preserved for inspection",
+                            invalid_field=f"leases[{lease_id}].duplicate",
+                            writer_protocol=f"{STATE_SCHEMA}+{SCOPED_STATE_SCHEMA}",
+                            state_path=self.scoped_state_path,
+                        )
+                    # Write crash: the legacy store kept the old "execution" kind
+                    # while the scoped store already received the promoted kind.
+                    # Prefer the scoped record; prior is shared by both by_id and union.
+                    prior["kind"] = next(
+                        k
+                        for k in (str(prior.get("kind", "")), str(lease.get("kind", "")))
+                        if SCOPED_EXECUTION_RE.fullmatch(k)
                     )
                 continue
             copied = dict(lease)
