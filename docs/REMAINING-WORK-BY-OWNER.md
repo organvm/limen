@@ -141,7 +141,7 @@ No task is ownerless or external-upstream; every item below is routable by Limen
 - `GEN-organvm-i-theoria-growth-auditor-ci-green-0620` [opencode] Make organvm-i-theoria/growth-auditor CI green
 
 ### organvm/limen (5)
-- `FORCE-copilot-lane` [codex] Add GitHub Copilot coding agent as a Limen dispatch lane
+- `RECOVER-FORCE-copilot-lane` [codex] Recover closed PR task: Add GitHub Copilot coding agent as a Limen dispatch lane
 - `FORCE-route-all-services` [codex] Router fans across ALL paid services, not just the 6 vendors
 - `FORCE-warp-oz-lane` [opencode] Enlist the installed oz-by-warp GitHub App as a dispatch lane
 - `GEN-4444j99-limen-ci-green-0620` [opencode] Make 4444J99/limen CI green
