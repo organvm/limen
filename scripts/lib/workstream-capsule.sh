@@ -69,9 +69,15 @@ workstream_jules_validate_default_base() {
 }
 
 workstream_jules_validate_clean_worktree() {
-  local dirty=""
+  local dirty="" receipt="" receipt_rel=""
 
-  if ! dirty="$(git status --porcelain --untracked-files=all 2>/dev/null)"; then
+  receipt="${LIMEN_WORKTREE:-}/docs/continuations/${LIMEN_CAPSULE_ID:-}/workstream.json"
+  receipt_rel="${receipt#"${LIMEN_WORKTREE:-}/"}"
+  if [[ "$receipt_rel" == "$receipt" || ! -f "$receipt_rel" ]]; then
+    printf 'Jules workstream launch could not resolve its validated receipt path\n' >&2
+    return 2
+  fi
+  if ! dirty="$(git status --porcelain --untracked-files=all -- . ":(exclude)$receipt_rel" 2>/dev/null)"; then
     printf 'Jules workstream launch could not inspect the worktree state\n' >&2
     return 2
   fi
