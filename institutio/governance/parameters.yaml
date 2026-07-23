@@ -291,6 +291,12 @@ parameters:
     self_update: none
     owner: vitals
     note: "Gate for the host-pressure-stale beat sensor (institutio/governance/sensors.yaml section 0o): scripts/host-pressure-stale.py fails when the VITALS record hasn't been written within VITALS_STALE_BEATS worst-case beats while LIMEN_VIGILIA=1. Watches the watcher; a silent gauge also fires one onset-deduped notification (scripts/_notify.py, IF-HOST-PRESSURE form 4). Read by the beat-sensors runner via the SENSORS registry. 0 disables the pass."
+  LIMEN_OPPORTUNITY_STALE:
+    default: "1"
+    env: LIMEN_OPPORTUNITY_STALE
+    self_update: none
+    owner: mail
+    note: "Gate for the opportunity-status-stale beat sensor (institutio/governance/sensors.yaml section 0o2): scripts/state-freshness.py fails (advisory) when logs/opportunity-status.json hasn't been refreshed within ~13h (~2 windows of the 12-beat opportunity-pipeline). Sibling of host-pressure-stale — watches the inbound-lead monitor's WRITER so the 2026-07-21 18h-blind freeze (WS0) can't recur unseen; a frozen writer also fires one onset-deduped notification (scripts/_notify.py). Read by the beat-sensors runner via the SENSORS registry. 0 disables the pass."
   VITALS_RSS_CEILING_MB:
     default: 1024
     env: LIMEN_VITALS_RSS_CEILING_MB
@@ -2876,6 +2882,42 @@ parameters:
     self_update: none
     owner: gitvs
     note: "Per-run timeout (seconds) resolved by the generic sensor runner for GitHub estate reconciliation and by each delegate/reap adapter it dispatches. The runner kills the full command group on overrun and the beat continues fail-open."
+  LIMEN_DECORUM:
+    default: 1
+    env: LIMEN_DECORUM
+    self_update: none
+    owner: decorum
+    note: "Master on/off for the DECORVM professionalization keeper sensor (scripts/decorum-keeper.py, sensors.yaml decorum). 1 (default) federates the estate's six quality organs into one verdict at logs/decorum.json on its declared cadence and reports any public egg-face; 0 disables it. READ-ONLY — the effector that files tasks/issues from findings is a separate gate (LIMEN_DECORUM_APPLY)."
+  LIMEN_BEAT_DECORUM:
+    default: 6
+    env: LIMEN_BEAT_DECORUM
+    self_update: none
+    owner: decorum
+    note: "Cadence (every N beats) of the DECORVM keeper sensor declared in sensors.yaml. The generic scheduled runner resolves this environment override; heartbeat-loop.sh contains no sensor-specific cadence constant."
+  LIMEN_DECORUM_TIMEOUT:
+    default: 120
+    env: LIMEN_DECORUM_TIMEOUT
+    self_update: none
+    owner: decorum
+    note: "Per-run timeout (seconds) resolved by the generic sensor runner for the DECORVM keeper sweep (which spawns the moat-audit subprocess). The runner kills the full command group on overrun and the beat continues fail-open."
+  LIMEN_DECORUM_APPLY:
+    default: 0
+    env: LIMEN_DECORUM_APPLY
+    self_update: none
+    owner: decorum
+    note: "Arms the DECORVM effector (the mentor): 0 (default) plans one bounded ticket per (lane, surface) finding and files nothing; 1 submits each through the tabularius broker as an idempotent create-only upsert (id DECORUM-<lane>-<surface>, so a re-run never re-files), capped by LIMEN_DECORUM_MAX (default 8). Never sends and never wipes — filing a ticket is the only mutation. Ships DARK; observe the DRY plan in the beat log first, and add fleet_runtime: \"1\" here when arming so enactment-audit locks it live."
+  LIMEN_DECORUM_MAX:
+    default: 8
+    env: LIMEN_DECORUM_MAX
+    self_update: none
+    owner: decorum
+    note: "Cap on the number of NEW professionalization tickets the DECORVM effector files per run (idempotent by id, so already-filed findings never re-file). Bounds the board churn while the estate's findings drain over successive beats."
+  LIMEN_DECORUM_SURFACES:
+    default: "$LIMEN_ROOT/institutio/governance/decorum-surfaces.yaml"
+    env: LIMEN_DECORUM_SURFACES
+    self_update: none
+    owner: decorum
+    note: "Path override for the DECORVM sources/threshold registry (declared departments + severity floor + polish/off-platform config; never a surface list — those derive from the department artifacts). Defaults to the in-repo institutio/governance/decorum-surfaces.yaml."
   LIMEN_GITVS_PORTAL_STARS:
     default: 3
     env: LIMEN_GITVS_PORTAL_STARS
@@ -4178,6 +4220,19 @@ parameters:
     owner: mail
     note: "Safety-valve arg for the opportunity-pipeline effector (--notify). When 1, review-due detections append COUNT-ONLY events to the sealed private log ~/Workspace/_people-private/opportunities/review-due.jsonl (ARCA-sealed, never public) and push a count-only line through the existing notify cascade. ON by default because both write targets are private/count-only; set 0 to run detection without recording."
 
+  # --- consulting: constellation register -------------------------------------
+  LIMEN_CONSTELLATION_OVERLAY:
+    default: "~/Workspace/_people-private/constellation/registry-private.yaml"
+    env: LIMEN_CONSTELLATION_OVERLAY
+    self_update: none
+    owner: consulting
+    note: "Path to the constellation register's ARCA-sealed private overlay (pipeline slugs, protocol state, channel state, boundaries). The public half lives at organs/consulting/constellation/registry.yaml; validate-constellation.py Rule #6 checks parity only when this file is reachable, so CI (store absent) degrades cleanly."
+  LIMEN_PEOPLE_STORE:
+    default: "~/Workspace/_people-private/people"
+    env: LIMEN_PEOPLE_STORE
+    self_update: none
+    owner: consulting
+    note: "Root of the private per-person store (open-asks.yaml, protocol artifacts, project dossiers) that constellation check.py predicates and the dossier engine read/write. ARCA-sealed via the _*-private glob; never in any public tree."
   LIMEN_OPPORTUNITY_BRIEF:
     default: "1"
     env: LIMEN_OPPORTUNITY_BRIEF
@@ -4190,6 +4245,24 @@ parameters:
     self_update: none
     owner: mail
     note: "Cadence (every N beats) of the opportunity-brief sensor. 12 beats means it ATTEMPTS several times a day; the script's own once/day stamp dedups so exactly one brief lands. Resolved by the generic scheduled runner (beat-sensors.py --run --source heartbeat --scheduled-only); heartbeat-loop.sh carries no sensor-specific cadence constant."
+  LIMEN_CONVERSION_FUNNEL:
+    default: "1"
+    env: LIMEN_CONVERSION_FUNNEL
+    self_update: none
+    owner: mail
+    note: "Gate for the conversion-funnel beat sensor (institutio/governance/sensors.yaml section heartbeat): two ordered steps — scripts/traffic-collect.py (gh /traffic per value-repo -> logs/observatory/traffic.jsonl) then scripts/conversion-funnel.py (fuses seen->inbound->revenue -> logs/profile-conversion-funnel-latest.json, naming the single bottleneck DISCOVERY|FACE|CLOSE). Read-only; both steps fail-open (a 403 on a repo without push access is recorded, never fatal). The bottleneck is what routes Aug-1 ($10k/wk) effort, and it was dark (manual-only) until this rung; the daily brief surfaces it. 0 disables the pass."
+  LIMEN_BEAT_CONVERSION_FUNNEL:
+    default: 48
+    env: LIMEN_BEAT_CONVERSION_FUNNEL
+    self_update: none
+    owner: mail
+    note: "Cadence (every N beats) of the conversion-funnel sensor. 48 ≈ once-daily at the slowest quiet tempo (~30min/beat -> 24h); leans infrequent because each run makes ~16 repos x 4 gh /traffic calls (network) and the traffic API is a 14-day rolling window that barely moves intra-day. Resolved by the generic scheduled runner (beat-sensors.py --run --source heartbeat --scheduled-only); heartbeat-loop.sh carries no sensor-specific cadence constant."
+  LIMEN_CONVERSION_FUNNEL_TIMEOUT:
+    default: 300
+    env: LIMEN_CONVERSION_FUNNEL_TIMEOUT
+    self_update: none
+    owner: mail
+    note: "Wall-clock bound (seconds) for the conversion-funnel sensor's two steps (traffic-collect + conversion-funnel). 300s covers ~16 repos x 4 gh /traffic calls plus the fuse; exceeding it is silent/non-fatal (the runner records the overrun and the beat continues)."
   LIMEN_OPPORTUNITY_BRIEF_TIMEOUT:
     default: 180
     env: LIMEN_OPPORTUNITY_BRIEF_TIMEOUT
