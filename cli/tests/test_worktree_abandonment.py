@@ -130,6 +130,7 @@ def test_quarantine_cross_filesystem_denial_preserves_source(
             quarantine,
             reason="test",
             receipt_root=tmp_path / "receipts",
+            owner_probe=lambda _path: None,
         )
 
     assert source.exists()
@@ -151,11 +152,50 @@ def test_quarantine_rename_failure_is_typed_and_preserves_source(
             tmp_path / "quarantine",
             reason="test",
             receipt_root=tmp_path / "receipts",
+            owner_probe=lambda _path: None,
         )
 
     assert source.exists()
     assert caught.value.receipt["phase"] == "move"
     assert caught.value.receipt["crash"]["code"] == "quarantine-denied"
+
+
+def test_quarantine_defaults_to_fail_closed_owner_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    monkeypatch.setattr(abandonment, "_default_cwd_owner_probe", lambda _path: 4242)
+
+    with pytest.raises(abandonment.WorktreeAbandonmentError, match="active-process-cwd:4242"):
+        abandonment.quarantine_path(
+            source,
+            tmp_path / "quarantine",
+            reason="test",
+            receipt_root=tmp_path / "receipts",
+        )
+
+    assert source.exists()
+    assert not (tmp_path / "quarantine").exists()
+
+
+def test_quarantine_nesting_denial_has_no_preflight_directory_side_effect(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    quarantine = source / "nested" / "quarantine"
+
+    with pytest.raises(abandonment.WorktreeAbandonmentError, match="nesting"):
+        abandonment.quarantine_path(
+            source,
+            quarantine,
+            reason="test",
+            receipt_root=tmp_path / "receipts",
+            owner_probe=lambda _path: None,
+        )
+
+    assert source.exists()
+    assert not quarantine.exists()
 
 
 def test_stable_zero_byte_lock_removal_requires_exact_unowned_identity(tmp_path: Path) -> None:

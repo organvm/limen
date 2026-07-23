@@ -267,6 +267,11 @@ def purge_generated_payloads(d: Path) -> tuple[bool, str]:
         source = d / relative
         if not source.exists() and not source.is_symlink():
             continue
+        ignored = git(["check-ignore", "-q", "--", relative], d)
+        if ignored.returncode == 1:
+            continue
+        if ignored.returncode != 0:
+            return False, f"generated-ignore-status-unavailable-after-{moved}:{relative}"
         destination_name = f"generated-{d.name}-{relative.replace('/', '_')}-{time.time_ns()}-{source.lstat().st_ino}"
         try:
             quarantine_path(
@@ -743,7 +748,15 @@ def main():
     dirs = [(target.path, target.min_age_h, target.source) for target in targets]
     removed, skipped, failed, deferred = [], [], [], []
     would_reclaim = []
+    generated_failures = {
+        str(row.get("root")): str(row.get("detail", "generated-quarantine-failed"))
+        for row in generated_reclaim.get("failed", [])
+        if isinstance(row, dict) and row.get("root")
+    }
     for d, min_age_h, source in dirs:
+        if d.name in generated_failures:
+            failed.append((d.name, generated_failures[d.name]))
+            continue
         action, reason = classify(d, now, min_age_h, preservation_receipts, source=source)
         if action == "skip":
             skipped.append((d.name, reason))

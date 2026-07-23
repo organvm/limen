@@ -302,13 +302,19 @@ def quarantine_path(
         if stat.S_ISLNK(raw.st_mode):
             raise RuntimeError("source-is-symlink")
         source = source.resolve(strict=True)
-        if owner_probe is not None:
-            owner = owner_probe(source)
-            if owner is not None:
-                code = "owner-probe-unavailable" if owner == -1 else f"active-process-cwd:{owner}"
-                raise RuntimeError(code)
-        quarantine_root.mkdir(parents=True, exist_ok=True)
-        quarantine_root = quarantine_root.resolve(strict=True)
+        owner = (owner_probe or _default_cwd_owner_probe)(source)
+        if owner is not None:
+            code = "owner-probe-unavailable" if owner == -1 else f"active-process-cwd:{owner}"
+            raise RuntimeError(code)
+        proposed_quarantine_root = quarantine_root.expanduser().resolve(strict=False)
+        if (
+            proposed_quarantine_root == source
+            or source in proposed_quarantine_root.parents
+            or proposed_quarantine_root in source.parents
+        ):
+            raise RuntimeError("quarantine-source-destination-nesting")
+        proposed_quarantine_root.mkdir(parents=True, exist_ok=True)
+        quarantine_root = proposed_quarantine_root.resolve(strict=True)
         if quarantine_root == source or source in quarantine_root.parents or quarantine_root in source.parents:
             raise RuntimeError("quarantine-source-destination-nesting")
         if not _same_filesystem(source, quarantine_root):
