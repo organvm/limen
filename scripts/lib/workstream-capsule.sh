@@ -122,7 +122,7 @@ workstream_launch_native_agent() {
   local autonomous="$3"
   local readme="$4"
   local allow_shell_fallback="$5"
-  local binary capsule_prompt="" jules_repo=""
+  local binary capsule_prompt="" jules_repo="" intent_path=""
 
   # A broker credential belongs to the registration client, never to the model process.
   unset LIMEN_CONDUCT_TOKEN
@@ -156,6 +156,13 @@ workstream_launch_native_agent() {
           printf 'Jules workstream launch could not derive an owner/repo from origin; set LIMEN_JULES_REPO\n' >&2
           return 2
         fi
+        intent_path="${readme%/*}/intent.md"
+        if [[ ! -s "$intent_path" ]]; then
+          printf 'Jules workstream launch requires a non-empty intent module\n' >&2
+          return 2
+        fi
+        IFS= read -r -d '' capsule_prompt < "$intent_path" || true
+        capsule_prompt="Do NOT ask for feedback or approval. Work autonomously and return the requested durable receipts. $capsule_prompt"
         exec "$binary" remote new --repo "$jules_repo" --session "$capsule_prompt"
         ;;
       *)
