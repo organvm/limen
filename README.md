@@ -9,7 +9,7 @@ Limen is a cross-agent, cross-repo, budget-capped task intake system. Every AI a
 ### Install
 
 ```bash
-# One-liner (clones repo, installs CLI to venv, sets up PATH)
+#One-liner (clones repo, installs CLI to venv, sets up PATH)
 curl -fsSL https://raw.githubusercontent.com/4444J99/limen/main/install.sh | bash
 source ~/.zshenv
 ```
@@ -24,38 +24,38 @@ brew install ./limen.rb
 ### Quick start
 
 ```bash
-# Point the CLI at the authenticated conduct owner, then inspect live capabilities
+#Point the CLI at the authenticated conduct owner, then inspect live capabilities
 export LIMEN_CONDUCT_URL=https://<authenticated-conduct-endpoint>
-# LIMEN_CONDUCT_TOKEN is injected by the credential wall; never commit or paste it.
+#LIMEN_CONDUCT_TOKEN is injected by the credential wall; never commit or paste it.
 limen conduct capabilities
 
-# Submit bounded work; the remote keeper owns tasks.yaml projection
+#Submit bounded work; the remote keeper owns tasks.yaml projection
 limen conduct submit --packet path/to/work-packet.json
 
-# Check readiness and stale claims before dispatching
+#Check readiness and stale claims before dispatching
 limen doctor --agent jules
 limen release-stale --agent jules --hours 24
 limen release-stale --agent jules --hours 24 --apply
 
-# Dispatch open tasks (default: dry-run preview; add --live to run for real)
+#Dispatch open tasks (default: dry-run preview; add --live to run for real)
 limen dispatch --agent jules --limit 100
 limen dispatch --agent jules --limit 100 --live
 
-# Check the board and budget
+#Check the board and budget
 limen status
 
-# Inspect partial board progress, source readiness, and work-loan metadata
+#Inspect partial board progress, source readiness, and work-loan metadata
 limen progress
 limen progress --view workstream --scope financial --all
 
-# Harvest results from completed dispatches
+#Harvest results from completed dispatches
 limen harvest
 ```
 
 ### Run API & Dashboard locally
 
 ```bash
-# FastAPI backend (port 8000) + Next.js dashboard (port 3000)
+#FastAPI backend (port 8000) + Next.js dashboard (port 3000)
 docker compose up
 ```
 
