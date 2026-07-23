@@ -480,6 +480,21 @@ def test_codex_and_claude_admit_all_structured_write_targets(tmp_path: Path) -> 
             )
             assert escaped["hookSpecificOutput"]["permissionDecisionReason"] == "write-target-outside-worktree"
 
+        conflicting_aliases = adapter.handle(
+            payload(
+                "PreToolUse",
+                cwd=str(first),
+                tool_name="NotebookEdit",
+                tool_input={
+                    "file_path": str(first / "decoy.txt"),
+                    "notebook_path": str(tmp_path / "outside.ipynb"),
+                },
+            ),
+            controller=controller(tmp_path / f"structured-aliases-{adapter_index}"),
+            owner_pid=301 + adapter_index,
+        )
+        assert conflicting_aliases["hookSpecificOutput"]["permissionDecisionReason"] == "write-target-outside-worktree"
+
 
 def test_symlink_aliases_resolve_to_the_same_writer_scope(tmp_path: Path) -> None:
     hook = load_hook()
