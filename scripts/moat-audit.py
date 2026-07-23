@@ -75,10 +75,11 @@ def _granted_repos() -> set[str]:
         return set()
 
 
-def repo_secret_count(repo: str) -> int | None:
-    """Names-only zero-policy probe: how many Actions secrets ride the repo. On a partner-
-    granted repo any push collaborator can exfiltrate a repo secret via a workflow edit, so
-    the policy is ZERO — re-home to org secrets with selected-repo scoping."""
+def repo_secret_posture(repo: str) -> str | None:
+    """Zero-policy probe: does the repo carry ANY Actions secrets. On a partner-granted repo
+    any push collaborator can exfiltrate a repo secret via a workflow edit, so the policy is
+    ZERO — re-home to org secrets with selected-repo scoping. Returns a posture literal only
+    ('clean' / 'exposed'); no secret value, name, or count ever leaves this function."""
     res = subprocess.run(
         ["gh", "api", f"repos/{repo}/actions/secrets", "--jq", ".total_count"],
         capture_output=True, text=True,
@@ -86,7 +87,7 @@ def repo_secret_count(repo: str) -> int | None:
     if res.returncode != 0:
         return None
     try:
-        return int(res.stdout.strip())
+        return "clean" if int(res.stdout.strip()) == 0 else "exposed"
     except ValueError:
         return None
 
@@ -230,7 +231,7 @@ def main() -> int:
             "repo": repo, "visibility": visibility,
             "granted": repo in granted,
             "guard_owed": repo in granted and not guard,
-            "repo_secrets": (repo_secret_count(repo) if repo in granted and not args.no_visibility else None),
+            "repo_secrets": (repo_secret_posture(repo) if repo in granted and not args.no_visibility else None),
             "leak_status": leaks["status"], "leaks": leaks["hits"],
             "leak_ref": leaks.get("ref"),
             "lure": verdict, "lure_detail": detail,
@@ -239,7 +240,7 @@ def main() -> int:
     leaking = [r for r in results if r["leaks"]]
     lure_gaps = [r for r in results if r["lure"] in ("gap", "dark")]
     guard_owed = [r for r in results if r["guard_owed"]]
-    secrets_exposed = [r for r in results if r["repo_secrets"]]
+    secrets_exposed = [r for r in results if r["repo_secrets"] == "exposed"]
     guard_missing = [r for r in results if args.require_guard and not guard_repos.get(r["repo"])]
 
     if args.json:
@@ -266,10 +267,10 @@ def main() -> int:
                 print(f"        · {r['lure_detail']}")
             if r["guard_owed"]:
                 print("        · granted repo without a moat-guard entry — evict-then-guard owed (CONST-*-MOAT)")
-            if r["repo_secrets"]:
-                print(f"        ! {r['repo_secrets']} Actions secret(s) on a partner-granted repo — a push "
-                      f"collaborator can exfiltrate via a workflow edit; re-home to org secrets with "
-                      f"selected-repo scoping (L-PARTNER-GRANTS)")
+            if r["repo_secrets"] == "exposed":
+                print("        ! Actions secrets present on a partner-granted repo — a push "
+                      "collaborator can exfiltrate via a workflow edit; re-home to org secrets with "
+                      "selected-repo scoping (L-PARTNER-GRANTS)")
         print("-" * 68)
         print(f"moat leaks: {len(leaking)}   lure gaps: {len(lure_gaps)}   "
               f"guard owed: {len(guard_owed)}   secrets exposed: {len(secrets_exposed)}")
