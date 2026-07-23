@@ -81,8 +81,8 @@ workstream_jules_validate_default_base() {
     printf 'Jules workstream launch requires current HEAD to equal the live remote default HEAD or its owned unbound reservation\n' >&2
     return 2
   fi
-  if ! git cat-file -e "HEAD:$receipt_rel" 2>/dev/null
-    || ! git diff --quiet HEAD -- "$receipt_rel"; then
+  if ! git cat-file -e "HEAD:$receipt_rel" 2>/dev/null ||
+    ! git diff --quiet HEAD -- "$receipt_rel"; then
     printf 'Jules workstream launch found an invalid unbound reservation receipt\n' >&2
     return 2
   fi
@@ -246,7 +246,7 @@ workstream_jules_publish_receipt() {
   local contract_helper="${LIMEN_CAPSULE_DIR:-}/workstream-contract.py"
   local timeout_seconds="${LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS:-120}"
   local branch="" receipt_rel="" publish_commit=""
-  local staged_paths="" current_subject="" changed_paths="" parent_subject=""
+  local staged_paths="" current_subject="" changed_paths="" parent_subject="" clean_rc=0
 
   branch="$(git branch --show-current 2>/dev/null || true)"
   receipt_rel="${receipt#"${LIMEN_WORKTREE:-}/"}"
@@ -254,8 +254,9 @@ workstream_jules_publish_receipt() {
     printf 'Jules session receipt could not resolve its topic branch or tracked path\n' >&2
     return 2
   fi
-  if ! workstream_jules_validate_clean_worktree; then
-    return $?
+  workstream_jules_validate_clean_worktree || clean_rc=$?
+  if [[ "$clean_rc" -ne 0 ]]; then
+    return "$clean_rc"
   fi
   if ! git add -- "$receipt_rel"; then
     printf 'Jules session receipt could not be staged\n' >&2

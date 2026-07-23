@@ -337,7 +337,8 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
             "Jules Nonzero Receipt",
         ],
     )
-    assert failed_after_output.exit_code == 42
+    assert failed_after_output.exit_code != 0
+    assert "durable session receipt" in capfd.readouterr().err
     monkeypatch.delenv("JULES_FAIL_AFTER_OUTPUT")
     nonzero_wt = repo / ".worktrees" / "jules-nonzero-receipt"
     nonzero_receipt = json.loads(
