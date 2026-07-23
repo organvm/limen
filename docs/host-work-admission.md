@@ -77,6 +77,8 @@ The Codex and Claude `PreToolUse` adapters consume the same lane-neutral action 
 - supported `cd`, `git -C`, redirection, structured edit/write, and apply-patch targets are
   canonicalized before containment checks; opaque mutation-capable compounds, background commands,
   command substitutions, and symlink escapes are denied;
+- structured write tools whose client payload omits the target fail closed as
+  `write-target-unavailable`;
 - plan-mode and explicit `planning_only=true` / `build_allowed=false` execution profiles cannot
   acquire a writer lease;
 - guarded heavy commands must pass the live global-heavy/pressure check;

@@ -124,7 +124,11 @@ def action_denial_supported() -> bool:
 
 def _tool_input(payload: dict[str, Any]) -> dict[str, Any]:
     value = payload.get("tool_input") or {}
-    return value if isinstance(value, dict) else {}
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        return {"input": value}
+    return {}
 
 
 def _tool_command(payload: dict[str, Any]) -> str:

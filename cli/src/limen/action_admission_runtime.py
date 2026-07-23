@@ -60,6 +60,12 @@ def admit_pre_tool_action(
         targets = target_paths(payload, cwd)
     except (AdmissionInputError, ValueError) as exc:
         return ToolAdmission(False, str(exc))
+    tool_name = str(payload.get("tool_name") or payload.get("tool") or "").strip().lower()
+    structured_write = tool_name in {"edit", "write", "apply_patch", "applypatch"} or (
+        "apply" in tool_name and "patch" in tool_name
+    )
+    if structured_write and not targets:
+        return ToolAdmission(False, "write-target-unavailable")
     if not scope.linked:
         return ToolAdmission(False, "shared-checkout-write")
     if any(not path_within(path, scope.top_level) for path in targets):

@@ -234,6 +234,18 @@ def test_primary_checkout_write_and_out_of_scope_target_are_denied(tmp_path: Pat
         owner_pid=101,
     )
     assert escaped["hookSpecificOutput"]["permissionDecisionReason"] == "write-target-outside-worktree"
+
+    freeform = hook.handle(
+        payload(
+            "PreToolUse",
+            cwd=str(first),
+            tool_name="apply_patch",
+            tool_input="*** Add File: ../outside.txt\n+unsafe\n",
+        ),
+        controller=service,
+        owner_pid=101,
+    )
+    assert freeform["hookSpecificOutput"]["permissionDecisionReason"] == "write-target-outside-worktree"
     assert service.status(probe=False)["leases"] == []
 
 
@@ -292,6 +304,15 @@ def test_conflicting_or_missing_effective_cwd_fails_closed(tmp_path: Path) -> No
     )
     output = hook.handle(missing, controller=service, owner_pid=101)
     assert output["hookSpecificOutput"]["permissionDecisionReason"] == "effective-cwd-unavailable"
+
+    missing_target = payload(
+        "PreToolUse",
+        cwd=str(first),
+        tool_name="apply_patch",
+        tool_input={},
+    )
+    output = hook.handle(missing_target, controller=service, owner_pid=101)
+    assert output["hookSpecificOutput"]["permissionDecisionReason"] == "write-target-unavailable"
     assert service.status(probe=False)["leases"] == []
 
 
