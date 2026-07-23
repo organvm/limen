@@ -18,18 +18,15 @@ workstream_native_binary() {
 }
 
 workstream_jules_repository() {
-  local repository="${LIMEN_JULES_REPO:-}"
-  local origin=""
+  local repository=""
+  local origin="$(git remote get-url origin 2>/dev/null || true)"
 
-  if [[ -z "$repository" ]]; then
-    origin="$(git remote get-url origin 2>/dev/null || true)"
-    case "$origin" in
-      git@github.com:*) repository="${origin#git@github.com:}" ;;
-      https://github.com/*) repository="${origin#https://github.com/}" ;;
-      ssh://git@github.com/*) repository="${origin#ssh://git@github.com/}" ;;
-    esac
-    repository="${repository%.git}"
-  fi
+  case "$origin" in
+    git@github.com:*) repository="${origin#git@github.com:}" ;;
+    https://github.com/*) repository="${origin#https://github.com/}" ;;
+    ssh://git@github.com/*) repository="${origin#ssh://git@github.com/}" ;;
+  esac
+  repository="${repository%.git}"
 
   if [[ ! "$repository" =~ ^[^/[:space:]]+/[^/[:space:]]+$ ]]; then
     return 1
@@ -153,7 +150,7 @@ workstream_launch_native_agent() {
         ;;
       jules)
         if ! jules_repo="$(workstream_jules_repository)"; then
-          printf 'Jules workstream launch could not derive an owner/repo from origin; set LIMEN_JULES_REPO\n' >&2
+          printf 'Jules workstream launch could not derive an owner/repo from the GitHub origin\n' >&2
           return 2
         fi
         intent_path="${readme%/*}/intent.md"
