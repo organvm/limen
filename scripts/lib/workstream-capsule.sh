@@ -663,6 +663,9 @@ PY
       workstream_native_binary \
       workstream_jules_repository \
       workstream_jules_validate_default_base \
+      workstream_jules_validate_clean_worktree \
+      workstream_jules_validate_unbound_receipt \
+      workstream_jules_reserve_receipt_branch \
       workstream_jules_sync_receipt \
       workstream_jules_publish_receipt \
       workstream_export_context \
