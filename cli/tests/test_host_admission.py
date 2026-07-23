@@ -565,11 +565,17 @@ def test_interrupted_migration_write_converges_on_scoped_record(tmp_path: Path) 
     # _load() must converge automatically without raising AdmissionStateError.
     result = service.status(probe=False)
 
-    assert result["allowed"] is not None  # no exception raised
+    assert result["allowed"] is True
     leases = result["leases"]
     assert len(leases) == 1
     assert leases[0]["lease_id"] == lease_id
     assert leases[0]["kind"] == scope.lease_kind
+
+    legacy = json.loads(service.state_path.read_text(encoding="utf-8"))
+    scoped = json.loads(service.scoped_state_path.read_text(encoding="utf-8"))
+    assert [lease["kind"] for lease in legacy["leases"]] == ["execution"]
+    assert scoped["leases"] == leases
+    assert service.status(probe=False)["leases"] == leases
 
 
 def test_interrupted_migration_unrelated_duplicate_still_raises(tmp_path: Path) -> None:
