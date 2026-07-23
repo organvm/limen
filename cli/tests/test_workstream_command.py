@@ -198,6 +198,15 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
         "id": "12345678901234567890",
         "url": "https://jules.google.com/session/12345678901234567890",
     }
+    reserved_receipt = json.loads(
+        _git(
+            "show",
+            "HEAD^:docs/continuations/jules-cloud/workstream.json",
+            cwd=wt,
+        ).stdout
+    )
+    assert reserved_receipt["schema"] == "limen.workstream.receipt.v1"
+    assert "provider_run" not in reserved_receipt
     assert _git("status", "--short", cwd=wt).stdout == ""
     assert (
         _git("log", "-1", "--format=%s", cwd=wt).stdout.strip()

@@ -121,18 +121,34 @@ PY
 workstream_jules_reserve_receipt_branch() {
   local contract_helper="${LIMEN_CAPSULE_DIR:-}/workstream-contract.py"
   local timeout_seconds="${LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS:-120}"
-  local branch="" current_head="" tree="" reservation_id="" reservation_commit=""
+  local branch="" current_head="" receipt="" receipt_rel=""
+  local reservation_index="" reservation_tree="" reservation_id="" reservation_commit=""
 
   branch="$(git branch --show-current 2>/dev/null || true)"
   current_head="$(git rev-parse HEAD 2>/dev/null || true)"
-  tree="$(git rev-parse 'HEAD^{tree}' 2>/dev/null || true)"
-  if [[ -z "$branch" || -z "$current_head" || -z "$tree" || ! -f "$contract_helper" ]]; then
-    printf 'Jules workstream launch could not resolve its receipt branch or contract helper\n' >&2
+  receipt="${LIMEN_WORKTREE:-}/docs/continuations/${LIMEN_CAPSULE_ID:-}/workstream.json"
+  receipt_rel="${receipt#"${LIMEN_WORKTREE:-}/"}"
+  if [[ -z "$branch" || -z "$current_head" || ! -f "$contract_helper"
+    || "$receipt_rel" == "$receipt" || ! -f "$receipt_rel" ]]; then
+    printf 'Jules workstream launch could not resolve its receipt branch, tracked path, or contract helper\n' >&2
     return 2
   fi
+  if ! reservation_index="$(mktemp "${TMPDIR:-/tmp}/limen-jules-reservation-index.XXXXXX")"; then
+    printf 'Jules workstream launch could not allocate its reservation index\n' >&2
+    return 2
+  fi
+  rm -f "$reservation_index"
+  if ! GIT_INDEX_FILE="$reservation_index" git read-tree "$current_head"
+    || ! GIT_INDEX_FILE="$reservation_index" git add -- "$receipt_rel"
+    || ! reservation_tree="$(GIT_INDEX_FILE="$reservation_index" git write-tree)"; then
+    rm -f "$reservation_index"
+    printf 'Jules workstream launch could not build its durable receipt reservation\n' >&2
+    return 2
+  fi
+  rm -f "$reservation_index"
   reservation_id="${LIMEN_SESSION_ID:-workstream}:$$:${RANDOM:-0}"
   if ! reservation_commit="$(printf 'chore: reserve Jules launch %s\n' "$reservation_id" | \
-    git -c commit.gpgsign=false commit-tree "$tree" -p "$current_head")"; then
+    git -c commit.gpgsign=false commit-tree "$reservation_tree" -p "$current_head")"; then
     printf 'Jules workstream launch could not create its reservation commit\n' >&2
     return 2
   fi
@@ -142,12 +158,11 @@ workstream_jules_reserve_receipt_branch() {
     printf 'Jules workstream launch could not reserve a unique durable receipt branch\n' >&2
     return 2
   fi
-  if ! git merge --ff-only "$reservation_commit" >/dev/null; then
+  if ! git reset --mixed "$reservation_commit" >/dev/null; then
     printf 'Jules workstream launch could not bind its local reservation commit\n' >&2
     return 2
   fi
 }
-
 workstream_jules_sync_receipt() {
   local receipt="$1"
   local session_id="$2"
