@@ -133,7 +133,7 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
         (
             "#!/usr/bin/env bash\n"
             'if [[ "$*" == *"remote get-url origin"* ]]; then\n'
-            '  printf "%s\\n" "${FAKE_ORIGIN:-https://github.com/organvm/demo-repo.git/}"\n'
+            '  printf "%s\\n" "${FAKE_ORIGIN:-https://x-access-token:redacted@github.com/organvm/demo-repo.git/}"\n'
             "  exit 0\n"
             "fi\n"
             'if [[ "$*" == *"fetch --prune"* ]]; then exit 0; fi\n'
@@ -201,6 +201,7 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     assert result.exit_code == 0, result.output
     args = args_capture.read_text(encoding="utf-8").splitlines()
     assert args[:4] == ["remote", "new", "--repo", "organvm/demo-repo"]
+    assert all("redacted" not in arg for arg in args)
     assert args[4] == "--session"
     assert args[5].startswith("Do NOT ask for feedback or approval.")
     assert "Ship the exact bounded packet." in args[5]
@@ -232,33 +233,6 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     assert all("HEAD:" not in push for push in pushes)
     assert all(":refs/heads/work/jules-cloud" in push for push in pushes)
     assert events_capture.read_text(encoding="utf-8").splitlines() == ["push", "jules", "push"]
-
-    args_capture.unlink()
-    credentialed_origin = "https://x-access-token:redacted@github.com/organvm/demo-repo.git"
-    monkeypatch.setenv("FAKE_ORIGIN", credentialed_origin)
-    credentialed = CliRunner().invoke(
-        main,
-        [
-            "workstream",
-            "--autonomous",
-            "--agent",
-            "jules",
-            "--prompt",
-            "Strip credentials before selecting the cloud repository.",
-            str(repo),
-            "Jules Credentialed Origin",
-        ],
-    )
-    assert credentialed.exit_code == 0, credentialed.output
-    credentialed_args = args_capture.read_text(encoding="utf-8").splitlines()
-    assert credentialed_args[:4] == [
-        "remote",
-        "new",
-        "--repo",
-        "organvm/demo-repo",
-    ]
-    assert all("redacted" not in arg for arg in credentialed_args)
-    monkeypatch.delenv("FAKE_ORIGIN")
 
     kickstart = wt / ".limen-workstream" / "kickstart.sh"
     kickstart_text = kickstart.read_text(encoding="utf-8")
