@@ -206,10 +206,8 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     assert "push --set-upstream origin HEAD:work/jules-cloud" in push_capture.read_text(encoding="utf-8")
     assert events_capture.read_text(encoding="utf-8").splitlines() == ["push", "jules", "push"]
     kickstart = wt / ".limen-workstream" / "kickstart.sh"
-    assert (
-        'if [[ "$agent" != "jules" ]]; then\n  exec 9>&-\nfi'
-        in kickstart.read_text(encoding="utf-8")
-    )
+    kickstart_text = kickstart.read_text(encoding="utf-8")
+    assert 'if [[ "$agent" != "jules" ]]; then\n  exec 9>&-\nfi' in kickstart_text
 
     original_receipt = receipt_path.read_text(encoding="utf-8")
     args_capture.unlink()
