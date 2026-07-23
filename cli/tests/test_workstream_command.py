@@ -233,7 +233,6 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     assert all("HEAD:" not in push for push in pushes)
     assert all(":refs/heads/work/jules-cloud" in push for push in pushes)
     assert events_capture.read_text(encoding="utf-8").splitlines() == ["push", "jules", "push"]
-
     kickstart = wt / ".limen-workstream" / "kickstart.sh"
     kickstart_text = kickstart.read_text(encoding="utf-8")
     assert 'if [[ "$agent" != "jules" ]]; then\n  exec 9>&-\nfi' in kickstart_text
