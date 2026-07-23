@@ -118,9 +118,26 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
         encoding="utf-8",
     )
     fake_jules.chmod(0o755)
+    real_git = shutil.which("git")
+    assert real_git is not None
+    fake_git = fake_bin / "git"
+    fake_git.write_text(
+        (
+            "#!/usr/bin/env bash\n"
+            'if [[ "$*" == *"remote get-url origin"* ]]; then\n'
+            '  printf "git@github.com:organvm/demo-repo.git\\n"\n'
+            "  exit 0\n"
+            "fi\n"
+            'if [[ "$*" == *"fetch --prune"* ]]; then exit 0; fi\n'
+            'exec "$REAL_GIT" "$@"\n'
+        ),
+        encoding="utf-8",
+    )
+    fake_git.chmod(0o755)
     args_capture = tmp_path / "jules-args.txt"
     monkeypatch.setenv("LIMEN_ROOT", str(ROOT))
     monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ['PATH']}")
+    monkeypatch.setenv("REAL_GIT", real_git)
     monkeypatch.setenv("SESSION_ARGS_CAPTURE", str(args_capture))
 
     result = CliRunner().invoke(
