@@ -349,13 +349,18 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
         timeout=10,
         check=False,
     )
-    assert retried.returncode == 0, retried.stdout + retried.stderr
+    assert retried.returncode != 0
+    assert "unbound Jules launch reservation requires recovery" in retried.stderr
     retry_events = events_capture.read_text(encoding="utf-8")[len(timeout_events_before) :].splitlines()
-    assert retry_events == ["push", "jules", "jules", "push"]
+    assert retry_events == ["push", "jules"]
+    assert not args_capture.exists()
     timeout_receipt = json.loads(
         (timeout_wt / "docs/continuations/jules-timeout/workstream.json").read_text(encoding="utf-8")
     )
-    assert timeout_receipt["provider_run"]["id"] == "12345678901234567890"
+    assert "provider_run" not in timeout_receipt
+    assert _git("log", "-1", "--format=%s", cwd=timeout_wt).stdout.strip().startswith(
+        "chore: reserve Jules launch "
+    )
 
     args_capture.unlink(missing_ok=True)
     monkeypatch.setenv("JULES_FAIL_AFTER_OUTPUT", "1")
