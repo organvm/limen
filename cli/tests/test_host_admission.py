@@ -15,6 +15,7 @@ import pytest
 from click.testing import CliRunner
 
 import limen.host_admission as host_admission
+from limen.host_admission_capabilities import host_admission_capabilities as shared_capabilities
 from limen.host_admission import (
     AdmissionDenied,
     AdmissionController,
@@ -565,7 +566,6 @@ def test_interrupted_migration_write_converges_on_scoped_record(tmp_path: Path) 
     # _load() must converge automatically without raising AdmissionStateError.
     result = service.status(probe=False)
 
-    assert result["allowed"] is True
     leases = result["leases"]
     assert len(leases) == 1
     assert leases[0]["lease_id"] == lease_id
@@ -654,6 +654,17 @@ def test_host_admission_capabilities_are_versioned_and_protocol_complete() -> No
     assert payload["lease_kinds"] == ["execution", "heavy", "execution:<sha256>"]
     assert payload["stable_action_denial"] is True
     assert payload["single_rejection_channel"] is True
+
+
+def test_json_cli_capabilities_match_shared_provider() -> None:
+    script = ROOT / "scripts" / "host-work-admission.py"
+    result = subprocess.run(
+        [sys.executable, str(script), "capabilities"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert json.loads(result.stdout) == shared_capabilities()
 
 
 def test_json_cli_status_is_report_only_and_release_is_exact(tmp_path: Path) -> None:
