@@ -342,9 +342,7 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     monkeypatch.delenv("JULES_FAIL_AFTER_OUTPUT")
     nonzero_wt = repo / ".worktrees" / "jules-nonzero-receipt"
     nonzero_receipt = json.loads(
-        (nonzero_wt / "docs/continuations/jules-nonzero-receipt/workstream.json").read_text(
-            encoding="utf-8"
-        )
+        (nonzero_wt / "docs/continuations/jules-nonzero-receipt/workstream.json").read_text(encoding="utf-8")
     )
     assert nonzero_receipt["provider_run"]["id"] == "12345678901234567890"
     assert (
