@@ -44,7 +44,7 @@ workstream_jules_validate_default_base() {
   local branch="" receipt="" receipt_rel="" current_parent="" current_subject=""
   local remote_branch_line="" remote_branch_head=""
 
-  unset LIMEN_JULES_REUSE_RESERVATION
+  workstream_jules_reuse_reservation=0
   if [[ ! -f "$contract_helper" ]]; then
     printf 'Jules workstream launch requires the capsule contract helper\n' >&2
     return 2
@@ -99,7 +99,7 @@ workstream_jules_validate_default_base() {
     printf 'Jules workstream launch reservation no longer owns its remote branch\n' >&2
     return 2
   fi
-  export LIMEN_JULES_REUSE_RESERVATION=1
+  workstream_jules_reuse_reservation=1
 }
 
 workstream_jules_validate_clean_worktree() {
@@ -433,7 +433,7 @@ workstream_launch_native_agent() {
         capsule_prompt="Do NOT ask for feedback or approval. Work autonomously and return the requested durable receipts. $capsule_prompt"
         # The pre-session push is the durable recovery capsule. Preserve it if a later provider
         # step fails; deleting it after Jules may have started would orphan the cloud run.
-        if [[ "${LIMEN_JULES_REUSE_RESERVATION:-0}" != "1" ]]; then
+        if [[ "${workstream_jules_reuse_reservation:-0}" != "1" ]]; then
           workstream_jules_reserve_receipt_branch || jules_rc=$?
           if [[ "$jules_rc" -ne 0 ]]; then
             return "$jules_rc"
