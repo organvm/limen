@@ -116,7 +116,9 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     fake_jules.write_text(
         (
             "#!/usr/bin/env bash\n"
+            'printf "jules\\n" >> "$EVENTS_CAPTURE"\n'
             'printf "%s\\n" "$@" > "$SESSION_ARGS_CAPTURE"\n'
+            'if [[ "${JULES_SLEEP:-0}" == "1" ]]; then sleep 5; fi\n'
             'printf "Session is created.\\nID: 12345678901234567890\\nTask: test\\n\\n'
             'URL: https://jules.google.com/session/12345678901234567890\\n"\n'
         ),
@@ -138,8 +140,16 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
             '  printf "%s\\tHEAD\\n" "$REMOTE_HEAD"\n'
             "  exit 0\n"
             "fi\n"
+            'if [[ "$*" == *"status --porcelain --untracked-files=all"* && "${REPORT_DIRTY:-0}" == "1" ]]; then\n'
+            '  printf " M local-only.txt\\n"\n'
+            "  exit 0\n"
+            "fi\n"
+            'if [[ "$*" == *"commit -qm chore: preserve Jules session"* && "${FAIL_RECEIPT_COMMIT:-0}" == "1" ]]; then\n'
+            "  exit 42\n"
+            "fi\n"
             'if [[ "$*" == *"push --set-upstream origin"* ]]; then\n'
-            '  printf "%s\\n" "$*" > "$PUSH_CAPTURE"\n'
+            '  printf "%s\\n" "$*" >> "$PUSH_CAPTURE"\n'
+            '  printf "push\\n" >> "$EVENTS_CAPTURE"\n'
             "  exit 0\n"
             "fi\n"
             'exec "$REAL_GIT" "$@"\n'
@@ -149,12 +159,14 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     fake_git.chmod(0o755)
     args_capture = tmp_path / "jules-args.txt"
     push_capture = tmp_path / "jules-push.txt"
+    events_capture = tmp_path / "jules-events.txt"
     remote_head = _git("rev-parse", "HEAD", cwd=repo).stdout.strip()
     monkeypatch.setenv("LIMEN_ROOT", str(ROOT))
     monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ['PATH']}")
     monkeypatch.setenv("REAL_GIT", real_git)
     monkeypatch.setenv("REMOTE_HEAD", remote_head)
     monkeypatch.setenv("PUSH_CAPTURE", str(push_capture))
+    monkeypatch.setenv("EVENTS_CAPTURE", str(events_capture))
     monkeypatch.setenv("SESSION_ARGS_CAPTURE", str(args_capture))
 
     result = CliRunner().invoke(
@@ -192,6 +204,88 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
         == "chore: preserve Jules session 12345678901234567890 receipt"
     )
     assert "push --set-upstream origin HEAD:work/jules-cloud" in push_capture.read_text(encoding="utf-8")
+    assert events_capture.read_text(encoding="utf-8").splitlines() == ["push", "jules", "push"]
+    kickstart = wt / ".limen-workstream" / "kickstart.sh"
+    assert 'if [[ "$agent" != "jules" ]]; then\n  exec 9>&-\nfi' in kickstart.read_text(
+        encoding="utf-8"
+    )
+
+    original_receipt = receipt_path.read_text(encoding="utf-8")
+    args_capture.unlink()
+    events_before = events_capture.read_text(encoding="utf-8")
+    relaunch = subprocess.run(
+        ["bash", str(kickstart)],
+        cwd=wt,
+        env={**os.environ},
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    assert relaunch.returncode != 0
+    assert "already has a provider run" in relaunch.stderr
+    assert receipt_path.read_text(encoding="utf-8") == original_receipt
+    assert events_capture.read_text(encoding="utf-8") == events_before
+    assert not args_capture.exists()
+
+    monkeypatch.setenv("REPORT_DIRTY", "1")
+    dirty = CliRunner().invoke(
+        main,
+        [
+            "workstream",
+            "--autonomous",
+            "--agent",
+            "jules",
+            "--prompt",
+            "Local-only state must fail closed.",
+            str(repo),
+            "Jules Dirty",
+        ],
+    )
+    assert dirty.exit_code != 0
+    assert "requires a clean worktree" in capfd.readouterr().err
+    assert not args_capture.exists()
+    monkeypatch.delenv("REPORT_DIRTY")
+
+    monkeypatch.setenv("JULES_SLEEP", "1")
+    monkeypatch.setenv("LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS", "1")
+    started = time.monotonic()
+    timed_out = CliRunner().invoke(
+        main,
+        [
+            "workstream",
+            "--autonomous",
+            "--agent",
+            "jules",
+            "--prompt",
+            "The provider call must be bounded.",
+            str(repo),
+            "Jules Timeout",
+        ],
+    )
+    assert timed_out.exit_code != 0
+    assert time.monotonic() - started < 4
+    monkeypatch.delenv("JULES_SLEEP")
+    monkeypatch.delenv("LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS")
+
+    args_capture.unlink()
+    monkeypatch.setenv("FAIL_RECEIPT_COMMIT", "1")
+    commit_failed = CliRunner().invoke(
+        main,
+        [
+            "workstream",
+            "--autonomous",
+            "--agent",
+            "jules",
+            "--prompt",
+            "A failed receipt commit must fail closed.",
+            str(repo),
+            "Jules Commit Failure",
+        ],
+    )
+    assert commit_failed.exit_code != 0
+    assert "could not publish its receipt" in capfd.readouterr().err
+    monkeypatch.delenv("FAIL_RECEIPT_COMMIT")
 
     args_capture.unlink()
     monkeypatch.setenv("REMOTE_HEAD", "0" * 40)

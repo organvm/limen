@@ -68,6 +68,55 @@ workstream_jules_validate_default_base() {
   fi
 }
 
+workstream_jules_validate_clean_worktree() {
+  local dirty=""
+
+  if ! dirty="$(git status --porcelain --untracked-files=all 2>/dev/null)"; then
+    printf 'Jules workstream launch could not inspect the worktree state\n' >&2
+    return 2
+  fi
+  if [[ -n "$dirty" ]]; then
+    printf 'Jules workstream launch requires a clean worktree; local changes are not visible in cloud\n' >&2
+    return 2
+  fi
+}
+
+workstream_jules_validate_unbound_receipt() {
+  local receipt="$1"
+
+  python3 - "$receipt" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+receipt_path = Path(sys.argv[1])
+try:
+    receipt = json.loads(receipt_path.read_text())
+except (OSError, json.JSONDecodeError) as exc:
+    raise SystemExit(f"invalid Jules session receipt target: {exc}")
+if receipt.get("provider_run") is not None:
+    raise SystemExit("Jules capsule already has a provider run; emit a successor capsule")
+PY
+}
+
+workstream_jules_reserve_receipt_branch() {
+  local contract_helper="${LIMEN_CAPSULE_DIR:-}/workstream-contract.py"
+  local timeout_seconds="${LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS:-120}"
+  local branch=""
+
+  branch="$(git branch --show-current 2>/dev/null || true)"
+  if [[ -z "$branch" || ! -f "$contract_helper" ]]; then
+    printf 'Jules workstream launch could not resolve its receipt branch or contract helper\n' >&2
+    return 2
+  fi
+  if ! GIT_TERMINAL_PROMPT=0 python3 "$contract_helper" run-bounded \
+    --timeout-seconds "$timeout_seconds" -- \
+    git push --set-upstream origin "HEAD:$branch"; then
+    printf 'Jules workstream launch could not reserve a durable receipt branch\n' >&2
+    return 2
+  fi
+}
+
 workstream_jules_sync_receipt() {
   local receipt="$1"
   local session_id="$2"
@@ -128,8 +177,11 @@ workstream_jules_publish_receipt() {
     printf 'Jules session receipt did not produce a tracked change\n' >&2
     return 2
   fi
-  git -c commit.gpgsign=false commit -qm \
-    "chore: preserve Jules session $session_id receipt" -- "$receipt_rel"
+  if ! git -c commit.gpgsign=false commit -qm \
+    "chore: preserve Jules session $session_id receipt" -- "$receipt_rel"; then
+    printf 'Jules session receipt could not be committed\n' >&2
+    return 2
+  fi
   GIT_TERMINAL_PROMPT=0 python3 "$contract_helper" run-bounded \
     --timeout-seconds "$timeout_seconds" -- \
     git push --set-upstream origin "HEAD:$branch"
@@ -221,6 +273,7 @@ workstream_launch_native_agent() {
   local readme="$4"
   local allow_shell_fallback="$5"
   local binary capsule_prompt="" jules_repo="" intent_path=""
+  local contract_helper="" timeout_seconds=""
   local jules_output="" jules_rc=0 jules_session_id="" jules_session_url="" jules_receipt=""
 
   # A broker credential belongs to the registration client, never to the model process.
@@ -260,6 +313,15 @@ workstream_launch_native_agent() {
         else
           return $?
         fi
+        jules_rc=0
+        workstream_jules_validate_clean_worktree || jules_rc=$?
+        if [[ "$jules_rc" -ne 0 ]]; then
+          return "$jules_rc"
+        fi
+        workstream_jules_reserve_receipt_branch || jules_rc=$?
+        if [[ "$jules_rc" -ne 0 ]]; then
+          return "$jules_rc"
+        fi
         intent_path="${readme%/*}/intent.md"
         if [[ ! -s "$intent_path" ]]; then
           printf 'Jules workstream launch requires a non-empty intent module\n' >&2
@@ -267,8 +329,12 @@ workstream_launch_native_agent() {
         fi
         IFS= read -r -d '' capsule_prompt < "$intent_path" || true
         capsule_prompt="Do NOT ask for feedback or approval. Work autonomously and return the requested durable receipts. $capsule_prompt"
+        contract_helper="${LIMEN_CAPSULE_DIR:-}/workstream-contract.py"
+        timeout_seconds="${LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS:-120}"
         jules_rc=0
-        jules_output="$("$binary" remote new --repo "$jules_repo" --session "$capsule_prompt" 2>&1)" || jules_rc=$?
+        jules_output="$(python3 "$contract_helper" run-bounded \
+          --timeout-seconds "$timeout_seconds" -- \
+          "$binary" remote new --repo "$jules_repo" --session "$capsule_prompt" 2>&1)" || jules_rc=$?
         printf '%s\n' "$jules_output"
         if [[ "$jules_rc" -ne 0 ]]; then
           return "$jules_rc"
@@ -868,6 +934,9 @@ if receipt != expected:
 PY
 }
 validate_capsule_receipt
+if [[ "\$agent" == "jules" ]]; then
+  workstream_jules_validate_unbound_receipt "\$receipt"
+fi
 refresh_workstream_runway() {
   local runway_fields=""
   if runway_fields="\$(python3 "\$contract_helper" admit-identity \
@@ -932,7 +1001,9 @@ if [[ "\$conduct" -eq 1 ]]; then
   workstream_register_conduct_session "\$agent" "\$PWD" "\$agent_capabilities"
 fi
 refresh_workstream_runway
-exec 9>&-
+if [[ "\$agent" != "jules" ]]; then
+  exec 9>&-
+fi
 workstream_launch_native_agent \
   "\$agent" "\$registry_binary" "$autonomous" "\$readme" "\$allow_shell_fallback"
 EOF
