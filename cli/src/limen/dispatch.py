@@ -1577,7 +1577,7 @@ def session_id() -> str:
     return os.environ.get("CLAUDE_SESSION_ID", os.environ.get("GEMINI_SESSION_ID", "cli"))
 
 
-def call_agent_dispatch(agent: str, task: Task, dry_run: bool) -> bool | str:
+def call_agent_dispatch(agent: str, task: Task, dry_run: bool) -> bool | str | PlanHandoffResult:
     agent = canonical_agent(agent)
     try:
         workstream_packet = _workstream_packet_for(task)
@@ -1635,7 +1635,7 @@ def _journaled_agent_dispatch(
     dry_run: bool,
     reservation_id: str,
     journal_root: Path | None = None,
-) -> bool | str:
+) -> bool | str | PlanHandoffResult:
     """Run one provider only after its work-capacity reservation is durable."""
 
     if dry_run:
@@ -3481,11 +3481,11 @@ def _blocked_result(reason: str) -> str:
     return _FAILED_BLOCKED_PREFIX + " ".join((reason or "blocked").split())[:500]
 
 
-def _is_blocked_result(result: bool | str) -> bool:
+def _is_blocked_result(result: object) -> bool:
     return isinstance(result, str) and result.startswith(_FAILED_BLOCKED_PREFIX)
 
 
-def _blocked_reason(result: bool | str) -> str:
+def _blocked_reason(result: object) -> str:
     if not _is_blocked_result(result):
         return ""
     return str(result)[len(_FAILED_BLOCKED_PREFIX) :]
@@ -3495,11 +3495,11 @@ def _workstream_successor_result(reason: str) -> str:
     return _WORKSTREAM_SUCCESSOR_PREFIX + " ".join((reason or "workstream boundary reached").split())[:500]
 
 
-def _is_workstream_successor_result(result: bool | str) -> bool:
+def _is_workstream_successor_result(result: object) -> bool:
     return isinstance(result, str) and result.startswith(_WORKSTREAM_SUCCESSOR_PREFIX)
 
 
-def _workstream_successor_reason(result: bool | str) -> str:
+def _workstream_successor_reason(result: object) -> str:
     if not _is_workstream_successor_result(result):
         return ""
     return str(result)[len(_WORKSTREAM_SUCCESSOR_PREFIX) :]
@@ -4688,7 +4688,7 @@ def _isolated_local_run(
             _cleanup_isolated_worktree(repo_dir, wt, branch, checkout_ref, pushed=pushed, task=task)
 
 
-def _call_local_agent(agent: str, task: Task, dry_run: bool) -> bool | str:
+def _call_local_agent(agent: str, task: Task, dry_run: bool) -> bool | str | PlanHandoffResult:
     if not agent_can_run_task(agent, task):
         print(f"  SKIP {task.id}: {agent} is gated for Limen registry discovery tasks")
         return False
@@ -5091,11 +5091,13 @@ def _apply_result(
     # same failure would violate the fixed-point contract.
     if successor_held:
         return
-    plan_handoff = isinstance(result, PlanHandoffResult)
-    successful_result = plan_handoff or (bool(result) and result not in {_NOOP, _RATELIMIT, _TIMEOUT})
-    successful_result = (
-        successful_result and not _is_blocked_result(result) and not _is_workstream_successor_result(result)
-    )
+    if isinstance(result, PlanHandoffResult):
+        successful_result = True
+    else:
+        successful_result = bool(result) and result not in {_NOOP, _RATELIMIT, _TIMEOUT}
+        successful_result = (
+            successful_result and not _is_blocked_result(result) and not _is_workstream_successor_result(result)
+        )
     if (
         not successor_held
         and not successful_result
@@ -5109,7 +5111,7 @@ def _apply_result(
         return
 
     entry = DispatchLogEntry(timestamp=now, agent=agent, session_id=session_id(), status="dispatched")
-    if plan_handoff:
+    if isinstance(result, PlanHandoffResult):
         try:
             builder = select_live_builder(result.receipt)
             builder_view = builder_task_from_receipt(
