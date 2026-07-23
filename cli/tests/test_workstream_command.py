@@ -133,12 +133,19 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
         (
             "#!/usr/bin/env bash\n"
             'if [[ "$*" == *"remote get-url origin"* ]]; then\n'
-            '  printf "https://github.com/organvm/demo-repo.git/\\n"\n'
+            '  printf "%s\\n" "${FAKE_ORIGIN:-https://github.com/organvm/demo-repo.git/}"\n'
             "  exit 0\n"
             "fi\n"
             'if [[ "$*" == *"fetch --prune"* ]]; then exit 0; fi\n'
             'if [[ "$*" == *"ls-remote origin HEAD"* ]]; then\n'
-            '  printf "%s\\tHEAD\\n" "$REMOTE_HEAD"\n'
+            '  resolved_head="$REMOTE_HEAD"\n'
+            '  if [[ "${ADVANCE_REMOTE_AFTER_FIRST_CHECK:-0}" == "1" ]]; then\n'
+            '    check_count="$(cat "$REMOTE_HEAD_CHECK_COUNT" 2>/dev/null || printf 0)"\n'
+            '    check_count=$((check_count + 1))\n'
+            '    printf "%s" "$check_count" > "$REMOTE_HEAD_CHECK_COUNT"\n'
+            '    if [[ "$check_count" -gt 1 ]]; then resolved_head="$ADVANCED_REMOTE_HEAD"; fi\n'
+            "  fi\n"
+            '  printf "%s\\tHEAD\\n" "$resolved_head"\n'
             "  exit 0\n"
             "fi\n"
             'if [[ "$*" == *"ls-remote origin refs/heads/"* ]]; then\n'
@@ -166,10 +173,13 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     push_capture = tmp_path / "jules-push.txt"
     events_capture = tmp_path / "jules-events.txt"
     remote_head = _git("rev-parse", "HEAD", cwd=repo).stdout.strip()
+    remote_head_check_count = tmp_path / "remote-head-check-count.txt"
     monkeypatch.setenv("LIMEN_ROOT", str(ROOT))
     monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ['PATH']}")
     monkeypatch.setenv("REAL_GIT", real_git)
     monkeypatch.setenv("REMOTE_HEAD", remote_head)
+    monkeypatch.setenv("REMOTE_HEAD_CHECK_COUNT", str(remote_head_check_count))
+    monkeypatch.setenv("ADVANCED_REMOTE_HEAD", "1" * 40)
     monkeypatch.setenv("PUSH_CAPTURE", str(push_capture))
     monkeypatch.setenv("EVENTS_CAPTURE", str(events_capture))
     monkeypatch.setenv("SESSION_ARGS_CAPTURE", str(args_capture))
@@ -222,6 +232,31 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     assert all("HEAD:" not in push for push in pushes)
     assert all(":refs/heads/work/jules-cloud" in push for push in pushes)
     assert events_capture.read_text(encoding="utf-8").splitlines() == ["push", "jules", "push"]
+
+    args_capture.unlink()
+    monkeypatch.setenv("FAKE_ORIGIN", "https://x-access-token:redacted@github.com/organvm/demo-repo.git")
+    credentialed = CliRunner().invoke(
+        main,
+        [
+            "workstream",
+            "--autonomous",
+            "--agent",
+            "jules",
+            "--prompt",
+            "Strip credentials before selecting the cloud repository.",
+            str(repo),
+            "Jules Credentialed Origin",
+        ],
+    )
+    assert credentialed.exit_code == 0, credentialed.output
+    assert args_capture.read_text(encoding="utf-8").splitlines()[:4] == [
+        "remote",
+        "new",
+        "--repo",
+        "organvm/demo-repo",
+    ]
+    monkeypatch.delenv("FAKE_ORIGIN")
+
     kickstart = wt / ".limen-workstream" / "kickstart.sh"
     kickstart_text = kickstart.read_text(encoding="utf-8")
     assert 'if [[ "$agent" != "jules" ]]; then\n  exec 9>&-\nfi' in kickstart_text
@@ -280,6 +315,28 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     assert "requires a clean worktree" in capfd.readouterr().err
     assert not args_capture.exists()
     monkeypatch.delenv("REPORT_DIRTY")
+
+    args_capture.unlink(missing_ok=True)
+    remote_head_check_count.unlink(missing_ok=True)
+    race_events_before = events_capture.read_text(encoding="utf-8")
+    monkeypatch.setenv("ADVANCE_REMOTE_AFTER_FIRST_CHECK", "1")
+    moving_default = CliRunner().invoke(
+        main,
+        [
+            "workstream",
+            "--autonomous",
+            "--agent",
+            "jules",
+            "--prompt",
+            "Do not launch if the default branch moves after reservation.",
+            str(repo),
+            "Jules Moving Default",
+        ],
+    )
+    assert moving_default.exit_code != 0
+    assert events_capture.read_text(encoding="utf-8")[len(race_events_before) :].splitlines() == ["push"]
+    assert not args_capture.exists()
+    monkeypatch.delenv("ADVANCE_REMOTE_AFTER_FIRST_CHECK")
 
     timeout_events_before = events_capture.read_text(encoding="utf-8")
     monkeypatch.setenv("JULES_SLEEP", "1")

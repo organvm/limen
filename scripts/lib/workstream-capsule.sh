@@ -23,6 +23,7 @@ workstream_jules_repository() {
 
   case "$origin" in
     git@github.com:*) repository="${origin#git@github.com:}" ;;
+    https://*@github.com/*) repository="${origin#*@github.com/}" ;;
     https://github.com/*) repository="${origin#https://github.com/}" ;;
     ssh://git@github.com/*) repository="${origin#ssh://git@github.com/}" ;;
   esac
@@ -438,6 +439,11 @@ workstream_launch_native_agent() {
           if [[ "$jules_rc" -ne 0 ]]; then
             return "$jules_rc"
           fi
+        fi
+        jules_rc=0
+        workstream_jules_validate_default_base || jules_rc=$?
+        if [[ "$jules_rc" -ne 0 ]]; then
+          return "$jules_rc"
         fi
         contract_helper="${LIMEN_CAPSULE_DIR:-}/workstream-contract.py"
         timeout_seconds="${LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS:-120}"
