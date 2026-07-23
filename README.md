@@ -1,8 +1,8 @@
 # Limen
 
-Universal agent task intake — one file to aim every AI agent across every repo.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE) [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 
-Limen is a cross-agent, cross-repo, budget-capped task intake system. It lives in a single `tasks.yaml` that every agent reads, and provides a CLI + SaaS dashboard for managing the pipeline.
+Limen is a cross-agent, cross-repo, budget-capped task intake system. Every AI agent reads a single `tasks.yaml` to discover work. TABVLARIVS is the deterministic state authority and lease keeper. The CLI + SaaS dashboard provide unified visibility, budget management, and lifecycle control across your entire agent fleet.
 
 ## Usage
 
@@ -250,3 +250,7 @@ nothing here is paywalled.
 - [Schema](SCHEMA.md)
 - [Agent Protocol](AGENTS.md)
 - [GitHub](https://github.com/4444J99/limen)
+
+## Contact
+
+For questions, issues, and collaboration, visit the [organvm GitHub](https://github.com/4444J99) or open an issue in this repository.
