@@ -350,6 +350,9 @@ def test_glob_translation_parity_with_verify_resolver():
 
 def test_ci_push_globs_reads_the_real_workflow():
     m = _load()
+    # The script's ROOT defaults to the operator's checkout path, which does not
+    # exist on a CI runner — pin it to the tree this test file actually lives in.
+    m.ROOT = ROOT
     globs = m._ci_push_globs()
     assert isinstance(globs, list) and "cli/**" in globs
 
