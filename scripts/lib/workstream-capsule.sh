@@ -87,7 +87,7 @@ workstream_jules_validate_clean_worktree() {
   fi
 }
 
-workstream_jules_validate_unbound_receipt() {
+workstream_jules_provider_run_id() {
   local receipt="$1"
 
   python3 - "$receipt" <<'PY'
@@ -100,25 +100,50 @@ try:
     receipt = json.loads(receipt_path.read_text())
 except (OSError, json.JSONDecodeError) as exc:
     raise SystemExit(f"invalid Jules session receipt target: {exc}")
-if receipt.get("provider_run") is not None:
-    raise SystemExit("Jules capsule already has a provider run; emit a successor capsule")
+provider_run = receipt.get("provider_run")
+if provider_run is None:
+    raise SystemExit(1)
+run_id = provider_run.get("id") if isinstance(provider_run, dict) else None
+if (
+    not isinstance(run_id, str)
+    or not run_id.isdigit()
+    or provider_run != {
+        "provider": "jules",
+        "id": run_id,
+        "url": f"https://jules.google.com/session/{run_id}",
+    }
+):
+    raise SystemExit("invalid Jules provider run identity")
+print(run_id)
 PY
 }
 
 workstream_jules_reserve_receipt_branch() {
   local contract_helper="${LIMEN_CAPSULE_DIR:-}/workstream-contract.py"
   local timeout_seconds="${LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS:-120}"
-  local branch=""
+  local branch="" current_head="" tree="" reservation_id="" reservation_commit=""
 
   branch="$(git branch --show-current 2>/dev/null || true)"
-  if [[ -z "$branch" || ! -f "$contract_helper" ]]; then
+  current_head="$(git rev-parse HEAD 2>/dev/null || true)"
+  tree="$(git rev-parse 'HEAD^{tree}' 2>/dev/null || true)"
+  if [[ -z "$branch" || -z "$current_head" || -z "$tree" || ! -f "$contract_helper" ]]; then
     printf 'Jules workstream launch could not resolve its receipt branch or contract helper\n' >&2
+    return 2
+  fi
+  reservation_id="${LIMEN_SESSION_ID:-workstream}:$$:${RANDOM:-0}"
+  if ! reservation_commit="$(printf 'chore: reserve Jules launch %s\n' "$reservation_id" | \
+    git -c commit.gpgsign=false commit-tree "$tree" -p "$current_head")"; then
+    printf 'Jules workstream launch could not create its reservation commit\n' >&2
     return 2
   fi
   if ! GIT_TERMINAL_PROMPT=0 python3 "$contract_helper" run-bounded \
     --timeout-seconds "$timeout_seconds" -- \
-    git push --set-upstream origin "HEAD:$branch"; then
-    printf 'Jules workstream launch could not reserve a durable receipt branch\n' >&2
+    git push --set-upstream origin "$reservation_commit:refs/heads/$branch"; then
+    printf 'Jules workstream launch could not reserve a unique durable receipt branch\n' >&2
+    return 2
+  fi
+  if ! git merge --ff-only "$reservation_commit" >/dev/null; then
+    printf 'Jules workstream launch could not bind its local reservation commit\n' >&2
     return 2
   fi
 }
@@ -178,14 +203,18 @@ workstream_jules_publish_receipt() {
     printf 'Jules session receipt could not resolve its topic branch or tracked path\n' >&2
     return 2
   fi
-  git add -- "$receipt_rel"
-  if git diff --cached --quiet -- "$receipt_rel"; then
-    printf 'Jules session receipt did not produce a tracked change\n' >&2
+  if ! git add -- "$receipt_rel"; then
+    printf 'Jules session receipt could not be staged\n' >&2
     return 2
   fi
-  if ! git -c commit.gpgsign=false commit -qm \
-    "chore: preserve Jules session $session_id receipt" -- "$receipt_rel"; then
-    printf 'Jules session receipt could not be committed\n' >&2
+  if ! git diff --cached --quiet -- "$receipt_rel"; then
+    if ! git -c commit.gpgsign=false commit -qm \
+      "chore: preserve Jules session $session_id receipt" -- "$receipt_rel"; then
+      printf 'Jules session receipt could not be committed\n' >&2
+      return 2
+    fi
+  elif ! git diff --quiet -- "$receipt_rel"; then
+    printf 'Jules session receipt has unstaged changes after staging\n' >&2
     return 2
   fi
   GIT_TERMINAL_PROMPT=0 python3 "$contract_helper" run-bounded \
@@ -672,7 +701,7 @@ PY
       workstream_jules_repository \
       workstream_jules_validate_default_base \
       workstream_jules_validate_clean_worktree \
-      workstream_jules_validate_unbound_receipt \
+      workstream_jules_provider_run_id \
       workstream_jules_reserve_receipt_branch \
       workstream_jules_sync_receipt \
       workstream_jules_publish_receipt \
@@ -946,7 +975,15 @@ PY
 }
 validate_capsule_receipt
 if [[ "\$agent" == "jules" ]]; then
-  workstream_jules_validate_unbound_receipt "\$receipt"
+  bound_session_id=""
+  if bound_session_id="\$(workstream_jules_provider_run_id "\$receipt")"; then
+    if workstream_jules_publish_receipt "\$receipt" "\$bound_session_id"; then
+      printf 'Jules session receipt republished: %s\n' "\$receipt"
+      exit 0
+    fi
+    printf 'Jules bound session receipt could not be republished\n' >&2
+    exit 2
+  fi
 fi
 refresh_workstream_runway() {
   local runway_fields=""

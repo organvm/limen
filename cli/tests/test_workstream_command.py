@@ -203,7 +203,11 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
         _git("log", "-1", "--format=%s", cwd=wt).stdout.strip()
         == "chore: preserve Jules session 12345678901234567890 receipt"
     )
-    assert "push --set-upstream origin HEAD:work/jules-cloud" in push_capture.read_text(encoding="utf-8")
+    pushes = push_capture.read_text(encoding="utf-8").splitlines()
+    assert len(pushes) == 2
+    assert "HEAD:" not in pushes[0]
+    assert ":refs/heads/work/jules-cloud" in pushes[0]
+    assert "push --set-upstream origin HEAD:work/jules-cloud" in pushes[1]
     assert events_capture.read_text(encoding="utf-8").splitlines() == ["push", "jules", "push"]
     kickstart = wt / ".limen-workstream" / "kickstart.sh"
     kickstart_text = kickstart.read_text(encoding="utf-8")
@@ -221,10 +225,10 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
         timeout=10,
         check=False,
     )
-    assert relaunch.returncode != 0
-    assert "already has a provider run" in relaunch.stderr
+    assert relaunch.returncode == 0, relaunch.stdout + relaunch.stderr
+    assert "receipt republished" in relaunch.stdout
     assert receipt_path.read_text(encoding="utf-8") == original_receipt
-    assert events_capture.read_text(encoding="utf-8") == events_before
+    assert events_capture.read_text(encoding="utf-8") == events_before + "push\n"
     assert not args_capture.exists()
 
     monkeypatch.setenv("REPORT_DIRTY", "1")
@@ -286,7 +290,27 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     assert "could not publish its receipt" in capfd.readouterr().err
     monkeypatch.delenv("FAIL_RECEIPT_COMMIT")
 
+    commit_wt = repo / ".worktrees" / "jules-commit-failure"
+    commit_receipt = commit_wt / "docs" / "continuations" / "jules-commit-failure" / "workstream.json"
+    recovered_receipt = json.loads(commit_receipt.read_text(encoding="utf-8"))
+    assert recovered_receipt["provider_run"]["id"] == "12345678901234567890"
     args_capture.unlink()
+    recovery_events = events_capture.read_text(encoding="utf-8")
+    recovered = subprocess.run(
+        ["bash", str(commit_wt / ".limen-workstream" / "kickstart.sh")],
+        cwd=commit_wt,
+        env={**os.environ},
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    assert recovered.returncode == 0, recovered.stdout + recovered.stderr
+    assert "receipt republished" in recovered.stdout
+    assert events_capture.read_text(encoding="utf-8") == recovery_events + "push\n"
+    assert not args_capture.exists()
+    assert _git("status", "--short", cwd=commit_wt).stdout == ""
+
     monkeypatch.setenv("REMOTE_HEAD", "0" * 40)
     stale = CliRunner().invoke(
         main,
