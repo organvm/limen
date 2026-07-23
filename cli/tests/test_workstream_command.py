@@ -144,8 +144,7 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
             '  printf " M local-only.txt\\n"\n'
             "  exit 0\n"
             "fi\n"
-            'if [[ "$*" == *"commit -qm chore: preserve Jules session"* '
-            '&& "${FAIL_RECEIPT_COMMIT:-0}" == "1" ]]; then\n'
+            'if [[ "$*" == *"commit -qm chore: preserve Jules session"* && "${FAIL_RECEIPT_COMMIT:-0}" == "1" ]]; then\n'
             "  exit 42\n"
             "fi\n"
             'if [[ "$*" == *"push --set-upstream origin"* ]]; then\n'
