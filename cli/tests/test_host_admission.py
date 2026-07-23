@@ -506,7 +506,7 @@ def test_state_file_is_private_and_versioned(tmp_path: Path) -> None:
     assert stat.S_IMODE(service.state_path.stat().st_mode) == 0o600
 
 
-def test_scoped_leases_live_only_in_the_sibling_store(tmp_path: Path) -> None:
+def test_scoped_leases_project_conservatively_for_legacy_readers(tmp_path: Path) -> None:
     _main, first, _second = make_linked_worktrees(tmp_path)
     service = controller(tmp_path / "state")
     scope = worktree_scope(first)
@@ -516,7 +516,7 @@ def test_scoped_leases_live_only_in_the_sibling_store(tmp_path: Path) -> None:
     legacy = json.loads(service.state_path.read_text(encoding="utf-8"))
     scoped = json.loads(service.scoped_state_path.read_text(encoding="utf-8"))
     assert legacy["schema"] == "limen.host_admission_state.v1"
-    assert legacy["leases"] == []
+    assert [lease["kind"] for lease in legacy["leases"]] == ["execution"]
     assert scoped["schema"] == "limen.host_admission_scoped_state.v1"
     assert [lease["kind"] for lease in scoped["leases"]] == [scope.lease_kind]
     assert [lease["kind"] for lease in service.status(probe=False)["leases"]] == [scope.lease_kind]
@@ -538,7 +538,7 @@ def test_current_reader_migrates_valid_scoped_records_out_of_legacy_store(tmp_pa
 
     legacy_after = json.loads(service.state_path.read_text(encoding="utf-8"))
     scoped_after = json.loads(service.scoped_state_path.read_text(encoding="utf-8"))
-    assert legacy_after["leases"] == []
+    assert [lease["kind"] for lease in legacy_after["leases"]] == ["execution"]
     assert [lease["kind"] for lease in scoped_after["leases"]] == [scope.lease_kind]
 
 

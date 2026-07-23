@@ -136,7 +136,7 @@ def _runtime_interpreter(target: Path) -> str:
         resolved = target.resolve(strict=True)
     except OSError:
         return sys.executable
-    runtime_root = resolved.parents[2].parent if len(resolved.parents) >= 3 else None
+    runtime_root = resolved.parents[2] if len(resolved.parents) >= 3 else None
     candidate = runtime_root / "venv" / "bin" / "python" if runtime_root is not None else None
     return str(candidate) if candidate is not None and candidate.is_file() else sys.executable
 
@@ -218,7 +218,13 @@ def delegate_immutable(target: Path, raw: str) -> dict[str, Any] | None:
     return output
 
 
-def _runtime_unavailable(payload: dict[str, Any], exc: ImmutableRuntimeError) -> dict[str, Any] | None:
+def _runtime_unavailable(
+    payload: dict[str, Any],
+    exc: ImmutableRuntimeError,
+    *,
+    controller: AdmissionController | None = None,
+    owner_pid: int | None = None,
+) -> dict[str, Any] | None:
     event = str(payload.get("hook_event_name") or "")
     text = (
         "Limen immutable host admission failed closed: "
@@ -231,9 +237,23 @@ def _runtime_unavailable(payload: dict[str, Any], exc: ImmutableRuntimeError) ->
         # immutable policy is handled at PreToolUse and inside guarded heavy
         # entrypoints; it must not prevent another Codex root from opening.
         return None
+    if event == "Stop":
+        owner = _turn_owner(payload)
+        if owner is None:
+            return _warning(text)
+        try:
+            _release_execution(
+                controller or AdmissionController(),
+                owner=owner,
+                pid=owner_pid or codex_owner_pid(),
+                cwd=str(payload.get("cwd") or ""),
+            )
+        except (AdmissionStateError, ValueError):
+            return _warning(text)
+        return None
     if event == "PreToolUse":
         action = classify_action(payload)
-        if action.category in {"observe", "sanctioned_control"}:
+        if action.category == "observe":
             return None
         return _tool_deny(text)
     return _warning(text)

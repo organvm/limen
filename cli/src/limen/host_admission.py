@@ -846,16 +846,21 @@ class AdmissionController:
     def _write(self, state: dict[str, Any]) -> None:
         legacy = {
             "schema": STATE_SCHEMA,
-            "leases": [dict(lease) for lease in state["leases"] if lease["kind"] in LEASE_KINDS],
+            "leases": [
+                ({**dict(lease), "kind": "execution"} if SCOPED_EXECUTION_RE.fullmatch(lease["kind"]) else dict(lease))
+                for lease in state["leases"]
+                if lease["kind"] in LEASE_KINDS or SCOPED_EXECUTION_RE.fullmatch(lease["kind"])
+            ],
             "pressure": state.get("pressure"),
         }
         scoped = {
             "schema": SCOPED_STATE_SCHEMA,
             "leases": [dict(lease) for lease in state["leases"] if SCOPED_EXECUTION_RE.fullmatch(lease["kind"])],
         }
-        # Both stores share the same advisory lock.  Publish the additive scoped
-        # file first, then the legacy-compatible view; an old reader therefore
-        # never observes a legacy file newly containing a scoped kind.
+        # Both stores share the same advisory lock. Publish the scoped file first,
+        # then project each scoped lease into legacy as a global execution lease.
+        # Older readers remain conservatively serialized during the rolling update,
+        # while current readers pair the projection with its exact scoped record.
         self._write_file(self.scoped_state_path, scoped)
         self._write_file(self.state_path, legacy)
         directory = os.open(self.root, os.O_RDONLY)

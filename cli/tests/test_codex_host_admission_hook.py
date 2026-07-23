@@ -767,11 +767,50 @@ def test_incompatible_runtime_never_blocks_session_start_and_denies_mutation_onc
         payload("PreToolUse", tool_input={"command": "git status --short"}),
         error,
     )
+    sanctioned = hook._runtime_unavailable(
+        payload("PreToolUse", tool_input={"command": "limen dispatch"}),
+        error,
+    )
 
     assert prompt is None
     assert set(tool) == {"hookSpecificOutput"}
+    assert set(sanctioned) == {"hookSpecificOutput"}
     assert observe is None
     assert "domus-limen-runtime status" in tool["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_runtime_interpreter_uses_installed_runtime_venv(tmp_path: Path) -> None:
+    hook = load_hook()
+    runtime = tmp_path / "runtime"
+    target = runtime / "scripts" / "hooks" / "codex-host-admission.py"
+    interpreter = runtime / "venv" / "bin" / "python"
+    target.parent.mkdir(parents=True)
+    interpreter.parent.mkdir(parents=True)
+    target.write_text("# hook\n", encoding="utf-8")
+    interpreter.write_text("# interpreter\n", encoding="utf-8")
+
+    assert hook._runtime_interpreter(target) == str(interpreter)
+
+
+def test_unavailable_runtime_still_releases_exact_owned_stop_lease(tmp_path: Path) -> None:
+    hook = load_hook()
+    _main, worktree, _second = linked_worktrees(tmp_path)
+    service = controller(tmp_path / "admission")
+    request = payload("Stop", cwd=str(worktree))
+    owner = hook._turn_owner(request)
+    assert owner is not None
+    scope = hook.worktree_scope(worktree)
+    service.acquire(scope.lease_kind, owner=owner, surface="test", pid=101)
+
+    output = hook._runtime_unavailable(
+        request,
+        hook.ImmutableRuntimeError("runtime-capabilities-timeout"),
+        controller=service,
+        owner_pid=101,
+    )
+
+    assert output is None
+    assert service.status(probe=False)["leases"] == []
 
 
 def test_malformed_store_emits_exactly_one_redacted_rejection_channel(
