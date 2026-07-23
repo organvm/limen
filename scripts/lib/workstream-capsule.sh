@@ -318,10 +318,6 @@ workstream_launch_native_agent() {
         if [[ "$jules_rc" -ne 0 ]]; then
           return "$jules_rc"
         fi
-        workstream_jules_reserve_receipt_branch || jules_rc=$?
-        if [[ "$jules_rc" -ne 0 ]]; then
-          return "$jules_rc"
-        fi
         intent_path="${readme%/*}/intent.md"
         if [[ ! -s "$intent_path" ]]; then
           printf 'Jules workstream launch requires a non-empty intent module\n' >&2
@@ -329,6 +325,12 @@ workstream_launch_native_agent() {
         fi
         IFS= read -r -d '' capsule_prompt < "$intent_path" || true
         capsule_prompt="Do NOT ask for feedback or approval. Work autonomously and return the requested durable receipts. $capsule_prompt"
+        # The pre-session push is the durable recovery capsule. Preserve it if a later provider
+        # step fails; deleting it after Jules may have started would orphan the cloud run.
+        workstream_jules_reserve_receipt_branch || jules_rc=$?
+        if [[ "$jules_rc" -ne 0 ]]; then
+          return "$jules_rc"
+        fi
         contract_helper="${LIMEN_CAPSULE_DIR:-}/workstream-contract.py"
         timeout_seconds="${LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS:-120}"
         jules_rc=0
