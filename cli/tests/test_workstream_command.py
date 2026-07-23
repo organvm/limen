@@ -250,12 +250,14 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
         ],
     )
     assert credentialed.exit_code == 0, credentialed.output
-    assert args_capture.read_text(encoding="utf-8").splitlines()[:4] == [
+    credentialed_args = args_capture.read_text(encoding="utf-8").splitlines()
+    assert credentialed_args[:4] == [
         "remote",
         "new",
         "--repo",
         "organvm/demo-repo",
     ]
+    assert all("redacted" not in arg for arg in credentialed_args)
     monkeypatch.delenv("FAKE_ORIGIN")
 
     kickstart = wt / ".limen-workstream" / "kickstart.sh"
