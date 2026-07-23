@@ -358,9 +358,7 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
         (timeout_wt / "docs/continuations/jules-timeout/workstream.json").read_text(encoding="utf-8")
     )
     assert "provider_run" not in timeout_receipt
-    assert _git("log", "-1", "--format=%s", cwd=timeout_wt).stdout.strip().startswith(
-        "chore: reserve Jules launch "
-    )
+    assert _git("log", "-1", "--format=%s", cwd=timeout_wt).stdout.strip().startswith("chore: reserve Jules launch ")
 
     args_capture.unlink(missing_ok=True)
     monkeypatch.setenv("JULES_FAIL_AFTER_OUTPUT", "1")
