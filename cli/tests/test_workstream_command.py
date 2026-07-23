@@ -190,8 +190,9 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     assert _git("log", "-1", "--format=%s", cwd=wt).stdout.strip() == (
         "chore: preserve Jules session 12345678901234567890 receipt"
     )
-    assert "push --set-upstream origin HEAD:work/jules-cloud" in push_capture.read_text(
-        encoding="utf-8"
+    assert (
+        "push --set-upstream origin HEAD:work/jules-cloud"
+        in push_capture.read_text(encoding="utf-8")
     )
 
     args_capture.unlink()
