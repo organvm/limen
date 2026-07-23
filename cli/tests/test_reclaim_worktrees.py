@@ -238,14 +238,22 @@ def test_reclaim_generated_payloads_cleans_inactive_ignored_dirs(tmp_path: Path,
     )
     (repo / "node_modules").mkdir()
     (repo / "node_modules" / "dep.txt").write_text("generated\n", encoding="utf-8")
+    quarantine = tmp_path / "quarantine"
 
     monkeypatch.setattr(reclaim, "active_async_task_prefixes", lambda: set())
+    monkeypatch.setattr(reclaim, "ABANDONMENT_QUARANTINE", str(quarantine))
+    monkeypatch.setattr(reclaim, "ABANDONMENT_RECEIPTS", tmp_path / "receipts")
     target = type("Target", (), {"path": repo, "min_age_h": 0})()
     result = reclaim.reclaim_generated_payloads([target])
 
     assert len(result["cleaned"]) == 1
     assert (repo / "README.md").exists()
     assert not (repo / "node_modules").exists()
+    preserved = list(quarantine.glob("generated-repo-node_modules-*"))
+    assert len(preserved) == 1
+    assert (preserved[0] / "dep.txt").read_text(encoding="utf-8") == "generated\n"
+    receipt = next((tmp_path / "receipts").glob("*.json"))
+    assert json.loads(receipt.read_text(encoding="utf-8"))["state"] == "completed"
 
 
 def test_reclaim_generated_payloads_skips_non_idle_roots(tmp_path: Path, monkeypatch) -> None:
