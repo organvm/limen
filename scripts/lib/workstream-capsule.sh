@@ -26,12 +26,113 @@ workstream_jules_repository() {
     https://github.com/*) repository="${origin#https://github.com/}" ;;
     ssh://git@github.com/*) repository="${origin#ssh://git@github.com/}" ;;
   esac
+  while [[ "$repository" == */ ]]; do
+    repository="${repository%/}"
+  done
   repository="${repository%.git}"
 
   if [[ ! "$repository" =~ ^[^/[:space:]]+/[^/[:space:]]+$ ]]; then
     return 1
   fi
   printf '%s\n' "$repository"
+}
+
+workstream_jules_validate_default_base() {
+  local contract_helper="${LIMEN_CAPSULE_DIR:-}/workstream-contract.py"
+  local timeout_seconds="${LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS:-120}"
+  local current_head="" remote_line="" remote_head=""
+
+  if [[ ! -f "$contract_helper" ]]; then
+    printf 'Jules workstream launch requires the capsule contract helper\n' >&2
+    return 2
+  fi
+  if ! current_head="$(git rev-parse HEAD 2>/dev/null)"; then
+    printf 'Jules workstream launch could not resolve the worktree HEAD\n' >&2
+    return 2
+  fi
+  if ! remote_line="$(
+    GIT_TERMINAL_PROMPT=0 python3 "$contract_helper" run-bounded \
+      --timeout-seconds "$timeout_seconds" -- git ls-remote origin HEAD
+  )"; then
+    printf 'Jules workstream launch could not resolve the live remote default HEAD\n' >&2
+    return 2
+  fi
+  remote_head="${remote_line%%[[:space:]]*}"
+  if [[ ! "$remote_head" =~ ^[0-9a-fA-F]{40,64}$ ]]; then
+    printf 'Jules workstream launch received an invalid remote default HEAD\n' >&2
+    return 2
+  fi
+  if [[ "$current_head" != "$remote_head" ]]; then
+    printf 'Jules workstream launch requires current HEAD to equal the live remote default HEAD\n' >&2
+    return 2
+  fi
+}
+
+workstream_jules_sync_receipt() {
+  local receipt="$1"
+  local session_id="$2"
+  local session_url="$3"
+
+  python3 - "$receipt" "${LIMEN_WORKTREE:-}" "$session_id" "$session_url" <<'PY'
+import json
+import os
+import sys
+from pathlib import Path
+
+receipt_path = Path(sys.argv[1])
+worktree = Path(sys.argv[2])
+session_id = sys.argv[3].strip()
+session_url = sys.argv[4].strip()
+expected_url = f"https://jules.google.com/session/{session_id}"
+try:
+    worktree_resolved = worktree.resolve(strict=True)
+    receipt_resolved = receipt_path.resolve(strict=True)
+    receipt = json.loads(receipt_path.read_text())
+except (OSError, json.JSONDecodeError) as exc:
+    raise SystemExit(f"invalid Jules session receipt target: {exc}")
+if (
+    receipt_path.is_symlink()
+    or not receipt_resolved.is_relative_to(worktree_resolved)
+    or not isinstance(receipt, dict)
+    or receipt.get("schema") != "limen.workstream.receipt.v1"
+):
+    raise SystemExit("invalid Jules session receipt target")
+if not session_id.isdigit() or not session_id or session_url != expected_url:
+    raise SystemExit("invalid Jules session ID or URL")
+receipt["provider_run"] = {
+    "provider": "jules",
+    "id": session_id,
+    "url": session_url,
+}
+temporary = receipt_path.with_name(f".{receipt_path.name}.tmp.{os.getpid()}")
+temporary.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+os.replace(temporary, receipt_path)
+PY
+}
+
+workstream_jules_publish_receipt() {
+  local receipt="$1"
+  local session_id="$2"
+  local contract_helper="${LIMEN_CAPSULE_DIR:-}/workstream-contract.py"
+  local timeout_seconds="${LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS:-120}"
+  local branch="" receipt_rel=""
+
+  branch="$(git branch --show-current 2>/dev/null || true)"
+  receipt_rel="${receipt#"${LIMEN_WORKTREE:-}/"}"
+  if [[ -z "$branch" || "$receipt_rel" == "$receipt" || ! -f "$receipt_rel" ]]; then
+    printf 'Jules session receipt could not resolve its topic branch or tracked path\n' >&2
+    return 2
+  fi
+  git add -- "$receipt_rel"
+  if git diff --cached --quiet -- "$receipt_rel"; then
+    printf 'Jules session receipt did not produce a tracked change\n' >&2
+    return 2
+  fi
+  git -c commit.gpgsign=false commit -qm \
+    "chore: preserve Jules session $session_id receipt" -- "$receipt_rel"
+  GIT_TERMINAL_PROMPT=0 python3 "$contract_helper" run-bounded \
+    --timeout-seconds "$timeout_seconds" -- \
+    git push --set-upstream origin "HEAD:$branch"
 }
 
 workstream_export_context() {
@@ -120,6 +221,7 @@ workstream_launch_native_agent() {
   local readme="$4"
   local allow_shell_fallback="$5"
   local binary capsule_prompt="" jules_repo="" intent_path=""
+  local jules_output="" jules_rc=0 jules_session_id="" jules_session_url="" jules_receipt=""
 
   # A broker credential belongs to the registration client, never to the model process.
   unset LIMEN_CONDUCT_TOKEN
@@ -153,6 +255,11 @@ workstream_launch_native_agent() {
           printf 'Jules workstream launch could not derive an owner/repo from the GitHub origin\n' >&2
           return 2
         fi
+        if workstream_jules_validate_default_base; then
+          :
+        else
+          return $?
+        fi
         intent_path="${readme%/*}/intent.md"
         if [[ ! -s "$intent_path" ]]; then
           printf 'Jules workstream launch requires a non-empty intent module\n' >&2
@@ -160,7 +267,28 @@ workstream_launch_native_agent() {
         fi
         IFS= read -r -d '' capsule_prompt < "$intent_path" || true
         capsule_prompt="Do NOT ask for feedback or approval. Work autonomously and return the requested durable receipts. $capsule_prompt"
-        exec "$binary" remote new --repo "$jules_repo" --session "$capsule_prompt"
+        jules_rc=0
+        jules_output="$("$binary" remote new --repo "$jules_repo" --session "$capsule_prompt" 2>&1)" || jules_rc=$?
+        printf '%s\n' "$jules_output"
+        if [[ "$jules_rc" -ne 0 ]]; then
+          return "$jules_rc"
+        fi
+        jules_session_id="$(printf '%s\n' "$jules_output" | sed -n 's/^ID:[[:space:]]*//p' | tr -d '\r' | tail -n 1)"
+        jules_session_url="$(printf '%s\n' "$jules_output" | sed -n 's/^URL:[[:space:]]*//p' | tr -d '\r' | tail -n 1)"
+        jules_receipt="${LIMEN_WORKTREE:-}/docs/continuations/${LIMEN_CAPSULE_ID:-}/workstream.json"
+        if ! workstream_jules_sync_receipt "$jules_receipt" "$jules_session_id" "$jules_session_url"; then
+          printf 'Jules workstream launch could not bind the session to its receipt\n' >&2
+          return 2
+        fi
+        if declare -F validate_capsule_receipt >/dev/null && ! validate_capsule_receipt; then
+          return 2
+        fi
+        if ! workstream_jules_publish_receipt "$jules_receipt" "$jules_session_id"; then
+          printf 'Jules workstream launch created a session but could not publish its receipt\n' >&2
+          return 2
+        fi
+        printf 'Jules session receipt: %s\n' "$jules_receipt"
+        return 0
         ;;
       *)
         exec "$binary" "$capsule_prompt"
@@ -236,6 +364,19 @@ expected = {
         "modules": modules,
     },
 }
+provider_run = receipt.get("provider_run")
+if provider_run is not None:
+    if not isinstance(provider_run, dict):
+        raise SystemExit("invalid capsule receipt: provider run must be an object")
+    run_id = provider_run.get("id")
+    expected_url = f"https://jules.google.com/session/{run_id}"
+    if provider_run != {
+        "provider": "jules",
+        "id": run_id,
+        "url": expected_url,
+    } or not isinstance(run_id, str) or not run_id.isdigit():
+        raise SystemExit("invalid capsule receipt: provider run identity mismatch")
+    expected["provider_run"] = provider_run
 if receipt != expected:
     raise SystemExit("invalid capsule receipt: identity or contract mismatch")
 PY
@@ -455,6 +596,9 @@ PY
     declare -f \
       workstream_native_binary \
       workstream_jules_repository \
+      workstream_jules_validate_default_base \
+      workstream_jules_sync_receipt \
+      workstream_jules_publish_receipt \
       workstream_export_context \
       workstream_register_conduct_session \
       workstream_launch_native_agent
@@ -706,6 +850,19 @@ expected = {
         "modules": modules,
     },
 }
+provider_run = receipt.get("provider_run")
+if provider_run is not None:
+    if not isinstance(provider_run, dict):
+        raise SystemExit("invalid capsule receipt: provider run must be an object")
+    run_id = provider_run.get("id")
+    expected_url = f"https://jules.google.com/session/{run_id}"
+    if provider_run != {
+        "provider": "jules",
+        "id": run_id,
+        "url": expected_url,
+    } or not isinstance(run_id, str) or not run_id.isdigit():
+        raise SystemExit("invalid capsule receipt: provider run identity mismatch")
+    expected["provider_run"] = provider_run
 if receipt != expected:
     raise SystemExit("invalid capsule receipt: identity or contract mismatch")
 PY
