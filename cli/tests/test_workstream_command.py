@@ -141,7 +141,7 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
             '  resolved_head="$REMOTE_HEAD"\n'
             '  if [[ "${ADVANCE_REMOTE_AFTER_FIRST_CHECK:-0}" == "1" ]]; then\n'
             '    check_count="$(cat "$REMOTE_HEAD_CHECK_COUNT" 2>/dev/null || printf 0)"\n'
-            '    check_count=$((check_count + 1))\n'
+            "    check_count=$((check_count + 1))\n"
             '    printf "%s" "$check_count" > "$REMOTE_HEAD_CHECK_COUNT"\n'
             '    if [[ "$check_count" -gt 1 ]]; then resolved_head="$ADVANCED_REMOTE_HEAD"; fi\n'
             "  fi\n"
