@@ -295,7 +295,7 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
 
     args_capture.unlink(missing_ok=True)
     remote_head_check_count.unlink(missing_ok=True)
-    race_events_before = events_capture.read_text(encoding="utf-8")
+    race_event_count = len(events_capture.read_text(encoding="utf-8").splitlines())
     monkeypatch.setenv("ADVANCE_REMOTE_AFTER_FIRST_CHECK", "1")
     moving_default = CliRunner().invoke(
         main,
@@ -311,7 +311,7 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
         ],
     )
     assert moving_default.exit_code != 0
-    race_events = events_capture.read_text(encoding="utf-8")[len(race_events_before) :].splitlines()
+    race_events = events_capture.read_text(encoding="utf-8").splitlines()[race_event_count:]
     assert race_events == ["push"]
     assert not args_capture.exists()
     monkeypatch.delenv("ADVANCE_REMOTE_AFTER_FIRST_CHECK")
