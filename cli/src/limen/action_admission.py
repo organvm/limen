@@ -403,7 +403,14 @@ def classify_action(payload: dict[str, Any]) -> Action:
     name = _tool_name(payload).lower()
     if name == "bash":
         return classify_bash(_tool_command(payload))
-    if name in {"apply_patch", "applypatch", "edit", "write"}:
+    if name in {
+        "apply_patch",
+        "applypatch",
+        "edit",
+        "multiedit",
+        "notebookedit",
+        "write",
+    }:
         return Action("workspace_write", f"{name}-is-write")
     return Action("workspace_write", "unknown-tool")
 
@@ -529,7 +536,7 @@ def target_paths(payload: dict[str, Any], cwd: Path) -> list[Path]:
 
     tool_input = _tool_input(payload)
     values: list[str] = []
-    raw_path = tool_input.get("file_path") or tool_input.get("path")
+    raw_path = tool_input.get("file_path") or tool_input.get("notebook_path") or tool_input.get("path")
     if raw_path:
         values.append(str(raw_path))
     patch = str(tool_input.get("patch") or tool_input.get("input") or "")
