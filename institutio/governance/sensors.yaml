@@ -1030,6 +1030,35 @@ sensors:
         severity: silent
         escalation: "opportunity sync skipped or exceeded its bound (reads obligations-ledger.json; fails open)"
 
+  application-funnel:
+    section: heartbeat
+    title: "the OUTBOUND funnel — mount the dormant application-pipeline on the beat: TRIGGER (detached, single-instance) its orchestrator to source roles from ATS/public boards, score >=9.0, build tailored materials, and STAGE complete application packages autonomously. Reversible by construction: nothing is submitted (the `apply`/ATS-submit phase stays behind the LIMEN_APPLY_FIRE arm, lever L-APPLY-FIRE) and nothing is sent (outreach only prepares follow-up dates). The inbound sibling of opportunity-pipeline"
+    gate: LIMEN_APPLICATION_SOURCE
+    default: "1"
+    source: [heartbeat]
+    owner: mail
+    cadence:
+      env: LIMEN_BEAT_APPLICATION_SOURCE
+      default: 48
+    timeout:
+      env: LIMEN_APPLICATION_SOURCE_TIMEOUT
+      default: 120
+    # The full cycle (match re-scores the whole pipeline) is a multi-minute job, so the driver
+    # TRIGGERS it detached under a single-instance lock and returns in <1s — the beat is never
+    # blocked, and the next trigger reports the last completed cycle's PII-clean counts. Dark
+    # until this rung: the mature funnel existed but nothing scheduled it (no working launchd
+    # agent, no beat sensor), so the outbound top-of-funnel never ran on its own.
+    steps:
+      - command: "python3 scripts/application-funnel.py"
+        args_when:
+          - env: LIMEN_APPLICATION_NOTIFY
+            default: "1"
+            equals: "1"
+            args: ["--notify"]
+            armed_valve_type: safety
+        severity: silent
+        escalation: "outbound funnel trigger skipped, or the pipeline runtime is missing — needs application-pipeline/.venv (the driver prints the exact bootstrap); fails open and never submits unless LIMEN_APPLY_FIRE=1"
+
   conversion-funnel:
     section: heartbeat
     title: "name the single public-face bottleneck (DISCOVERY|FACE|CLOSE) — the constraint that routes Aug-1 ($10k/wk) effort, kept live on the beat instead of dark/manual"
@@ -1131,6 +1160,33 @@ sensors:
       - command: "python3 scripts/jules-quota.py"
         severity: advisory
         escalation: "Jules quota under target late-day, or orphan/recovery sessions pending — drain (jules-land) + dispatch (metabolize 4b) own the effectors; orphan list via `python3 scripts/jules-land.py`"
+
+  jules-supply:
+    section: "0z2"
+    title: "Jules packet supply — dispatchable-supply-vs-floor gauge with armed template minting"
+    gate: LIMEN_JULES_SUPPLY
+    default: "1"
+    source: [metabolize]
+    owner: arms-agents
+    # The quota sensor (jules-quota) measures used-vs-target; hitting 100/day also needs
+    # ~100 loan-complete open packets to dispatch. This organ measures supply-vs-floor and,
+    # when the LIMEN_JULES_SUPPLY_APPLY valve is armed, mints the deficit from the declared
+    # renewable series in docs/jules-supply-templates.yaml as TABVLARIVS upsert tickets —
+    # adding supply = adding one registry entry, never a hand-minting session. Floor derives
+    # from the jules capacity target — never pinned here. Dry-run (gauge-only) by default.
+    steps:
+      - command: "python3 scripts/jules-supply.py"
+        args_when:
+          # Armed by default (operator mandate 2026-07-23: the 100/day quota is consumed
+          # autonomously — "we shouldn't even have to think about it"). Disarm with
+          # LIMEN_JULES_SUPPLY_APPLY=0 for a gauge-only dry run.
+          - env: LIMEN_JULES_SUPPLY_APPLY
+            default: "1"
+            equals: "1"
+            args: ["--apply"]
+            armed_valve_type: deliverable
+        severity: advisory
+        escalation: "Dispatchable Jules supply is below floor and minting is unarmed — arm LIMEN_JULES_SUPPLY_APPLY=1 or extend docs/jules-supply-templates.yaml"
 
   decorum:
     section: "heartbeat"
