@@ -138,9 +138,9 @@ workstream_jules_reserve_receipt_branch() {
     return 2
   fi
   rm -f "$reservation_index"
-  if ! GIT_INDEX_FILE="$reservation_index" git read-tree "$current_head"
-    || ! GIT_INDEX_FILE="$reservation_index" git add -- "$receipt_rel"
-    || ! reservation_tree="$(GIT_INDEX_FILE="$reservation_index" git write-tree)"; then
+  if ! GIT_INDEX_FILE="$reservation_index" git read-tree "$current_head" ||
+    ! GIT_INDEX_FILE="$reservation_index" git add -- "$receipt_rel" ||
+    ! reservation_tree="$(GIT_INDEX_FILE="$reservation_index" git write-tree)"; then
     rm -f "$reservation_index"
     printf 'Jules workstream launch could not build its durable receipt reservation\n' >&2
     return 2
@@ -163,6 +163,7 @@ workstream_jules_reserve_receipt_branch() {
     return 2
   fi
 }
+
 workstream_jules_sync_receipt() {
   local receipt="$1"
   local session_id="$2"
