@@ -382,6 +382,7 @@ workstream_launch_native_agent() {
   local binary capsule_prompt="" jules_repo="" intent_path=""
   local contract_helper="" timeout_seconds=""
   local jules_output="" jules_rc=0 jules_session_id="" jules_session_url="" jules_receipt=""
+  local jules_reserved_this_launch=0
 
   # A broker credential belongs to the registration client, never to the model process.
   unset LIMEN_CONDUCT_TOKEN
@@ -439,11 +440,17 @@ workstream_launch_native_agent() {
           if [[ "$jules_rc" -ne 0 ]]; then
             return "$jules_rc"
           fi
+          jules_reserved_this_launch=1
         fi
         jules_rc=0
         workstream_jules_validate_default_base || jules_rc=$?
         if [[ "$jules_rc" -ne 0 ]]; then
           return "$jules_rc"
+        fi
+        if [[ "${workstream_jules_reuse_reservation:-0}" == "1"
+          && "$jules_reserved_this_launch" != "1" ]]; then
+          printf 'unbound Jules launch reservation requires recovery: bind the existing numeric session receipt before relaunch; refusing a duplicate remote session\n' >&2
+          return 2
         fi
         contract_helper="${LIMEN_CAPSULE_DIR:-}/workstream-contract.py"
         timeout_seconds="${LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS:-120}"
