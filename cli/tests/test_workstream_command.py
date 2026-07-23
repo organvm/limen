@@ -141,7 +141,9 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     args = args_capture.read_text(encoding="utf-8").splitlines()
     assert args[:4] == ["remote", "new", "--repo", "organvm/demo-repo"]
     assert args[4] == "--session"
-    assert "# Continuation capsule: jules-cloud" in args[5]
+    assert args[5].startswith("Do NOT ask for feedback or approval.")
+    assert "Ship the exact bounded packet." in args[5]
+    assert "# Continuation capsule:" not in args[5]
 
 
 def test_shell_launcher_hands_off_to_generated_kickstart_without_a_tty(tmp_path: Path) -> None:
