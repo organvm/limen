@@ -973,6 +973,8 @@ if receipt != expected:
     raise SystemExit("invalid capsule receipt: identity or contract mismatch")
 PY
 }
+workstream_export_context \
+  "\$agent" "\$PWD" "\$capsule_dir" "\$expected_slug" "\$expected_workstream" "\$agent_capabilities"
 validate_capsule_receipt
 if [[ "\$agent" == "jules" ]]; then
   bound_session_id=""
@@ -1043,8 +1045,6 @@ if git remote get-url origin >/dev/null 2>&1 9>&-; then
 fi
 python3 "\$contract_helper" run-bounded \
   --timeout-seconds "\$preflight_timeout" -- git status --short --branch 9>&-
-workstream_export_context \
-  "\$agent" "\$PWD" "\$capsule_dir" "\$expected_slug" "\$expected_workstream" "\$agent_capabilities"
 if [[ "\$conduct" -eq 1 ]]; then
   workstream_register_conduct_session "\$agent" "\$PWD" "\$agent_capabilities"
 fi
