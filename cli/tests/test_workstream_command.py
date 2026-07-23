@@ -211,7 +211,9 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(
         ],
     )
     assert stale.exit_code != 0
-    assert "current HEAD to equal the live remote default HEAD" in capfd.readouterr().err
+    assert (
+        "current HEAD to equal the live remote default HEAD" in capfd.readouterr().err
+    )
     assert not args_capture.exists()
 
 
