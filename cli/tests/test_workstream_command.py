@@ -129,6 +129,7 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     real_git = shutil.which("git")
     assert real_git is not None
     fake_git = fake_bin / "git"
+    # Fake userinfo proves repository selection never forwards credentials to Jules.
     fake_git.write_text(
         (
             "#!/usr/bin/env bash\n"
