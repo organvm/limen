@@ -2348,11 +2348,11 @@ parameters:
     owner: arms-agents
     note: "Beat gate for the jules-supply sensor (sensors.yaml jules-supply): dispatchable-supply-vs-floor gauge; the armed valve LIMEN_JULES_SUPPLY_APPLY owns minting."
   LIMEN_JULES_SUPPLY_APPLY:
-    default: ""
+    default: "1"
     env: LIMEN_JULES_SUPPLY_APPLY
     self_update: none
     owner: arms-agents
-    note: "Armed valve for jules-supply minting: 1 = the organ mints deficit packets from docs/jules-supply-templates.yaml as TABVLARIVS upsert tickets; unset = dry-run gauge only."
+    note: "Armed valve for jules-supply minting (armed by default per the 2026-07-23 operator mandate: the daily Jules quota is consumed autonomously): 1 = mint deficit packets from docs/jules-supply-templates.yaml as TABVLARIVS upsert tickets; 0 = dry-run gauge only."
   LIMEN_JULES_SUPPLY_FLOOR:
     default: ""
     env: LIMEN_JULES_SUPPLY_FLOOR

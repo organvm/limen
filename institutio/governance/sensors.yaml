@@ -1148,7 +1148,11 @@ sensors:
     steps:
       - command: "python3 scripts/jules-supply.py"
         args_when:
+          # Armed by default (operator mandate 2026-07-23: the 100/day quota is consumed
+          # autonomously — "we shouldn't even have to think about it"). Disarm with
+          # LIMEN_JULES_SUPPLY_APPLY=0 for a gauge-only dry run.
           - env: LIMEN_JULES_SUPPLY_APPLY
+            default: "1"
             equals: "1"
             args: ["--apply"]
             armed_valve_type: deliverable
