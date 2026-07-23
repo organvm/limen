@@ -187,8 +187,9 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
         "url": "https://jules.google.com/session/12345678901234567890",
     }
     assert _git("status", "--short", cwd=wt).stdout == ""
-    assert _git("log", "-1", "--format=%s", cwd=wt).stdout.strip() == (
-        "chore: preserve Jules session 12345678901234567890 receipt"
+    assert (
+        _git("log", "-1", "--format=%s", cwd=wt).stdout.strip()
+        == "chore: preserve Jules session 12345678901234567890 receipt"
     )
     assert (
         "push --set-upstream origin HEAD:work/jules-cloud"
