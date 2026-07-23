@@ -99,9 +99,7 @@ def test_workstream_command_writes_private_kickstart_packet(tmp_path: Path, monk
     assert "workstream contract is missing" in partial.output
 
 
-def test_autonomous_jules_workstream_uses_remote_cloud_transport(
-    tmp_path: Path, monkeypatch, capfd
-) -> None:
+def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path, monkeypatch, capfd) -> None:
     repo = tmp_path / "demo-repo"
     repo.mkdir()
     _git("init", "-q", "-b", "main", cwd=repo)
@@ -211,9 +209,7 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(
         ],
     )
     assert stale.exit_code != 0
-    assert (
-        "current HEAD to equal the live remote default HEAD" in capfd.readouterr().err
-    )
+    assert "current HEAD to equal the live remote default HEAD" in capfd.readouterr().err
     assert not args_capture.exists()
 
 
