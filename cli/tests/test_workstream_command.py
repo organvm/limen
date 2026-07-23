@@ -105,7 +105,7 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     _git("init", "-q", "-b", "main", cwd=repo)
     _git("config", "user.email", "test@example.invalid", cwd=repo)
     _git("config", "user.name", "Test User", cwd=repo)
-    _git("remote", "add", "origin", "git@github.com:organvm/demo-repo.git", cwd=repo)
+    _git("remote", "add", "origin", "https://github.com/organvm/demo-repo.git/", cwd=repo)
     (repo / "README.md").write_text("demo\n", encoding="utf-8")
     _git("add", "README.md", cwd=repo)
     _git("commit", "-qm", "init", cwd=repo)
@@ -114,7 +114,12 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     fake_bin.mkdir()
     fake_jules = fake_bin / "jules"
     fake_jules.write_text(
-        '#!/usr/bin/env bash\nprintf "%s\\n" "$@" > "$SESSION_ARGS_CAPTURE"\n',
+        (
+            '#!/usr/bin/env bash\n'
+            'printf "%s\\n" "$@" > "$SESSION_ARGS_CAPTURE"\n'
+            'printf "Session is created.\\nID: 12345678901234567890\\nTask: test\\n\\n'
+            'URL: https://jules.google.com/session/12345678901234567890\\n"\n'
+        ),
         encoding="utf-8",
     )
     fake_jules.chmod(0o755)
@@ -125,19 +130,31 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
         (
             "#!/usr/bin/env bash\n"
             'if [[ "$*" == *"remote get-url origin"* ]]; then\n'
-            '  printf "git@github.com:organvm/demo-repo.git\\n"\n'
+            '  printf "https://github.com/organvm/demo-repo.git/\\n"\n'
             "  exit 0\n"
             "fi\n"
             'if [[ "$*" == *"fetch --prune"* ]]; then exit 0; fi\n'
+            'if [[ "$*" == *"ls-remote origin HEAD"* ]]; then\n'
+            '  printf "%s\\tHEAD\\n" "$REMOTE_HEAD"\n'
+            "  exit 0\n"
+            "fi\n"
+            'if [[ "$*" == *"push --set-upstream origin"* ]]; then\n'
+            '  printf "%s\\n" "$*" > "$PUSH_CAPTURE"\n'
+            "  exit 0\n"
+            "fi\n"
             'exec "$REAL_GIT" "$@"\n'
         ),
         encoding="utf-8",
     )
     fake_git.chmod(0o755)
     args_capture = tmp_path / "jules-args.txt"
+    push_capture = tmp_path / "jules-push.txt"
+    remote_head = _git("rev-parse", "HEAD", cwd=repo).stdout.strip()
     monkeypatch.setenv("LIMEN_ROOT", str(ROOT))
     monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ['PATH']}")
     monkeypatch.setenv("REAL_GIT", real_git)
+    monkeypatch.setenv("REMOTE_HEAD", remote_head)
+    monkeypatch.setenv("PUSH_CAPTURE", str(push_capture))
     monkeypatch.setenv("SESSION_ARGS_CAPTURE", str(args_capture))
 
     result = CliRunner().invoke(
@@ -161,6 +178,40 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     assert args[5].startswith("Do NOT ask for feedback or approval.")
     assert "Ship the exact bounded packet." in args[5]
     assert "# Continuation capsule:" not in args[5]
+    wt = repo / ".worktrees" / "jules-cloud"
+    receipt_path = wt / "docs" / "continuations" / "jules-cloud" / "workstream.json"
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert receipt["provider_run"] == {
+        "provider": "jules",
+        "id": "12345678901234567890",
+        "url": "https://jules.google.com/session/12345678901234567890",
+    }
+    assert _git("status", "--short", cwd=wt).stdout == ""
+    assert _git("log", "-1", "--format=%s", cwd=wt).stdout.strip() == (
+        "chore: preserve Jules session 12345678901234567890 receipt"
+    )
+    assert "push --set-upstream origin HEAD:work/jules-cloud" in push_capture.read_text(
+        encoding="utf-8"
+    )
+
+    args_capture.unlink()
+    monkeypatch.setenv("REMOTE_HEAD", "0" * 40)
+    stale = CliRunner().invoke(
+        main,
+        [
+            "workstream",
+            "--autonomous",
+            "--agent",
+            "jules",
+            "--prompt",
+            "This stale base must not launch.",
+            str(repo),
+            "Jules Stale Base",
+        ],
+    )
+    assert stale.exit_code != 0
+    assert "current HEAD to equal the live remote default HEAD" in stale.output
+    assert not args_capture.exists()
 
 
 def test_shell_launcher_hands_off_to_generated_kickstart_without_a_tty(tmp_path: Path) -> None:
