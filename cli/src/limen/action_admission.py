@@ -76,6 +76,16 @@ _GIT_READ_ONLY = frozenset(
         "worktree",
     }
 )
+_GIT_ADMIN_ENV = frozenset(
+    {
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_COMMON_DIR",
+        "GIT_DIR",
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_WORK_TREE",
+    }
+)
 _SANCTIONED_LIMEN = frozenset(
     {"channels", "conduct", "dispatch", "fanout", "harvest", "host-admission", "progress", "status", "workstream"}
 )
@@ -439,7 +449,16 @@ def _existing_directory(path: Path, *, label: str) -> Path:
 
 
 def _git_cwd(tokens: list[str], cwd: Path) -> Path:
-    tokens = _strip_env_assignments(tokens)
+    assignment_index = 0
+    while assignment_index < len(tokens) and re.fullmatch(
+        r"[A-Za-z_][A-Za-z0-9_]*=.*",
+        tokens[assignment_index],
+    ):
+        name, _separator, _value = tokens[assignment_index].partition("=")
+        if name in _GIT_ADMIN_ENV:
+            raise AdmissionInputError("unsupported-git-admin-target")
+        assignment_index += 1
+    tokens = tokens[assignment_index:]
     if not tokens or Path(tokens[0]).name != "git":
         return cwd
     current = cwd
@@ -455,7 +474,7 @@ def _git_cwd(tokens: list[str], cwd: Path) -> Path:
             )
             index += 2
             continue
-        if token in {"--git-dir", "--work-tree"}:
+        if token in {"--git-dir", "--work-tree"} or token.startswith(("--git-dir=", "--work-tree=")):
             raise AdmissionInputError("unsupported-git-admin-target")
         if token == "-c":
             if index + 1 >= len(tokens):

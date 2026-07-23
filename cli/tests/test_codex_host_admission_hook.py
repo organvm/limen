@@ -347,6 +347,32 @@ def test_git_c_and_cd_redirection_resolve_the_actual_write_scope(tmp_path: Path)
     assert outside_service.status(probe=False)["leases"] == []
 
 
+def test_git_admin_targets_cannot_escape_the_leased_worktree(tmp_path: Path) -> None:
+    hook = load_hook()
+    _main, first, _second = linked_worktrees(tmp_path)
+    outside = tmp_path / "outside"
+    commands = [
+        f"git --git-dir={outside / '.git'} checkout -b topic",
+        f"git --work-tree={outside} checkout -b topic",
+        f"GIT_DIR={outside / '.git'} git checkout -b topic",
+        f"GIT_WORK_TREE={outside} git checkout -b topic",
+    ]
+
+    for index, command in enumerate(commands):
+        service = controller(tmp_path / f"git-admin-admission-{index}")
+        output = hook.handle(
+            payload(
+                "PreToolUse",
+                cwd=str(first),
+                tool_input={"command": command},
+            ),
+            controller=service,
+            owner_pid=101,
+        )
+        assert output["hookSpecificOutput"]["permissionDecisionReason"] == "unsupported-git-admin-target"
+        assert service.status(probe=False)["leases"] == []
+
+
 def test_background_substitution_and_plan_only_mutations_are_denied(tmp_path: Path) -> None:
     hook = load_hook()
     _main, first, _second = linked_worktrees(tmp_path)
