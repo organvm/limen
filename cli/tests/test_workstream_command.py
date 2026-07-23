@@ -121,6 +121,7 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
             'if [[ "${JULES_SLEEP:-0}" == "1" ]]; then sleep 5; fi\n'
             'printf "Session is created.\\nID: 12345678901234567890\\nTask: test\\n\\n'
             'URL: https://jules.google.com/session/12345678901234567890\\n"\n'
+            'if [[ "${JULES_FAIL_AFTER_OUTPUT:-0}" == "1" ]]; then exit 42; fi\n'
         ),
         encoding="utf-8",
     )
@@ -138,6 +139,10 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
             'if [[ "$*" == *"fetch --prune"* ]]; then exit 0; fi\n'
             'if [[ "$*" == *"ls-remote origin HEAD"* ]]; then\n'
             '  printf "%s\\tHEAD\\n" "$REMOTE_HEAD"\n'
+            "  exit 0\n"
+            "fi\n"
+            'if [[ "$*" == *"ls-remote origin refs/heads/"* ]]; then\n'
+            '  printf "%s\\t%s\\n" "$("$REAL_GIT" rev-parse HEAD)" "${!#}"\n'
             "  exit 0\n"
             "fi\n"
             'if [[ "$*" == *"status --porcelain --untracked-files=all"* && "${REPORT_DIRTY:-0}" == "1" ]]; then\n'
@@ -214,9 +219,8 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     )
     pushes = push_capture.read_text(encoding="utf-8").splitlines()
     assert len(pushes) == 2
-    assert "HEAD:" not in pushes[0]
-    assert ":refs/heads/work/jules-cloud" in pushes[0]
-    assert "push --set-upstream origin HEAD:work/jules-cloud" in pushes[1]
+    assert all("HEAD:" not in push for push in pushes)
+    assert all(":refs/heads/work/jules-cloud" in push for push in pushes)
     assert events_capture.read_text(encoding="utf-8").splitlines() == ["push", "jules", "push"]
     kickstart = wt / ".limen-workstream" / "kickstart.sh"
     kickstart_text = kickstart.read_text(encoding="utf-8")
@@ -240,6 +244,24 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     assert events_capture.read_text(encoding="utf-8") == events_before + "push\n"
     assert not args_capture.exists()
 
+    (wt / "unrelated.txt").write_text("must not ride the receipt push\n", encoding="utf-8")
+    _git("add", "unrelated.txt", cwd=wt)
+    _git("commit", "-qm", "unrelated local work", cwd=wt)
+    unrelated_events = events_capture.read_text(encoding="utf-8")
+    unrelated_republish = subprocess.run(
+        ["bash", str(kickstart)],
+        cwd=wt,
+        env={**os.environ},
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    assert unrelated_republish.returncode != 0
+    assert "exact receipt-only commit" in unrelated_republish.stderr
+    assert events_capture.read_text(encoding="utf-8") == unrelated_events
+    assert not args_capture.exists()
+
     monkeypatch.setenv("REPORT_DIRTY", "1")
     dirty = CliRunner().invoke(
         main,
@@ -259,6 +281,7 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     assert not args_capture.exists()
     monkeypatch.delenv("REPORT_DIRTY")
 
+    timeout_events_before = events_capture.read_text(encoding="utf-8")
     monkeypatch.setenv("JULES_SLEEP", "1")
     monkeypatch.setenv("LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS", "1")
     started = time.monotonic()
@@ -280,7 +303,55 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     monkeypatch.delenv("JULES_SLEEP")
     monkeypatch.delenv("LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS")
 
-    args_capture.unlink()
+    timeout_wt = repo / ".worktrees" / "jules-timeout"
+    args_capture.unlink(missing_ok=True)
+    retried = subprocess.run(
+        ["bash", str(timeout_wt / ".limen-workstream" / "kickstart.sh")],
+        cwd=timeout_wt,
+        env={**os.environ},
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    assert retried.returncode == 0, retried.stdout + retried.stderr
+    retry_events = events_capture.read_text(encoding="utf-8")[len(timeout_events_before) :].splitlines()
+    assert retry_events == ["push", "jules", "jules", "push"]
+    timeout_receipt = json.loads(
+        (timeout_wt / "docs/continuations/jules-timeout/workstream.json").read_text(encoding="utf-8")
+    )
+    assert timeout_receipt["provider_run"]["id"] == "12345678901234567890"
+
+    args_capture.unlink(missing_ok=True)
+    monkeypatch.setenv("JULES_FAIL_AFTER_OUTPUT", "1")
+    failed_after_output = CliRunner().invoke(
+        main,
+        [
+            "workstream",
+            "--autonomous",
+            "--agent",
+            "jules",
+            "--prompt",
+            "Preserve a receipt even when the provider returns nonzero.",
+            str(repo),
+            "Jules Nonzero Receipt",
+        ],
+    )
+    assert failed_after_output.exit_code == 42
+    monkeypatch.delenv("JULES_FAIL_AFTER_OUTPUT")
+    nonzero_wt = repo / ".worktrees" / "jules-nonzero-receipt"
+    nonzero_receipt = json.loads(
+        (nonzero_wt / "docs/continuations/jules-nonzero-receipt/workstream.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert nonzero_receipt["provider_run"]["id"] == "12345678901234567890"
+    assert (
+        _git("log", "-1", "--format=%s", cwd=nonzero_wt).stdout.strip()
+        == "chore: preserve Jules session 12345678901234567890 receipt"
+    )
+
+    args_capture.unlink(missing_ok=True)
     monkeypatch.setenv("FAIL_RECEIPT_COMMIT", "1")
     commit_failed = CliRunner().invoke(
         main,

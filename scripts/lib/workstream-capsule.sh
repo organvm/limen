@@ -41,7 +41,10 @@ workstream_jules_validate_default_base() {
   local contract_helper="${LIMEN_CAPSULE_DIR:-}/workstream-contract.py"
   local timeout_seconds="${LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS:-120}"
   local current_head="" remote_line="" remote_head=""
+  local branch="" receipt="" receipt_rel="" current_parent="" current_subject=""
+  local remote_branch_line="" remote_branch_head=""
 
+  unset LIMEN_JULES_REUSE_RESERVATION
   if [[ ! -f "$contract_helper" ]]; then
     printf 'Jules workstream launch requires the capsule contract helper\n' >&2
     return 2
@@ -62,10 +65,41 @@ workstream_jules_validate_default_base() {
     printf 'Jules workstream launch received an invalid remote default HEAD\n' >&2
     return 2
   fi
-  if [[ "$current_head" != "$remote_head" ]]; then
-    printf 'Jules workstream launch requires current HEAD to equal the live remote default HEAD\n' >&2
+  if [[ "$current_head" == "$remote_head" ]]; then
+    return 0
+  fi
+
+  branch="$(git branch --show-current 2>/dev/null || true)"
+  receipt="${LIMEN_WORKTREE:-}/docs/continuations/${LIMEN_CAPSULE_ID:-}/workstream.json"
+  receipt_rel="${receipt#"${LIMEN_WORKTREE:-}/"}"
+  current_parent="$(git rev-parse HEAD^ 2>/dev/null || true)"
+  current_subject="$(git log -1 --format=%s 2>/dev/null || true)"
+  if [[ -z "$branch" || "$current_parent" != "$remote_head"
+    || "$current_subject" != "chore: reserve Jules launch "*
+    || "$receipt_rel" == "$receipt" || ! -f "$receipt_rel"
+    || ! -f "$contract_helper" ]]; then
+    printf 'Jules workstream launch requires current HEAD to equal the live remote default HEAD or its owned unbound reservation\n' >&2
     return 2
   fi
+  if ! git cat-file -e "HEAD:$receipt_rel" 2>/dev/null
+    || ! git diff --quiet HEAD -- "$receipt_rel"; then
+    printf 'Jules workstream launch found an invalid unbound reservation receipt\n' >&2
+    return 2
+  fi
+  if ! remote_branch_line="$(
+    GIT_TERMINAL_PROMPT=0 python3 "$contract_helper" run-bounded \
+      --timeout-seconds "$timeout_seconds" -- \
+      git ls-remote origin "refs/heads/$branch"
+  )"; then
+    printf 'Jules workstream launch could not resolve its remote reservation branch\n' >&2
+    return 2
+  fi
+  remote_branch_head="${remote_branch_line%%[[:space:]]*}"
+  if [[ "$remote_branch_head" != "$current_head" ]]; then
+    printf 'Jules workstream launch reservation no longer owns its remote branch\n' >&2
+    return 2
+  fi
+  export LIMEN_JULES_REUSE_RESERVATION=1
 }
 
 workstream_jules_validate_clean_worktree() {
@@ -211,7 +245,8 @@ workstream_jules_publish_receipt() {
   local session_id="$2"
   local contract_helper="${LIMEN_CAPSULE_DIR:-}/workstream-contract.py"
   local timeout_seconds="${LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS:-120}"
-  local branch="" receipt_rel=""
+  local branch="" receipt_rel="" publish_commit=""
+  local staged_paths="" current_subject="" changed_paths="" parent_subject=""
 
   branch="$(git branch --show-current 2>/dev/null || true)"
   receipt_rel="${receipt#"${LIMEN_WORKTREE:-}/"}"
@@ -219,11 +254,19 @@ workstream_jules_publish_receipt() {
     printf 'Jules session receipt could not resolve its topic branch or tracked path\n' >&2
     return 2
   fi
+  if ! workstream_jules_validate_clean_worktree; then
+    return $?
+  fi
   if ! git add -- "$receipt_rel"; then
     printf 'Jules session receipt could not be staged\n' >&2
     return 2
   fi
   if ! git diff --cached --quiet -- "$receipt_rel"; then
+    staged_paths="$(git diff --cached --name-only)"
+    if [[ "$staged_paths" != "$receipt_rel" ]]; then
+      printf 'Jules session receipt publish found unrelated staged paths\n' >&2
+      return 2
+    fi
     if ! git -c commit.gpgsign=false commit -qm \
       "chore: preserve Jules session $session_id receipt" -- "$receipt_rel"; then
       printf 'Jules session receipt could not be committed\n' >&2
@@ -233,9 +276,20 @@ workstream_jules_publish_receipt() {
     printf 'Jules session receipt has unstaged changes after staging\n' >&2
     return 2
   fi
+  publish_commit="$(git rev-parse HEAD 2>/dev/null || true)"
+  current_subject="$(git log -1 --format=%s 2>/dev/null || true)"
+  changed_paths="$(git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null || true)"
+  parent_subject="$(git log -1 --format=%s HEAD^ 2>/dev/null || true)"
+  if [[ -z "$publish_commit"
+    || "$current_subject" != "chore: preserve Jules session $session_id receipt"
+    || "$changed_paths" != "$receipt_rel"
+    || "$parent_subject" != "chore: reserve Jules launch "* ]]; then
+    printf 'Jules session receipt publish requires the exact receipt-only commit on its reservation\n' >&2
+    return 2
+  fi
   GIT_TERMINAL_PROMPT=0 python3 "$contract_helper" run-bounded \
     --timeout-seconds "$timeout_seconds" -- \
-    git push --set-upstream origin "HEAD:$branch"
+    git push --set-upstream origin "$publish_commit:refs/heads/$branch"
 }
 
 workstream_export_context() {
@@ -378,9 +432,11 @@ workstream_launch_native_agent() {
         capsule_prompt="Do NOT ask for feedback or approval. Work autonomously and return the requested durable receipts. $capsule_prompt"
         # The pre-session push is the durable recovery capsule. Preserve it if a later provider
         # step fails; deleting it after Jules may have started would orphan the cloud run.
-        workstream_jules_reserve_receipt_branch || jules_rc=$?
-        if [[ "$jules_rc" -ne 0 ]]; then
-          return "$jules_rc"
+        if [[ "${LIMEN_JULES_REUSE_RESERVATION:-0}" != "1" ]]; then
+          workstream_jules_reserve_receipt_branch || jules_rc=$?
+          if [[ "$jules_rc" -ne 0 ]]; then
+            return "$jules_rc"
+          fi
         fi
         contract_helper="${LIMEN_CAPSULE_DIR:-}/workstream-contract.py"
         timeout_seconds="${LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS:-120}"
@@ -389,25 +445,34 @@ workstream_launch_native_agent() {
           --timeout-seconds "$timeout_seconds" -- \
           "$binary" remote new --repo "$jules_repo" --session "$capsule_prompt" 2>&1)" || jules_rc=$?
         printf '%s\n' "$jules_output"
-        if [[ "$jules_rc" -ne 0 ]]; then
-          return "$jules_rc"
-        fi
         jules_session_id="$(printf '%s\n' "$jules_output" | sed -n 's/^ID:[[:space:]]*//p' | tr -d '\r' | tail -n 1)"
         jules_session_url="$(printf '%s\n' "$jules_output" | sed -n 's/^URL:[[:space:]]*//p' | tr -d '\r' | tail -n 1)"
         jules_receipt="${LIMEN_WORKTREE:-}/docs/continuations/${LIMEN_CAPSULE_ID:-}/workstream.json"
-        if ! workstream_jules_sync_receipt "$jules_receipt" "$jules_session_id" "$jules_session_url"; then
-          printf 'Jules workstream launch could not bind the session to its receipt\n' >&2
-          return 2
+        if [[ "$jules_session_id" =~ ^[0-9]+$
+          && "$jules_session_url" == "https://jules.google.com/session/$jules_session_id" ]]; then
+          if ! workstream_jules_sync_receipt "$jules_receipt" "$jules_session_id" "$jules_session_url"; then
+            printf 'Jules workstream launch could not bind the session to its receipt\n' >&2
+            return 2
+          fi
+          if declare -F validate_capsule_receipt >/dev/null && ! validate_capsule_receipt; then
+            return 2
+          fi
+          if ! workstream_jules_publish_receipt "$jules_receipt" "$jules_session_id"; then
+            printf 'Jules workstream launch created a session but could not publish its receipt\n' >&2
+            return 2
+          fi
+          printf 'Jules session receipt: %s\n' "$jules_receipt"
+          if [[ "$jules_rc" -ne 0 ]]; then
+            printf 'Jules returned nonzero after emitting a durable session receipt\n' >&2
+            return "$jules_rc"
+          fi
+          return 0
         fi
-        if declare -F validate_capsule_receipt >/dev/null && ! validate_capsule_receipt; then
-          return 2
+        if [[ "$jules_rc" -ne 0 ]]; then
+          return "$jules_rc"
         fi
-        if ! workstream_jules_publish_receipt "$jules_receipt" "$jules_session_id"; then
-          printf 'Jules workstream launch created a session but could not publish its receipt\n' >&2
-          return 2
-        fi
-        printf 'Jules session receipt: %s\n' "$jules_receipt"
-        return 0
+        printf 'Jules workstream launch did not emit a valid session ID and URL\n' >&2
+        return 2
         ;;
       *)
         exec "$binary" "$capsule_prompt"
