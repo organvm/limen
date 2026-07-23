@@ -1030,6 +1030,33 @@ sensors:
         severity: silent
         escalation: "opportunity sync skipped or exceeded its bound (reads obligations-ledger.json; fails open)"
 
+  conversion-funnel:
+    section: heartbeat
+    title: "name the single public-face bottleneck (DISCOVERY|FACE|CLOSE) — the constraint that routes Aug-1 ($10k/wk) effort, kept live on the beat instead of dark/manual"
+    gate: LIMEN_CONVERSION_FUNNEL
+    default: "1"
+    source: [heartbeat]
+    owner: mail
+    cadence:
+      env: LIMEN_BEAT_CONVERSION_FUNNEL
+      default: 48
+    timeout:
+      env: LIMEN_CONVERSION_FUNNEL_TIMEOUT
+      default: 300
+    # Two ORDERED steps: traffic-collect (gh /traffic per value-repo -> traffic.jsonl, the "seen"
+    # signal) must refresh BEFORE conversion-funnel fuses seen->inbound->revenue and writes the
+    # bottleneck to logs/profile-conversion-funnel-latest.json (which the daily brief then surfaces).
+    # Both read-only + fail-open (a 403 on a repo without push access is recorded, never fatal); both
+    # silent so a network hiccup can't red the beat. Dark until this rung — the bottleneck (currently
+    # DISCOVERY: repos provable but unseen) only refreshed when a human ran it by hand.
+    steps:
+      - command: "python3 scripts/traffic-collect.py"
+        severity: silent
+        escalation: "traffic-collect skipped/failed — the 'seen' signal may be stale (gh /traffic; 403 without push access is recorded, non-fatal)"
+      - command: "python3 scripts/conversion-funnel.py"
+        severity: silent
+        escalation: "conversion-funnel skipped/failed — the public-face bottleneck (DISCOVERY|FACE|CLOSE) may be stale in logs/profile-conversion-funnel-latest.json (reads traffic.jsonl + opportunity-status.json; fails open)"
+
   opportunity-brief:
     section: heartbeat
     title: "the engine's daily VOICE — once per day compose a plain-text opportunity brief (inbound leads, what you owe, LinkedIn mirror status, correspondence, engine freshness) and EMAIL it to the operator's own inbox so the continuous engine is felt, not buried in a log"
@@ -1047,6 +1074,24 @@ sensors:
       - command: "python3 scripts/opportunity-brief.py"
         severity: silent
         escalation: "daily brief skipped or send failed (reads status/ledger, emails self via mail-send; idempotent once/day; fails open)"
+
+  opportunity-status-stale:
+    section: "0o2"
+    title: "opportunity engine is alive — the inbound-lead monitor's status file is still being refreshed, not silently frozen"
+    gate: LIMEN_OPPORTUNITY_STALE
+    default: "1"
+    source: [metabolize]
+    owner: mail
+    # The 2026-07-21 sibling of host-pressure-stale: the beat ticked but opportunity-review-delta
+    # stopped rewriting logs/opportunity-status.json for ~18h, so the daily brief + every downstream
+    # reader reported all-clear while the engine was blind. This rung watches the WRITER, not the
+    # leads: opportunity-pipeline fires every 12 beats (~6h worst-case tempo), so 13h = ~2 windows
+    # is stale without false-positiving a slow beat. Reuses the generic scripts/state-freshness.py
+    # (fails toward stale: absent/unparseable/old file all exit 1). Read-only; advisory; onset-deduped.
+    steps:
+      - command: 'python3 scripts/state-freshness.py --file logs/opportunity-status.json --field generated_at --max-age-seconds 46800 --key opportunity-status-stale --label "opportunity engine"'
+        severity: advisory
+        escalation: "opportunity-status.json has stopped refreshing — the inbound-lead monitor (opportunity-review-delta) is frozen and the daily brief is reporting stale state; check `python3 scripts/opportunity-review-delta.py` and the heartbeat (2026-07-21 18h-blind incident, WS0)"
 
   closeout-reconcile:
     section: "0z"
@@ -1067,3 +1112,36 @@ sensors:
       - label: "closeout classifier self-test (verdicts correct)"
         tier: det
         command: "python3 scripts/reconcile-closeouts.py --doctor"
+
+  decorum:
+    section: "heartbeat"
+    title: "professionalization keeper — no public surface is currently egg-faced"
+    gate: LIMEN_DECORUM
+    default: "1"
+    source: [heartbeat]
+    owner: decorum
+    cadence:
+      env: LIMEN_BEAT_DECORUM
+      default: 6
+    timeout:
+      env: LIMEN_DECORUM_TIMEOUT
+      default: 120
+    # DECORVM federates the estate's six quality organs (experience/visual/seo/countenance/links/moat)
+    # into ONE verdict at logs/decorum.json + logs/decorum.html. Departments + the severity floor are
+    # declared data in institutio/governance/decorum-surfaces.yaml (derive-never-pin); an unmeasured
+    # department is skipped fail-open, never failed. Ships default-on but READ-ONLY — the effector that
+    # files tasks/issues from findings is a separate gate (LIMEN_DECORUM_APPLY), dry-run until armed.
+    steps:
+      - command: "python3 scripts/decorum-keeper.py --sweep"
+        args_when:
+          - env: LIMEN_DECORUM_APPLY
+            default: "0"
+            equals: "1"
+            args: ["--apply"]
+            armed_valve_type: deliverable
+        severity: advisory
+        escalation: "DECORVM found a public egg-face — see logs/decorum.json (blocking finding at/above floor 'high')"
+    omega_eligible:
+      - label: "keeper wiring self-test (registry + schema valid)"
+        tier: det
+        command: "python3 scripts/decorum-keeper.py --doctor"
