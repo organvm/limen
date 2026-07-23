@@ -32,6 +32,15 @@
 
 schema_version: 0.1
 
+pr_debt_policy:
+  active_owner_max_age_hours: 168
+  owner_label_prefix: "owner:"
+  preservation_labels: ["custody:preservation"]
+  preservation_markers:
+    - "Lifecycle preservation PR opened by `scripts/worktree-pr-receipts.py`."
+  owner: gitvs
+  note: "Runtime policy for typing every exhaustively enumerated open PR without encoding owners, repositories, or provider names in the engine."
+
 # ── the machine identity contract ────────────────────────────────────────────────────────────
 # The App is the estate's actor. `expected_permissions` is the least-privilege posture the doctor
 # holds the live App installation to — it fails on an OVER-grant (drift toward more-than-declared),
@@ -167,6 +176,18 @@ resource_types:
     status: active
     owner: gitvs
     note: "The ACCOUNT layer above the repo graph: each org's billing plan + repo custody vs the `orgs:` block below (doctor class L). Plan/subscription changes are account-level human acts — the doctor cites the lever, never touches billing. (Enterprise emptied by machine 2026-07-17, #1185; the surviving atom is the Team upgrade.)"
+  repo_collaborators:
+    identity: derived
+    desired: ["every outside collaborator matches a grant row in institutio/github/access.yaml (login, role <= ceiling); nothing undeclared, nothing on a never-grant repo"]
+    observe: "gh api /repos/{repo}/collaborators?affiliation=outside + /repos/{repo}/invitations + /orgs/{org}/outside_collaborators"
+    effector:
+      - kind: delegate
+        argv: [python3, scripts/collab-sync.py, --apply]
+        approval: {lever: L-PARTNER-GRANTS}
+      - {kind: file-atom, target: L-PARTNER-GRANTS}
+    status: active
+    owner: gitvs
+    note: "Partner partitioning (grants, not transfers): the ACCESS registry is desired-state, the census is class N. Sending an invite is OUTBOUND = his hand (the plan prints the exact commands on the lever); --apply removes UNDECLARED access only (the exposure-reducing direction), double-dark behind LIMEN_COLLAB_APPLY=1 and the approval lever above — gitvs reconcile never auto-runs it."
 
   # ── envisioned — declared (owed), surfaced in the ledger, not yet gating ──────────────────────
   # These are the surfaces the ask ("everything GitHub") names but GITVS does not yet enact. They are
@@ -215,11 +236,12 @@ resource_types:
   dependabot:
     identity: derived
     desired: ["security_updates_on"]
-    observe: ""
-    effector: []
-    status: envisioned
+    observe: "python3 scripts/dependabot-security-guard.py --check (per audit-CI repo: automated_security_fixes + vulnerability-alerts)"
+    effector:
+      - {kind: delegate, argv: [python3, scripts/dependabot-security-guard.py, --apply]}
+    status: active
     owner: gitvs
-    note: "Dependabot/Renovate posture — owed; now the native instance of the `integrations` registry below (its config .github/dependabot.yml is already present)."
+    note: "Dependabot security-update posture — the Tier-2 owner for estate-audit-heal's deferred (framework-major) advisories. Wired 2026-07-22: dependabot-security-guard.py observes + (armed) re-enables security-updates/alerts across the org's audit-CI repos, so the deferral can't silently break. Scoped to audit-CI repos (limen uses Renovate). Config .github/dependabot.yml is a separate concern (version-updates, pushed by sync-marketplace-config.py)."
   marketplace_app:
     identity: derived
     desired: ["installed_on_scope_classes", "config_present"]
@@ -263,7 +285,7 @@ orgs:
 classes:
   conductor:
     match: ["organvm/limen"]
-    visibility: private                    # flipped 2026-07-16 (publication-engine double-dark, his deliberate act)
+    visibility: public                     # 2026-07-22 owner decision: conductor stays public (free-tier CI dependency; resolves the observed-public drift); supersedes the 2026-07-16 private flip
     branch_protection: required
     required_checks: ["pr-gate", "python", "web", "worker"]
     app_installed: required
@@ -403,6 +425,7 @@ repo_overrides:
   organvm/collaboratory: {class: operation_private, why: "collaboratory constellation — private operation"}
   organvm/commerce--meta: {class: operation_private, why: "product operation; path-sample clean — publish-wave candidate (sweep + lever gated)", publish_candidate: true}
   organvm/composition-1-2: {class: operation_private, why: "product operation; path-sample clean — publish-wave candidate (sweep + lever gated)", publish_candidate: true}
+  organvm/content-engine--asset-amplifier: {class: operation_private, why: "partner-shared build lane — protected, review-gated (repo_collaborators grant; was falling to protection-exempt private_unreviewed)"}
   organvm/content-engine--asset-amplifier--a-organvm-legacy: {class: operation_private, why: "product operation; path-sample clean — publish-wave candidate (sweep + lever gated)", publish_candidate: true}
   organvm/contrib: {class: operation_private, why: "contribution staging lane (prepare-never-submit)"}
   organvm/contrib--anthropic-skills: {class: operation_private, why: "contribution staging lane (prepare-never-submit)"}
@@ -475,6 +498,7 @@ repo_overrides:
   organvm/sign-signal--voice-synth: {class: operation_private, why: "product operation; path-sample clean — publish-wave candidate (sweep + lever gated)", publish_candidate: true}
   organvm/sovereign--ground: {class: vault_private, why: "ground corpus — internal strategy"}
   organvm/sovereign--ground--4444j99: {class: vault_private, why: "ground corpus — internal strategy"}
+  organvm/sovereign-systems--elevate-align: {class: operation_private, why: "partner-shared build lane — protected, review-gated (repo_collaborators grant; was falling to protection-exempt private_unreviewed)"}
   organvm/speculum-opencode: {class: vault_private, why: "planning/prompt corpus — internal strategy"}
   organvm/speech-score-engine: {class: operation_private, why: "product operation; path-sample clean — publish-wave candidate (sweep + lever gated)", publish_candidate: true}
   organvm/studium-generale: {class: operation_private, why: "product operation; path-sample clean — publish-wave candidate (sweep + lever gated)", publish_candidate: true}

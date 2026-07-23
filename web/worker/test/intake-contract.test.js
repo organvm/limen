@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import worker from "../src/index.js";
@@ -9,6 +10,13 @@ import {
   validateIntakeContract,
 } from "../src/index.js";
 
+test("production projection targets the protected board publication branch", () => {
+  const config = readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
+  assert.match(config, /LIMEN_GITHUB_BRANCH = "tabularius\/board-projection"/);
+  assert.match(config, /LIMEN_CONDUCT_KEEPER_NAME = "tabularius-conduct-v2"/);
+  assert.doesNotMatch(config, /LIMEN_GITHUB_BRANCH = "main"/);
+});
+
 function typedTask(overrides = {}) {
   return {
     id: "WORKER-1",
@@ -16,6 +24,11 @@ function typedTask(overrides = {}) {
     repo: "organvm/limen",
     target_agent: "codex",
     status: "open",
+    budget_cost: 1,
+    origin: "human_prompt",
+    horizon: "present",
+    value_case: "Deliver one bounded Worker task",
+    owner_surface: "organvm/limen",
     predicate: "pytest -q web/api/tests/test_main.py",
     receipt_target: "github:organvm/limen:pull-request:WORKER-1",
     ...overrides,
@@ -67,6 +80,10 @@ test("GitHub-backed Worker mutations fail closed at the missing conduct keeper w
     "    status: dispatched",
     "    predicate: pytest -q",
     "    receipt_target: git:organvm/limen:tasks.yaml#WORKER-1",
+    "    origin: human_prompt",
+    "    horizon: present",
+    "    value_case: Verify the bounded Worker task",
+    "    owner_surface: organvm/limen",
     "    created: '2026-07-01'",
     "    dispatch_log: []",
     "",
@@ -117,7 +134,13 @@ test("GitHub-backed Worker mutations fail closed at the missing conduct keeper w
     new Request("https://limen.test/api/tasks/WORKER-1/verify", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ status: "done" }),
+      body: JSON.stringify({
+        status: "done",
+        predicate_exit_code: 0,
+        receipt_target: "git:organvm/limen:tasks.yaml#WORKER-1",
+        receipt_verified: true,
+        verification_context_digest: "a".repeat(64),
+      }),
     }),
     new Request("https://limen.test/api/tasks/WORKER-1/assign", {
       method: "POST",

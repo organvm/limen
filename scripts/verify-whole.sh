@@ -127,6 +127,9 @@ python3 scripts/tests/correspondence-drain-trend-append.test.py
 step "Verify the stale-awaiting-them nudge (INTERNALDATE parse + a reply older than the threshold flips awaiting-them → needs-human)"
 python3 scripts/tests/correspondence-await-stale.test.py
 
+step "Verify the daily brief SURFACES stale warm leads (stale_awaiting cue renders + counted + PII-clean; silent at 0)"
+python3 scripts/tests/opportunity-brief.test.py
+
 step "Verify the worktree-commit-guard hook (live-main commit deny matrix, hermetic fixture)"
 bash scripts/tests/worktree-commit-guard.test.sh
 
@@ -205,7 +208,7 @@ node scripts/validate-contract-schemas.mjs
 
 step "Run API and CLI tests"
 env -u LIMEN_API_TOKEN -u LIMEN_OWNER_TOKEN -u LIMEN_CLIENT_TOKEN \
-  PYTHONPATH="$PYTHONPATH_VALUE" python3 -m pytest web/api/tests cli/tests -q
+  PYTHONPATH="$PYTHONPATH_VALUE" python3 -m pytest web/api/tests cli/tests -q -n auto
 
 step "Verify MONETA sovereign-mint licence tests (vitest + tsc)"
 if command -v npm >/dev/null; then
@@ -229,6 +232,10 @@ step "Build static dashboard and validate exported surfaces"
   cd "$ROOT/web/app"
   npm run build
 )
+python3 "$ROOT/scripts/assemble-dashboard-data.py" \
+  --app "$ROOT/web/app" \
+  --repo-root "$ROOT"
+node "$ROOT/web/app/scripts/validate-exported-pages.mjs"
 
 if [[ "${LIMEN_VERIFY_LIVE:-0}" == "1" ]]; then
   step "Verify live Firebase static surfaces"

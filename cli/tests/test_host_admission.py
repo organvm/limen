@@ -588,19 +588,23 @@ def test_interrupted_migration_unrelated_duplicate_still_raises(tmp_path: Path) 
     }
     # Legacy store: execution kind, owner=codex-a.
     (root / "state.json").write_text(
-        json.dumps({
-            "schema": "limen.host_admission_state.v1",
-            "leases": [{**base, "kind": "execution"}],
-            "pressure": None,
-        }),
+        json.dumps(
+            {
+                "schema": "limen.host_admission_state.v1",
+                "leases": [{**base, "kind": "execution"}],
+                "pressure": None,
+            }
+        ),
         encoding="utf-8",
     )
     # Scoped store: scoped kind but different owner — not a plausible migration pair.
     (root / "scoped-state.json").write_text(
-        json.dumps({
-            "schema": "limen.host_admission_scoped_state.v1",
-            "leases": [{**base, "kind": f"execution:{scope_hash}", "owner": "codex-b"}],
-        }),
+        json.dumps(
+            {
+                "schema": "limen.host_admission_scoped_state.v1",
+                "leases": [{**base, "kind": f"execution:{scope_hash}", "owner": "codex-b"}],
+            }
+        ),
         encoding="utf-8",
     )
     svc = controller(root)
@@ -817,7 +821,10 @@ host_admission_release
         ["bash", "-c", shell],
         capture_output=True,
         text=True,
-        timeout=10,
+        # The helper spawns several python3 interpreters; on a CI host saturated
+        # by xdist siblings each spawn can take seconds, so the budget covers a
+        # loaded host while still bounding a hung refresh child.
+        timeout=60,
         check=False,
     )
     assert result.returncode == 0, result.stderr

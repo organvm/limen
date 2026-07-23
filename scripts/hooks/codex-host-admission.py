@@ -14,12 +14,19 @@ from typing import Any, Callable
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "cli" / "src"))
 
-from limen.codex_action_admission import classify_action, path_within, target_paths  # noqa: E402
+from limen.host_admission_capabilities import (  # noqa: E402
+    host_admission_capabilities,
+)
+
+if sys.argv[1:] == ["--capabilities"]:
+    print(json.dumps(host_admission_capabilities(), separators=(",", ":")))
+    raise SystemExit(0)
+
+from limen.action_admission import classify_action, path_within, target_paths  # noqa: E402
+from limen.action_admission_runtime import admit_pre_tool_action  # noqa: E402
 from limen.host_admission import (  # noqa: E402
     AdmissionController,
     AdmissionStateError,
-    host_admission_capabilities,
-    is_descendant,
     worktree_scope,
 )
 
@@ -307,43 +314,15 @@ def handle(
     pid = owner_pid or codex_owner_pid()
 
     if event == "PreToolUse":
-        action = classify_action(payload)
-        if action.category in {"observe", "sanctioned_control"}:
-            return None
-        if action.category == "unguarded_heavy":
-            return _tool_deny(f"unguarded-heavy; use {action.equivalent}")
-        if action.category == "guarded_heavy":
-            status = controller.status(probe=True)
-            heavy = next((item for item in status.get("leases") or [] if item.get("kind") == "heavy"), None)
-            inherited = bool(heavy and is_descendant(pid, int(heavy["pid"])))
-            reasons = list(status.get("reasons") or [])
-            if heavy and not inherited:
-                reasons.insert(0, "heavy-lease-held")
-            if reasons:
-                return _tool_deny(",".join(dict.fromkeys(reasons)))
-            return None
-        if owner is None:
-            return _tool_deny("writer-session-identity-unavailable")
-        cwd = Path(str(payload.get("cwd") or "")).expanduser()
-        try:
-            scope = worktree_scope(cwd)
-        except ValueError as exc:
-            return _tool_deny(str(exc))
-        if not scope.linked:
-            return _tool_deny("shared-checkout-write")
-        targets = target_paths(payload, cwd)
-        if any(not path_within(path, scope.top_level) for path in targets):
-            return _tool_deny("write-target-outside-worktree")
-        decision = controller.acquire(
-            scope.lease_kind,
+        decision = admit_pre_tool_action(
+            payload,
+            controller=controller,
             owner=owner,
             surface="codex-worktree-write",
             pid=pid,
             ttl_seconds=_EXECUTION_TTL_SECONDS,
         )
-        if not decision["allowed"]:
-            return _tool_deny(",".join(decision.get("reasons") or ["workspace-writer-lease-held"]))
-        return None
+        return None if decision.allowed else _tool_deny(decision.reason)
 
     if event == "SubagentStart":
         return {
@@ -426,8 +405,10 @@ def main() -> int:
         event = str(payload.get("hook_event_name") or "")
         output = handle(payload)
     except (AdmissionStateError, ValueError) as exc:
-        text = _state_error_text(exc) if isinstance(exc, AdmissionStateError) else (
-            f"Limen host admission hook failed closed: {exc}"
+        text = (
+            _state_error_text(exc)
+            if isinstance(exc, AdmissionStateError)
+            else (f"Limen host admission hook failed closed: {exc}")
         )
         if event == "PreToolUse":
             output = _tool_deny(text)

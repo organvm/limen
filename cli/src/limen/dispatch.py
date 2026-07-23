@@ -64,6 +64,16 @@ from limen.provider_selection import (
     paid_service_block_reason,
     select_opencode_model,
 )
+from limen.plan_handoff import (
+    PlanHandoffResult,
+    PlanReceiptError,
+    build_plan_receipt,
+    builder_task_from_receipt,
+    is_build_from_plan,
+    is_plan_only,
+    select_live_builder,
+    validate_receipt_for_task,
+)
 from limen.remote_execution import (
     GitHubWorkflowAdapter,
     ReceiptStore,
@@ -92,11 +102,18 @@ from limen.worktree_debt import (
     admission_blocks,
     take_admission_snapshot,
 )
+from limen.worktree_initialization import WorktreeInitializationError, initialize_worktree
 from limen.worktree_roots import dispatch_clone_cache_root, effective_worktree_root
+from limen.work_loan import task_work_loan_readiness
 from limen.workstream_contract import (
     ContractError as WorkstreamContractError,
     WORKSTREAM_SUCCESSOR_REQUIRED_LABEL,
     validate_packet_contract,
+)
+from limen.work_loan_journal import (
+    WorkLoanJournalError,
+    default_store as default_work_loan_journal_store,
+    work_loan_selection_key,
 )
 
 
@@ -895,7 +912,34 @@ def _dispatchable(task: Task) -> bool:
         return False
     if "needs-human" in (task.labels or []):
         return False
-    return task_execution_ready(task)
+    return task_work_loan_readiness(task).ready and task_execution_ready(task)
+
+
+def _effective_target_agent(task: Task) -> str:
+    """Return the live claim lane without mutating durable ownership metadata.
+
+    ``target_agent`` is the task's durable eligibility/ownership constraint. A
+    bounded provider failure may route the next claim through the latest OPEN
+    receipt; that executor lives in ``dispatch_log.route_to`` and does not
+    rewrite the task itself.
+    """
+
+    if task.status == "open" and is_build_from_plan(task) and task.plan_receipt is not None:
+        try:
+            validate_receipt_for_task(task, task.plan_receipt)
+            return select_live_builder(task.plan_receipt) or "__plan_builder_unavailable__"
+        except PlanReceiptError:
+            return "__plan_builder_invalid__"
+    if task.status == "open" and task.dispatch_log:
+        latest = task.dispatch_log[-1]
+        if latest.status == "open" and latest.route_to:
+            return canonical_agent(latest.route_to)
+    return canonical_agent(task.target_agent)
+
+
+def _task_targets_agent(task: Task, agent: str) -> bool:
+    target = _effective_target_agent(task)
+    return target in {canonical_agent(agent), "any"}
 
 
 def _entry_text(entry: DispatchLogEntry) -> str:
@@ -1165,6 +1209,7 @@ def sort_value_gate_candidates(
         key=lambda task: (
             _dispatch_focus_bucket(task, value_repos),
             _PRIORITY_ORDER.get(task.priority, 99),
+            *work_loan_selection_key(task),
             str(task.id),
         ),
     )
@@ -1533,7 +1578,7 @@ def session_id() -> str:
     return os.environ.get("CLAUDE_SESSION_ID", os.environ.get("GEMINI_SESSION_ID", "cli"))
 
 
-def call_agent_dispatch(agent: str, task: Task, dry_run: bool) -> bool | str:
+def call_agent_dispatch(agent: str, task: Task, dry_run: bool) -> bool | str | PlanHandoffResult:
     agent = canonical_agent(agent)
     try:
         workstream_packet = _workstream_packet_for(task)
@@ -1583,6 +1628,52 @@ def call_agent_dispatch(agent: str, task: Task, dry_run: bool) -> bool | str:
             reasons = ",".join(exc.decision.get("reasons") or ["host-admission-denied"])
             return _blocked_result(f"host admission denied local {agent} execution: {reasons}")
     return _run_cmd(["agent-dispatch", agent, _build_prompt(task)], task, dry_run)
+
+
+def _journaled_agent_dispatch(
+    agent: str,
+    task: Task,
+    dry_run: bool,
+    reservation_id: str,
+    journal_root: Path | None = None,
+) -> bool | str | PlanHandoffResult:
+    """Run one provider only after its work-capacity reservation is durable."""
+
+    if dry_run:
+        return call_agent_dispatch(agent, task, dry_run=True)
+    store = default_work_loan_journal_store() if journal_root is None else default_work_loan_journal_store(journal_root)
+    try:
+        store.record_reservation(task, agent=canonical_agent(agent), reservation_id=reservation_id)
+    except WorkLoanJournalError as exc:
+        return _blocked_result(f"work-loan reservation failed: {exc}")
+    started = time.monotonic()
+    try:
+        result = call_agent_dispatch(agent, task, dry_run=False)
+    except Exception:
+        elapsed_seconds = max(0.0, time.monotonic() - started)
+        store.record_actual(
+            task,
+            agent=canonical_agent(agent),
+            reservation_id=reservation_id,
+            elapsed_seconds=elapsed_seconds,
+            local_host=canonical_agent(agent) in LOCAL_CHECKOUT_AGENTS,
+            metrics={"runs": 1},
+        )
+        raise
+    elapsed_seconds = max(0.0, time.monotonic() - started)
+    launched_runs = 0 if _is_blocked_result(result) or _is_workstream_successor_result(result) else 1
+    try:
+        store.record_actual(
+            task,
+            agent=canonical_agent(agent),
+            reservation_id=reservation_id,
+            elapsed_seconds=elapsed_seconds,
+            local_host=canonical_agent(agent) in LOCAL_CHECKOUT_AGENTS,
+            metrics={"runs": launched_runs},
+        )
+    except WorkLoanJournalError as exc:
+        return _blocked_result(f"work-loan actual accounting failed after provider launch: {exc}")
+    return result
 
 
 def _remote_receipt_store() -> ReceiptStore:
@@ -1850,6 +1941,14 @@ def _build_prompt(task: Task, task_first: bool = False) -> str:
             "For PR-fix/rebase tasks, inspect that PR before editing; when available, dispatch "
             "bases this isolated branch on the PR head and targets the repair PR back to that head."
         )
+    if is_plan_only(task):
+        parts.append(
+            "\n\n--- PLAN-ONLY AUTHORITY ---\n"
+            "Do not edit, create, delete, move, or format files; do not commit, push, open a PR, "
+            "or mutate external state. Inspect the isolated checkout and return a concrete, "
+            "ordered implementation plan as stdout. The dispatcher will reject the handoff if "
+            "the worktree changes. Do not select or recommend a named model."
+        )
     body = f"{''.join(parts)}\n\n{_value_gate_discipline(task)}\n\n{_verification_discipline()}"
     flame = _flame_preamble()
     if not flame:
@@ -2085,7 +2184,7 @@ def _call_warp_oz(agent: str, task: Task, dry_run: bool) -> bool | str:
     dispatch_repo = os.environ.get("LIMEN_WARP_OZ_REPO", "organvm/limen")
     intent = (
         "Planning only: return a build packet and do not implement."
-        if requested_profile.planning_only and plan_accepted
+        if requested_profile.planning_only
         else "Execute the task and verify the narrow acceptance predicate."
     )
     prompt = (
@@ -3383,11 +3482,11 @@ def _blocked_result(reason: str) -> str:
     return _FAILED_BLOCKED_PREFIX + " ".join((reason or "blocked").split())[:500]
 
 
-def _is_blocked_result(result: bool | str) -> bool:
+def _is_blocked_result(result: object) -> bool:
     return isinstance(result, str) and result.startswith(_FAILED_BLOCKED_PREFIX)
 
 
-def _blocked_reason(result: bool | str) -> str:
+def _blocked_reason(result: object) -> str:
     if not _is_blocked_result(result):
         return ""
     return str(result)[len(_FAILED_BLOCKED_PREFIX) :]
@@ -3397,11 +3496,11 @@ def _workstream_successor_result(reason: str) -> str:
     return _WORKSTREAM_SUCCESSOR_PREFIX + " ".join((reason or "workstream boundary reached").split())[:500]
 
 
-def _is_workstream_successor_result(result: bool | str) -> bool:
+def _is_workstream_successor_result(result: object) -> bool:
     return isinstance(result, str) and result.startswith(_WORKSTREAM_SUCCESSOR_PREFIX)
 
 
-def _workstream_successor_reason(result: bool | str) -> str:
+def _workstream_successor_reason(result: object) -> str:
     if not _is_workstream_successor_result(result):
         return ""
     return str(result)[len(_WORKSTREAM_SUCCESSOR_PREFIX) :]
@@ -4117,7 +4216,7 @@ def _run_isolated_agent(
     wt: Path,
     agent_cmd: list[str],
     lane_timeout: int,
-) -> bool | str:
+) -> bool | str | PlanHandoffResult:
     try:
         run_env = _lane_run_env(agent, wt, task)
         if agent == "opencode":
@@ -4150,6 +4249,17 @@ def _run_isolated_agent(
         _show_opencode_clock_after_run(task)
     if run.returncode != 0:
         return _failed_agent_result(agent, task, run)
+    if is_plan_only(task):
+        status = _git(["status", "--porcelain", "-z"], wt)
+        if status.returncode != 0:
+            return _blocked_result("plan-only worktree status is unreadable")
+        if status.stdout:
+            return _blocked_result("plan-only worker mutated the isolated worktree")
+        try:
+            receipt = build_plan_receipt(task, run.stdout or "", planner_agent=agent)
+        except PlanReceiptError as exc:
+            return _blocked_result(f"invalid plan-only result: {exc}")
+        return PlanHandoffResult(receipt=receipt)
     if agent in ("agy", "antigravity"):
         _bridge_agy_scratch(task, wt)
     if agent == "ollama":
@@ -4443,7 +4553,7 @@ def _isolated_local_run(
     task: Task,
     dry_run: bool,
     base_agent_args: list[str] | None = None,
-) -> bool | str:
+) -> bool | str | PlanHandoffResult:
     binary = _resolve_agent_binary(agent)
     repo_dir = _resolve_repo_dir(task)
     if repo_dir is None and not dry_run:
@@ -4506,7 +4616,8 @@ def _isolated_local_run(
     # 1) fresh base from origin — never the user's possibly-dirty working tree.
     # Hold the git-plumbing lock only for these fast parent-repo ops so concurrent
     # same-repo dispatches don't collide on index.lock (the slow run is unlocked).
-    add = subprocess.CompletedProcess([], 1, "", "worktree add was not attempted")
+    initialization_error = "worktree initialization was not attempted"
+    initialized = False
     for attempt in range(6):
         if attempt:
             suffix = secrets.token_hex(4)
@@ -4522,15 +4633,30 @@ def _isolated_local_run(
                 if wt.exists():
                     print(f"  retrying worktree add {task.id}: preserved existing worktree at {wt}")
                     continue
-            add = _git_plumbing(["worktree", "add", "-b", branch, str(wt), checkout_ref], repo_dir, timeout=120)
-        if add.returncode == 0:
+            try:
+                initialize_worktree(
+                    repo_dir,
+                    wt,
+                    branch=branch,
+                    checkout_ref=checkout_ref,
+                    task_id=task.id,
+                )
+            except WorktreeInitializationError as exc:
+                initialization_error = str(exc)
+            else:
+                initialized = True
+        if initialized:
             break
-        if re.search(r"branch .* already exists|is already checked out", add.stderr or "", re.IGNORECASE):
+        if re.search(
+            r"branch .* already exists|is already checked out",
+            initialization_error,
+            re.IGNORECASE,
+        ):
             print(f"  retrying worktree add {task.id}: stale branch collision on {branch}")
             continue
         break
-    if add.returncode != 0:
-        print(f"  FAILED worktree add {task.id}: {add.stderr.strip()[:300]}")
+    if not initialized:
+        print(f"  FAILED transactional worktree initialization {task.id}: {initialization_error[:300]}")
         return False
     _record_worktree_birth(task, wt, branch, checkout_ref, pr_base, existing_pr=bool(pr_head))
     _mark_machine_admission_born(task.id)
@@ -4542,6 +4668,8 @@ def _isolated_local_run(
         start_head_result = _git(["rev-parse", "HEAD"], wt)
         start_head = start_head_result.stdout.strip() if start_head_result.returncode == 0 else ""
         run_result = _run_isolated_agent(agent, task, wt, agent_cmd, lane_timeout)
+        if isinstance(run_result, PlanHandoffResult):
+            return run_result
         if run_result is not True:
             return run_result
 
@@ -4577,7 +4705,7 @@ def _isolated_local_run(
             _cleanup_isolated_worktree(repo_dir, wt, branch, checkout_ref, pushed=pushed, task=task)
 
 
-def _call_local_agent(agent: str, task: Task, dry_run: bool) -> bool | str:
+def _call_local_agent(agent: str, task: Task, dry_run: bool) -> bool | str | PlanHandoffResult:
     if not agent_can_run_task(agent, task):
         print(f"  SKIP {task.id}: {agent} is gated for Limen registry discovery tasks")
         return False
@@ -4682,7 +4810,7 @@ def _remaining_budget(limen: LimenFile, agent: str, budget: int) -> int:
     return max(0, budget - track.spent)
 
 
-DispatchResult = tuple[str, str, bool | str, str, str]
+DispatchResult = tuple[str, str, bool | str | PlanHandoffResult, str, str]
 
 
 def _clear_result_receipts(task_id: str) -> None:
@@ -4848,7 +4976,7 @@ def dispatch_tasks(
     for t in tasks:
         if not _dispatchable(t):
             continue
-        if t.target_agent != agent_filter and t.target_agent != "any":
+        if not _task_targets_agent(t, agent_filter):
             continue
         if not agent_can_run_task(agent_filter, t):
             continue
@@ -4913,7 +5041,13 @@ def dispatch_tasks(
         selected_contract_hash = execution_contract_hash(task)
         selected_lifecycle_token = _lifecycle_ownership_token(task)
         try:
-            result = call_agent_dispatch(agent_filter, task, dry_run)
+            result = _journaled_agent_dispatch(
+                agent_filter,
+                task,
+                dry_run,
+                selected_lifecycle_token,
+                tasks_path.parent,
+            )
         finally:
             if not dry_run:
                 _release_machine_admission(task.id)
@@ -4945,7 +5079,7 @@ def dispatch_tasks(
 def _apply_result(
     task: Task,
     agent: str,
-    result: bool | str,
+    result: bool | str | PlanHandoffResult,
     now: datetime,
     track: BudgetTrack,
     *,
@@ -4974,10 +5108,13 @@ def _apply_result(
     # same failure would violate the fixed-point contract.
     if successor_held:
         return
-    successful_result = bool(result) and result not in {_NOOP, _RATELIMIT, _TIMEOUT}
-    successful_result = (
-        successful_result and not _is_blocked_result(result) and not _is_workstream_successor_result(result)
-    )
+    if isinstance(result, PlanHandoffResult):
+        successful_result = True
+    else:
+        successful_result = bool(result) and result not in {_NOOP, _RATELIMIT, _TIMEOUT}
+        successful_result = (
+            successful_result and not _is_blocked_result(result) and not _is_workstream_successor_result(result)
+        )
     if (
         not successor_held
         and not successful_result
@@ -4991,7 +5128,38 @@ def _apply_result(
         return
 
     entry = DispatchLogEntry(timestamp=now, agent=agent, session_id=session_id(), status="dispatched")
-    if result == _NOOP:
+    if isinstance(result, PlanHandoffResult):
+        try:
+            builder = select_live_builder(result.receipt)
+            builder_view = builder_task_from_receipt(
+                task,
+                result.receipt,
+                builder=builder or "__plan_builder_unavailable__",
+            )
+        except PlanReceiptError as exc:
+            entry.status = "failed_blocked"
+            entry.output = f"plan receipt rejected: {exc}"
+            task.status = "failed_blocked"
+            if "blocked:plan-receipt" not in task.labels:
+                task.labels.append("blocked:plan-receipt")
+        else:
+            task.target_agent = builder_view.target_agent
+            task.labels = builder_view.labels
+            task.context = builder_view.context
+            task.claude_tier = None
+            task.plan_receipt = result.receipt
+            task.status = "open"
+            entry.status = "open"
+            entry.route_to = builder
+            entry.output = (
+                "validated plan receipt recorded; builder will be selected again from live capabilities at claim time"
+            )
+            if builder is None:
+                entry.output += "; no capable builder is currently reachable"
+            if charge_budget:
+                track.spent += task.budget_cost
+                track.per_agent[agent] = track.per_agent.get(agent, 0) + task.budget_cost
+    elif result == _NOOP:
         entry.status = "failed"
         entry.output = "No-op result; failed for recovery instead of archived."
         task.status = "failed"
@@ -5002,7 +5170,6 @@ def _apply_result(
         entry.status = "open"
         entry.route_to = nxt
         entry.output = f"rate limited on {agent}; reopened to live fleet route"
-        task.target_agent = nxt
         task.status = "open"
     elif result == _TIMEOUT:
         if _control_host_task(task):
@@ -5024,7 +5191,6 @@ def _apply_result(
             entry.status = "open"
             entry.route_to = "jules"
             entry.output = f"timeout on {agent}; reopened to asynchronous lane"
-            task.target_agent = "jules"
             task.status = "open"
             if "slow" not in task.labels:
                 task.labels.append("slow")
@@ -5056,13 +5222,11 @@ def _apply_result(
             entry.status = "open"
             entry.route_to = fallback
             entry.output = "remote/service lane failed; reopened to healthy fleet cascade"
-            task.target_agent = fallback
             task.status = "open"
         elif next_lane := _next_lane(agent):
             entry.status = "open"
             entry.route_to = next_lane
             entry.output = f"{agent} lane failed; reopened to healthy fleet cascade"
-            task.target_agent = next_lane
             task.status = "open"
         else:
             entry.status = "failed"
@@ -5407,7 +5571,7 @@ def _select_parallel_reservations(
         for t in limen.tasks:
             if not _dispatchable(t):
                 continue
-            if t.target_agent != agent and t.target_agent != "any":
+            if not _task_targets_agent(t, agent):
                 continue
             if not agent_can_run_task(agent, t):
                 continue
@@ -5619,7 +5783,13 @@ def dispatch_parallel(
     def run_one(at: tuple[str, str]) -> DispatchResult:
         agent, tid = at
         try:
-            res = call_agent_dispatch(agent, id2task[tid], dry_run=False)
+            res = _journaled_agent_dispatch(
+                agent,
+                id2task[tid],
+                False,
+                selected_lifecycle_tokens[tid],
+                tasks_path.parent,
+            )
         except Exception as e:  # never let one task kill the pool
             print(f"  ERROR {agent} {tid}: {str(e)[:160]}")
             res = False

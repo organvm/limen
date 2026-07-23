@@ -26,6 +26,7 @@ from limen.conduct.models import (
 )
 from limen.conduct.resources import conflicting_keys, parse_resource, sorted_claims
 from limen.conduct.store import MemoryStateStore, StateStore
+from limen.work_loan import packet_is_non_capacity_projection, packet_work_loan_missing, work_loan_denial
 
 
 class ConductError(RuntimeError):
@@ -81,12 +82,15 @@ def authority_attenuates(child: AuthorityEnvelopeV1, parent: AuthorityEnvelopeV1
 
 
 def _is_task_compatibility_packet(packet: WorkPacketV1) -> bool:
-    return bool(
-        packet.execution.get("adapter") == "tabularius"
-        and packet.intent.get("kind") in {"task.upsert", "task.status", "task.claim", "task.mutate"}
-        and packet.task_id
-        and packet.intent.get("task_id") == packet.task_id
-    )
+    return packet_is_non_capacity_projection(packet)
+
+
+def _require_work_loan(packet: WorkPacketV1) -> None:
+    """Admit only underwritten execution or the exact zero-run task projection."""
+
+    missing = packet_work_loan_missing(packet)
+    if missing:
+        raise ConductConflict(work_loan_denial(missing))
 
 
 class ConductBroker:
@@ -191,6 +195,7 @@ class ConductBroker:
         now = now or utc_now()
         principal, principal_enforced = self._principal_for_identity(packet.conductor, principal)
         self._require_role(principal, "conductor", "compatibility")
+        _require_work_loan(packet)
         if packet.deadline <= now:
             raise ConductError("work packet deadline has already passed")
         with self.store.transaction() as state:
@@ -202,7 +207,7 @@ class ConductBroker:
             if not conductor_raw:
                 raise ConductConflict("packet conductor must be a registered session")
             conductor = ConductorSessionV1.model_validate(conductor_raw)
-            if conductor.identity != packet.conductor:
+            if conductor.identity != self._bind_conductor_identity(packet.conductor, principal):
                 raise ConductConflict("packet conductor identity does not match its registered session")
             if now - conductor.heartbeat_at > self.session_ttl:
                 raise ConductConflict("packet conductor session is not healthy")
@@ -237,6 +242,7 @@ class ConductBroker:
                     or stored.resource_claims != packet.resource_claims
                     or stored.predicate != packet.predicate
                     or stored.receipt_target != packet.receipt_target
+                    or stored.work_loan != packet.work_loan
                 ):
                     raise ConductConflict("duplicate work changed its identity, authority, or contract")
                 state["work_index"][packet.work_id] = duplicate
@@ -406,6 +412,8 @@ class ConductBroker:
             raise ConductError("conduct graph submission requires at least one packet")
         if any(_is_task_compatibility_packet(packet) or packet.task_id for packet in packets):
             raise ConductConflict("task-board packets are not accepted in graph submissions")
+        for packet in packets:
+            _require_work_loan(packet)
         now = now or utc_now()
         resolved, _ = self._principal_for_identity(packets[0].conductor, principal)
         self._require_role(resolved, "conductor")
@@ -472,6 +480,7 @@ class ConductBroker:
     ) -> dict[str, Any]:
         """Atomically register a dependent node without leasing its resources early."""
 
+        _require_work_loan(packet)
         if packet.deadline <= now:
             raise ConductError("work packet deadline has already passed")
         dependencies = tuple(str(item) for item in packet.execution.get("dependencies") or ())
@@ -482,7 +491,7 @@ class ConductBroker:
             if not conductor_raw:
                 raise ConductConflict("packet conductor must be a registered session")
             conductor = ConductorSessionV1.model_validate(conductor_raw)
-            if conductor.identity != packet.conductor:
+            if conductor.identity != self._bind_conductor_identity(packet.conductor, principal):
                 raise ConductConflict("packet conductor identity does not match its registered session")
             if state["session_principals"].get(conductor.session_id) != principal.principal_id:
                 raise ConductConflict("packet conductor is not bound to the authenticated principal")
@@ -648,6 +657,10 @@ class ConductBroker:
                 raise ConductConflict("lease belongs to another executor principal")
             if lease.state not in {"reserved", "active"}:
                 raise ConductConflict(f"lease is not active: {lease.state}")
+            run = state["runs"].get(lease.run_id)
+            if not run:
+                raise ConductError(f"lease points to missing run: {lease.run_id}")
+            _require_work_loan(WorkPacketV1.model_validate(run["packet"]))
             principal_id = lease.executor_principal_id or resolved.principal_id
             token = self._capability_token(lease.lease_id, lease.generation, principal_id)
             if not hmac.compare_digest(lease.capability_token_hash, self._token_hash(token)):
@@ -1573,3 +1586,13 @@ class ConductBroker:
             }
         )
         return session.model_copy(update={"identity": identity})
+
+    @staticmethod
+    def _bind_conductor_identity(
+        identity: AgentIdentityV1,
+        principal: ConductPrincipalV1,
+    ) -> AgentIdentityV1:
+        # register() stores token-bound agent/surface; comparisons against the
+        # stored session must apply the same binding or a client that declares
+        # its own surface can never match (the #1408 relay freeze).
+        return identity.model_copy(update={"agent": principal.agent, "surface": principal.surface})

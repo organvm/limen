@@ -100,6 +100,10 @@ def test_red_verdict_emits_one_idempotent_task(tmp_path):
     assert tasks[0].priority == "critical" and "mainred" in tasks[0].labels
     assert "deadbeef" * 5 in tasks[0].predicate
     assert "gh pr list" not in tasks[0].predicate
+    assert tasks[0].origin == "system_debt"
+    assert tasks[0].horizon == "present"
+    assert tasks[0].value_case == (f"Restore organvm/limen protected main to green at exact head {'deadbeef' * 5}")
+    assert tasks[0].owner_surface == "organvm/limen"
     # idempotent: a second run adds nothing
     run(tmp_path, apply=True)
     assert len(load_limen_file(tmp_path / "tasks.yaml").tasks) == 1
@@ -326,8 +330,137 @@ def test_exact_head_check_fails_closed_without_matching_completed_run(monkeypatc
     current = "a" * 40
     monkeypatch.setattr(m, "_remote_main_head", lambda: current)
     monkeypatch.setattr(m, "_gh_main_runs", lambda: [_run_row(current, status="in_progress")])
+    monkeypatch.setattr(m, "_queue_proof_url", lambda h: None)
     assert m.exact_head_check() == 1
     assert "no completed" in capsys.readouterr().out
+
+
+def test_exact_head_queue_group_proof_greens_cancelled_burst(monkeypatch, capsys):
+    m = _load()
+    head = "a" * 40
+    monkeypatch.setattr(m, "_remote_main_head", lambda: head)
+    # Busy-queue steady state: the head's own push run is still in progress and the
+    # newest COMPLETED push run is a superseded cancellation from the merge burst.
+    monkeypatch.setattr(
+        m,
+        "_gh_main_runs",
+        lambda: [_run_row(head, status="in_progress"), _run_row("b" * 40, conclusion="cancelled")],
+    )
+    monkeypatch.setattr(m, "_queue_proof_url", lambda h: "https://queue.test/run" if h == head else None)
+    assert m.exact_head_check() == 0
+    assert "queue-proven" in capsys.readouterr().out
+
+
+def test_exact_head_queue_proof_never_masks_completed_failure(monkeypatch, capsys):
+    m = _load()
+    head = "a" * 40
+    monkeypatch.setattr(m, "_remote_main_head", lambda: head)
+    monkeypatch.setattr(m, "_gh_main_runs", lambda: [_run_row(head, conclusion="failure")])
+    monkeypatch.setattr(m, "_queue_proof_url", lambda h: "https://queue.test/run")
+    assert m.exact_head_check() == 1
+    assert "EXACT-HEAD RED" in capsys.readouterr().out
+
+
+def test_default_mode_cancelled_rescued_by_queue_proof(tmp_path, monkeypatch, capsys):
+    # Beat mode reads the cached newest-push-run verdict; a cancelled one is the busy-queue
+    # steady state and must resolve green via the current head's merge-group proof.
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    monkeypatch.setenv("LIMEN_MAIN_GREEN_THROTTLE", "100000")
+    m = _load()
+    _seed(tmp_path, "cancelled")
+    head = "a" * 40
+    monkeypatch.setattr(m, "_remote_main_head", lambda: head)
+    monkeypatch.setattr(m, "_queue_proof_url", lambda h: "https://queue.test/run" if h == head else None)
+    monkeypatch.setattr(m, "_fetch_open_prs", lambda: [])
+    assert m.main([]) == 0
+    out = capsys.readouterr().out
+    assert "GREEN" in out and "queue-proven" in out
+
+
+# ── path-aware exact-head: docs/board-only merges never trigger ci.yml ─────────
+
+
+def test_glob_translation_parity_with_verify_resolver():
+    m = _load()
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("verify_mod", ROOT / "scripts" / "verify.py")
+    verify_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(verify_mod)
+    for glob in ("web/app/**", "cli/**", "tasks.yaml", "scripts/*.py", "**"):
+        assert m._glob_to_regex(glob).pattern == verify_mod.glob_to_regex(glob).pattern
+
+
+def test_ci_push_globs_reads_the_real_workflow():
+    m = _load()
+    # The script's ROOT defaults to the operator's checkout path, which does not
+    # exist on a CI runner — pin it to the tree this test file actually lives in.
+    m.ROOT = ROOT
+    globs = m._ci_push_globs()
+    assert isinstance(globs, list) and "cli/**" in globs
+
+
+def test_path_aware_gap_verdict_matrix():
+    m = _load()
+    globs = ["cli/**", "tasks.yaml"]
+    ok, why = m.path_aware_gap_verdict(["docs/x.md", "logs/y.md"], globs)
+    assert ok and "none implicate" in why
+    ok, why = m.path_aware_gap_verdict(["docs/x.md", "cli/src/limen/io.py"], globs)
+    assert not ok and "cli/src/limen/io.py" in why
+    assert m.path_aware_gap_verdict(None, globs) == (False, "gap files unavailable")
+    ok, why = m.path_aware_gap_verdict(["docs/x.md"], [])
+    assert not ok and "no push path filter" in why
+
+
+def test_exact_head_path_aware_green_for_non_implicating_gap(monkeypatch, capsys):
+    m = _load()
+    head, green = "a" * 40, "b" * 40
+    monkeypatch.setattr(m, "_remote_main_head", lambda: head)
+    monkeypatch.setattr(m, "_gh_main_runs", lambda: [_run_row(green)])
+    monkeypatch.setattr(m, "_compare_files", lambda base, h: ["docs/plans/x.md"])
+    monkeypatch.setattr(m, "_ci_push_globs", lambda: ["cli/**"])
+    monkeypatch.setattr(m, "_queue_proof_url", lambda h: None)
+    assert m.exact_head_check() == 0
+    assert "GREEN (path-aware)" in capsys.readouterr().out
+
+
+def test_exact_head_path_aware_fails_when_gap_implicates(monkeypatch, capsys):
+    m = _load()
+    head, green = "a" * 40, "b" * 40
+    monkeypatch.setattr(m, "_remote_main_head", lambda: head)
+    monkeypatch.setattr(m, "_gh_main_runs", lambda: [_run_row(green)])
+    monkeypatch.setattr(m, "_compare_files", lambda base, h: ["cli/src/limen/io.py"])
+    monkeypatch.setattr(m, "_ci_push_globs", lambda: ["cli/**"])
+    monkeypatch.setattr(m, "_queue_proof_url", lambda h: None)
+    assert m.exact_head_check() == 1
+    assert "EXACT-HEAD FAIL" in capsys.readouterr().out
+
+
+def test_exact_head_path_aware_never_walks_past_red(monkeypatch, capsys):
+    m = _load()
+    head, red = "a" * 40, "b" * 40
+    monkeypatch.setattr(m, "_remote_main_head", lambda: head)
+    monkeypatch.setattr(m, "_gh_main_runs", lambda: [_run_row(red, conclusion="failure")])
+
+    def _boom(base, h):
+        raise AssertionError("must not compare past a red trunk")
+
+    monkeypatch.setattr(m, "_compare_files", _boom)
+    monkeypatch.setattr(m, "_queue_proof_url", lambda h: None)
+    assert m.exact_head_check() == 1
+    assert "EXACT-HEAD RED" in capsys.readouterr().out
+
+
+def test_exact_head_path_aware_fails_closed_when_compare_unavailable(monkeypatch, capsys):
+    m = _load()
+    head, green = "a" * 40, "b" * 40
+    monkeypatch.setattr(m, "_remote_main_head", lambda: head)
+    monkeypatch.setattr(m, "_gh_main_runs", lambda: [_run_row(green)])
+    monkeypatch.setattr(m, "_compare_files", lambda base, h: None)
+    monkeypatch.setattr(m, "_ci_push_globs", lambda: ["cli/**"])
+    monkeypatch.setattr(m, "_queue_proof_url", lambda h: None)
+    assert m.exact_head_check() == 1
+    assert "gap files unavailable" in capsys.readouterr().out
 
 
 def test_remote_main_head_reads_owner_ref_not_cached_tracking_ref(monkeypatch):

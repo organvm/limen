@@ -139,6 +139,25 @@ DEFAULT_MAP: list[dict] = [
         "enabled": False,
     },
     {
+        # Faculty-application portal login (NEOGOV / GovernmentJobs.com, e.g. tenant cfkedu =
+        # College of the Florida Keys). Read by application-pipeline's neogov_submit.py --assist to
+        # log in and fill the multi-page form to the brink (the operator clicks Submit — the engine
+        # never auto-submits a counterparty form). A VENDOR LOGIN the organ cannot mint: it stays
+        # enabled=False until the operator authenticates once and lands the account in op://; the
+        # organ then hydrates NEOGOV_USERNAME/PASSWORD every beat, value never printed. Username +
+        # password are distinct values -> two entries. [[credential-durability-organ]]
+        "lane": "neogov/governmentjobs (faculty apply) — username",
+        "ref": "op://Personal/GovernmentJobs cfkedu/username",
+        "env": ["NEOGOV_USERNAME", "GOVERNMENTJOBS_USERNAME"],
+        "enabled": False,
+    },
+    {
+        "lane": "neogov/governmentjobs (faculty apply) — password",
+        "ref": "op://Personal/GovernmentJobs cfkedu/password",
+        "env": ["NEOGOV_PASSWORD", "GOVERNMENTJOBS_PASSWORD"],
+        "enabled": False,
+    },
+    {
         "lane": "gh/copilot/jules",
         "ref": "op://GitHub-Tokens/master-org-token-011726/password",
         "env": ["GH_TOKEN", "GITHUB_TOKEN"],
@@ -276,6 +295,13 @@ DEFAULT_MAP: list[dict] = [
         "ref": "op://Private/gmail-app-pw-2026-06-06/password",
         "env": ["GMAIL_APP_PASSWORD"],
         "enabled": True,
+        # VALIDITY probe (added 2026-07-23): the whole inbound-lead farm (gmail_imap_sweep →
+        # obligations → opportunity_sync → the daily brief) starves silently when this password
+        # goes stale, and presence ✓ is NOT validity. Until now this lane was `UNVERIFIABLE — no
+        # probe defined`, so a DEAD app-password sailed through --verify and the brief read
+        # "0 inbound" on a dark feed. Probe = a real IMAP LOGIN to imap.gmail.com with the paired
+        # GMAIL_USER; AUTHENTICATIONFAILED ⟹ ✗ (re-mint the op:// item), offline ⟹ fail-open.
+        "verify": {"kind": "imap", "host": "imap.gmail.com", "user_env": "GMAIL_USER"},
         # REQUIRED for the autonomous mail organ: without it the keyed IMAP path (draft-save
         # AND gmail_imap_sweep archive) cannot authenticate, so nothing auto-cleans Gmail. A
         # `required` lane that fails to materialize is a LOUD --verify failure (not a silent
@@ -700,6 +726,31 @@ def probe_cred(entry: dict, value: str, timeout: int = 6) -> tuple[str, str]:
     spec = entry.get("verify")
     if not spec:
         return "unverifiable", "no probe defined"
+    if spec.get("kind") == "imap":
+        # An app-password is an IMAP SASL login, not an HTTP token — probe it by actually
+        # LOGGING IN to the mail host. The paired username comes from the sibling lane's
+        # materialized env (GMAIL_USER), never hardcoded. Rejection (AUTHENTICATIONFAILED)
+        # is a DEAD credential; an offline/DNS/socket failure stays fail-open (never cry wolf).
+        import imaplib
+        host = spec.get("host", "imap.gmail.com")
+        user = _env_value(spec.get("user_env", "IMAP_USER")) or os.getenv(spec.get("user_env", "IMAP_USER") or "", "")
+        if not user:
+            return "unverifiable", f"no user ({spec.get('user_env', 'IMAP_USER')}) materialized"
+        try:
+            conn = imaplib.IMAP4_SSL(host, timeout=timeout)
+        except Exception as e:  # DNS / socket / TLS — no network, fail open
+            return "unverifiable", f"unreachable ({type(e).__name__})"
+        try:
+            conn.login(user, value)  # value = the app-password; never logged
+            try:
+                conn.logout()
+            except Exception:
+                pass
+            return "valid", f"IMAP login OK ({host})"
+        except imaplib.IMAP4.error as e:
+            return "invalid", (_scrub(str(e))[:80] or "IMAP AUTHENTICATIONFAILED")
+        except Exception as e:  # timeout / reset mid-handshake — fail open
+            return "unverifiable", f"unreachable ({type(e).__name__})"
     url, headers = spec["url"], {"User-Agent": "limen-creds-hydrate"}
     if spec.get("auth") == "bearer":
         headers["Authorization"] = f"Bearer {value}"

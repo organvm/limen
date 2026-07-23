@@ -17,7 +17,7 @@ import limen.tabularius as tabularius
 import pytest
 from limen.conduct.client import BrokerUnavailable
 from limen.io import load_limen_file, queue_lock, save_limen_file
-from limen.models import LimenFile
+from limen.models import DispatchLogEntry, LimenFile
 from limen.tabularius import (
     INTENT_META,
     INTENT_REMOVE,
@@ -53,6 +53,10 @@ def _task(tid: str, **over: Any) -> dict[str, Any]:
         "created": "2026-07-01",
         "predicate": f"pytest -q -k {tid}",
         "receipt_target": f"github:organvm/limen:pull-request:{tid}",
+        "origin": "human_prompt",
+        "horizon": "present",
+        "value_case": f"Apply the bounded TABVLARIVS task {tid}",
+        "owner_surface": "organvm/limen",
     }
     base.update(over)
     return base
@@ -91,10 +95,14 @@ class FakeConductClient:
         *,
         fail_after: int | None = None,
         unavailable_on_register: bool = False,
+        bound_agent: str | None = None,
+        bound_surface: str | None = None,
     ):
         self.tasks = {str(task["id"]): dict(task) for task in tasks}
         self.fail_after = fail_after
         self.unavailable_on_register = unavailable_on_register
+        self.bound_agent = bound_agent
+        self.bound_surface = bound_surface
         self.registered: list[Any] = []
         self.packets: list[Any] = []
 
@@ -102,7 +110,12 @@ class FakeConductClient:
         if self.unavailable_on_register:
             raise BrokerUnavailable("test broker unavailable")
         self.registered.append(session)
-        return {"session": session.model_dump(mode="json")}
+        registered = session.model_dump(mode="json")
+        if self.bound_agent is not None:
+            registered["identity"]["agent"] = self.bound_agent
+        if self.bound_surface is not None:
+            registered["identity"]["surface"] = self.bound_surface
+        return {"session": registered}
 
     def submit(self, packet):
         if self.fail_after is not None and len(self.packets) >= self.fail_after:
@@ -167,6 +180,16 @@ def test_submit_helpers_validate_before_emitting(tmp_path):
         )
     with pytest.raises(Exception):
         submit_task_upsert(board, {"title": "missing id"}, agent="codex")
+    ununderwritten = _task("T-NEW", status="open")
+    ununderwritten.pop("value_case")
+    with pytest.raises(ValueError, match="task-not-underwritten:value_case"):
+        submit_task_upsert(board, ununderwritten, agent="codex")
+    with pytest.raises(ValueError, match="receipt credit requires an evidence-bound status transition"):
+        submit_task_upsert(
+            board,
+            _task("T-CREDIT", status="done", receipt_verified=True),
+            agent="codex",
+        )
     assert pending_count(board) == 0
 
 
@@ -190,6 +213,43 @@ def test_pure_reducer_merges_fields_and_appends_status_receipt():
     assert tasks["T-1"]["priority"] == "high"
     assert tasks["T-1"]["status"] == "dispatched"
     assert tasks["T-1"]["dispatch_log"][-1]["output"] == "claimed"
+
+
+def test_pure_reducer_requires_and_preserves_completion_evidence():
+    tasks: OrderedDict[str, dict[str, Any]] = OrderedDict([("T-CREDIT", _task("T-CREDIT", status="in_progress"))])
+    meta: dict[str, Any] = {"version": "1.0", "portal": None}
+    before = tasks.copy()
+    missing = _ticket(
+        INTENT_STATUS,
+        task_id="T-CREDIT",
+        patch={"status": "done", "receipt_verified": True},
+        log={"status": "done"},
+    )
+
+    with pytest.raises(ValueError, match="completion-not-verified:predicate"):
+        _apply(missing, tasks, meta)
+    assert tasks == before
+
+    digest = "a" * 64
+    receipt_target = tasks["T-CREDIT"]["receipt_target"]
+    completion = _ticket(
+        INTENT_STATUS,
+        task_id="T-CREDIT",
+        patch={"status": "done", "receipt_verified": True},
+        log={
+            "status": "done",
+            "predicate_exit_code": 0,
+            "remote_receipt": receipt_target,
+            "verification_context_digest": digest,
+        },
+    )
+
+    _apply(completion, tasks, meta)
+
+    assert tasks["T-CREDIT"]["receipt_verified"] is True
+    assert tasks["T-CREDIT"]["dispatch_log"][-1]["predicate_exit_code"] == 0
+    assert tasks["T-CREDIT"]["dispatch_log"][-1]["remote_receipt"] == receipt_target
+    assert tasks["T-CREDIT"]["dispatch_log"][-1]["verification_context_digest"] == digest
 
 
 def test_batch_admission_rejects_stale_exact_state_ticket():
@@ -256,6 +316,14 @@ def test_sync_relays_claim_to_broker_without_writing_projection(tmp_path, monkey
     monkeypatch.setattr(tabularius, "client_from_env", lambda: fake)
     desired = load_limen_file(board)
     desired.tasks[1].status = "dispatched"
+    desired.tasks[1].dispatch_log.append(
+        DispatchLogEntry(
+            timestamp=_NOW,
+            agent="codex",
+            session_id="claim-session",
+            status="dispatched",
+        )
+    )
 
     result = apply_limen_file_sync(
         board,
@@ -269,6 +337,7 @@ def test_sync_relays_claim_to_broker_without_writing_projection(tmp_path, monkey
     assert result.wrote is False
     assert result.note == "broker-committed"
     assert fake.packets[0].intent["kind"] == "task.claim"
+    assert fake.packets[0].initiator.agent == "legacy-adapter"
     assert fake.tasks["T-1"]["status"] == "dispatched"
     assert board.read_bytes() == before
     assert not _archive(board).exists()
@@ -346,6 +415,26 @@ def test_equivalent_tickets_share_a_deterministic_remote_work_key(tmp_path, monk
     assert fake.packets[0].work_key == fake.packets[1].work_key
 
 
+def test_remote_registration_identity_is_bound_into_compatibility_packet():
+    fake = FakeConductClient(
+        [],
+        bound_agent="codex",
+        bound_surface="credential-principal",
+    )
+    ticket = _ticket(
+        INTENT_UPSERT,
+        task_id="T-BOUND",
+        patch=_task("T-BOUND", status="open"),
+        ticket_id="principal-bound",
+    )
+
+    tabularius._relay_ticket(ticket, None, client=fake)
+
+    assert fake.packets[0].conductor.agent == "codex"
+    assert fake.packets[0].conductor.surface == "credential-principal"
+    assert fake.packets[0].initiator == fake.packets[0].conductor
+
+
 def test_drain_defers_all_tickets_when_broker_is_unavailable(tmp_path, monkeypatch):
     board = _seed_board(tmp_path)
     before = board.read_bytes()
@@ -382,6 +471,7 @@ def test_local_retry_replays_committed_full_projection_after_cache_write_crash(t
         task_id="T-1",
         patch={"status": "dispatched"},
         log={"status": "dispatched", "output": "claimed once"},
+        agent="codex",
         ticket_id="crash-retry",
     )
     submit_ticket(board, ticket)
@@ -535,3 +625,24 @@ def test_reducer_preserves_successor_terminal_hold():
 
     assert tasks["T-held"]["status"] == "done"
     assert tasks["T-held"]["labels"] == ["workstream:successor-required"]
+
+
+def test_canonical_revision_matches_worker_millisecond_canon() -> None:
+    """Python renders revisions in the keeper's JS toISOString canon (#1408 family).
+
+    canonicalRevision in projection.js always emits millisecond precision, so a
+    microsecond render from a Python producer can never CAS-match the keeper —
+    every status transition on a Python-stamped task 409s with
+    "exact revision moved". Vectors below are `new Date(v).toISOString()` output.
+    """
+    canon = tabularius._canonical_revision
+    assert canon({"updated": "2026-07-22T19:28:29.695237Z"}) == "2026-07-22T19:28:29.695Z"
+    assert canon({"updated": "2026-07-22T19:28:29Z"}) == "2026-07-22T19:28:29.000Z"
+    assert canon({"updated": "2026-07-22T19:28:29.695Z"}) == "2026-07-22T19:28:29.695Z"
+    assert canon({"dispatch_log": [{"timestamp": "2026-07-23T10:30:04.446Z"}]}) == "2026-07-23T10:30:04.446Z"
+    assert (
+        canon({"updated": datetime(2026, 7, 22, 19, 28, 29, 695237, tzinfo=timezone.utc)}) == "2026-07-22T19:28:29.695Z"
+    )
+    # Non-datetime revisions pass through untouched, exactly like the worker.
+    assert canon({"created": "2026-07-23"}) == "2026-07-23"
+    assert canon({"status": "open"}) == "open"

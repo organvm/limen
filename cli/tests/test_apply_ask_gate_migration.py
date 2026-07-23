@@ -404,7 +404,7 @@ def test_concurrent_claim_invalidates_parent_exact_state_and_verification(tmp_pa
     claim = compiler.Ticket(
         ticket_id="concurrent-claim-before-parent",
         timestamp=timestamp - timedelta(seconds=1),
-        agent="jules",
+        agent="agy",
         session_id="concurrent-claim",
         intent="task.upsert",
         task_id=task_id,
@@ -412,6 +412,9 @@ def test_concurrent_claim_invalidates_parent_exact_state_and_verification(tmp_pa
             "predicate": row["predicate"],
             "receipt_target": row["receipt_target"],
             "status": "dispatched",
+            "origin": "human_prompt",
+            "horizon": "present",
+            "value_case": "Concurrent claim underwritten for the ask-gate migration test.",
         },
         log={"status": "dispatched", "output": "concurrent claim"},
     )
@@ -446,7 +449,7 @@ def test_later_same_batch_claim_rejects_parent_archive_and_verification(tmp_path
         prior_claim = compiler.Ticket(
             ticket_id="prior-dispatched-claim",
             timestamp=timestamp - timedelta(seconds=1),
-            agent="jules",
+            agent="agy",
             session_id="prior-dispatched",
             intent="task.upsert",
             task_id=task_id,
@@ -454,6 +457,9 @@ def test_later_same_batch_claim_rejects_parent_archive_and_verification(tmp_path
                 "predicate": row["predicate"],
                 "receipt_target": row["receipt_target"],
                 "status": "dispatched",
+                "origin": "human_prompt",
+                "horizon": "present",
+                "value_case": "Prior dispatched claim underwritten for the ask-gate migration test.",
             },
             log={"status": "dispatched", "output": "prior valid claim"},
         )
@@ -465,7 +471,7 @@ def test_later_same_batch_claim_rejects_parent_archive_and_verification(tmp_path
     later_claim = compiler.Ticket(
         ticket_id=f"later-{claim_status}-claim",
         timestamp=timestamp + timedelta(seconds=1),
-        agent="jules",
+        agent="agy",
         session_id=f"later-{claim_status}",
         intent="task.upsert",
         task_id=task_id,
@@ -473,6 +479,9 @@ def test_later_same_batch_claim_rejects_parent_archive_and_verification(tmp_path
             "predicate": row["predicate"],
             "receipt_target": row["receipt_target"],
             "status": claim_status,
+            "origin": "human_prompt",
+            "horizon": "present",
+            "value_case": "Later same-batch claim underwritten for the ask-gate migration test.",
         },
         log={"status": claim_status, "output": "later same-batch claim"},
     )

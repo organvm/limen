@@ -3,6 +3,7 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
 import yaml
 
 
@@ -139,6 +140,12 @@ def test_agent_claim_submits_atomic_compatibility_event_without_mutating_project
                         # (github_pr_contract) is derivable. Without it agent_claim correctly raises
                         # IntakeContractError instead of dispatching unverifiable work.
                         "repo": "organvm/limen",
+                        "origin": "human_prompt",
+                        "horizon": "present",
+                        "value_case": "Reserve the explicitly requested MCP task",
+                        "owner_surface": "organvm/limen",
+                        "predicate": "pytest -q cli/tests/test_mcp_server.py",
+                        "receipt_target": "github:organvm/limen:pull-request:TASK-1",
                         "custom_extension": {"keep": True},
                     }
                 ],
@@ -166,7 +173,7 @@ def test_agent_claim_submits_atomic_compatibility_event_without_mutating_project
     assert packet.intent["patch"]["target_agent"] == "opencode"
     assert packet.intent["patch"]["status"] == "dispatched"
     assert packet.intent["patch"]["target_agent"] == "opencode"
-    assert "gh pr list --repo organvm/limen" in packet.intent["patch"]["predicate"]
+    assert packet.intent["patch"]["predicate"] == "pytest -q cli/tests/test_mcp_server.py"
     assert packet.resource_claims[0].key == "task/TASK-1"
     assert packet.required_capabilities == frozenset({"board-write"})
 
@@ -272,6 +279,12 @@ def test_agent_claim_rejects_unavailable_runtime_without_mutating(tmp_path, monk
                         "budget_cost": 3,
                         "status": "open",
                         "created": "2026-07-13",
+                        "origin": "human_prompt",
+                        "horizon": "present",
+                        "value_case": "Wait for and use the declared runtime",
+                        "owner_surface": "organvm/limen",
+                        "predicate": "pytest -q cli/tests/test_mcp_server.py",
+                        "receipt_target": "github:organvm/limen:pull-request:TASK-MOUNT",
                         "execution_requirements": [{"kind": "mount", "path": "/runtime/unavailable"}],
                     }
                 ],
@@ -320,6 +333,10 @@ def test_agent_claim_accepts_available_explicit_mount(tmp_path, monkeypatch):
                         "created": "2026-07-13",
                         "predicate": "python3 scripts/check.py",
                         "receipt_target": "git:organvm/limen:logs/check.json",
+                        "origin": "human_prompt",
+                        "horizon": "present",
+                        "value_case": "Run the declared task on its available runtime",
+                        "owner_surface": "organvm/limen",
                         "execution_requirements": [{"kind": "mount", "path": "/runtime/available"}],
                     }
                 ],
@@ -345,6 +362,39 @@ def test_agent_claim_accepts_available_explicit_mount(tmp_path, monkeypatch):
     assert tasks.read_bytes() == before
     assert "budget_debit" not in client.packets[0].intent
     assert client.packets[0].intent["patch"]["target_agent"] == "opencode"
+
+
+def test_agent_claim_rejects_missing_work_loan_in_stable_order(tmp_path, monkeypatch):
+    server = _load_server()
+    tasks = tmp_path / "tasks.yaml"
+    tasks.write_text(
+        yaml.safe_dump(
+            {
+                "version": "1.0",
+                "tasks": [
+                    {
+                        "id": "TASK-LEGACY",
+                        "title": "Readable but not admissible",
+                        "repo": "organvm/limen",
+                        "target_agent": "any",
+                        "priority": "high",
+                        "budget_cost": 1,
+                        "status": "open",
+                        "created": "2026-07-13",
+                        "predicate": "pytest -q cli/tests/test_mcp_server.py",
+                        "receipt_target": "github:organvm/limen:pull-request:TASK-LEGACY",
+                    }
+                ],
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LIMEN_TASKS", str(tasks))
+
+    result = server.agent_claim("TASK-LEGACY", "opencode")
+
+    assert result == ("task-not-underwritten:source_origin,horizon,value_case - cannot claim")
 
 
 def test_mcp_server_has_no_direct_board_writer_or_git_sync(tmp_path, monkeypatch):
@@ -426,6 +476,7 @@ def test_task_add_and_status_are_conduct_compatibility_events(tmp_path, monkeypa
         "organvm/limen",
         "pytest -q",
         "github:organvm/limen:pull-request:LIMEN-001",
+        "Deliver the explicitly requested MCP task",
         agent="codex",
     )
     updated = server.update_task_status("TASK-STATUS", "done", context="predicate passed")
@@ -434,6 +485,25 @@ def test_task_add_and_status_are_conduct_compatibility_events(tmp_path, monkeypa
     assert "submitted status done" in updated
     assert [packet.intent["kind"] for packet in client.packets] == ["task.upsert", "task.status"]
     assert tasks.read_bytes() == before
+
+
+def test_task_add_rejects_noncanonical_work_loan_enums() -> None:
+    server = _load_server()
+    arguments = (
+        "New task",
+        "organvm/limen",
+        "pytest -q",
+        "github:organvm/limen:pull-request:LIMEN-001",
+        "Deliver the explicitly requested MCP task",
+    )
+    with pytest.raises(ValueError, match="origin must be one of"):
+        server.add_task(*arguments, origin="urgent")
+    with pytest.raises(ValueError, match="horizon must be one of"):
+        server.add_task(*arguments, horizon="soon")
+    with pytest.raises(ValueError, match="due_at is required"):
+        server.add_task(*arguments, external_deadline=True)
+    with pytest.raises(ValueError, match="valid ISO date"):
+        server.add_task(*arguments, external_deadline=True, due_at="soon")
 
 
 def test_mcp_conduct_tools_forward_the_identical_protocol_models(monkeypatch):

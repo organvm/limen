@@ -18,6 +18,7 @@ from limen import runtime_requirements  # noqa: E402
 from limen.models import LimenFile  # noqa: E402
 from limen.tabularius import apply_limen_file_sync  # noqa: E402
 from limen.workstream_contract import WORKSTREAM_SUCCESSOR_REQUIRED_LABEL  # noqa: E402
+from limen.work_loan import task_work_loan_readiness  # noqa: E402
 
 VALID_CLAIM_AGENTS = {
     "agy",
@@ -86,6 +87,15 @@ def claim_task(data: dict[str, Any], task_id: str, agent: str, session_id: str) 
             raise SystemExit(f"task {task_id} is not open; current status is {status!r}")
         if WORKSTREAM_SUCCESSOR_REQUIRED_LABEL in (task.get("labels") or []):
             raise SystemExit(f"task {task_id} requires a separately admitted successor; cannot claim expired row")
+        latest = (task.get("dispatch_log") or [])[-1:] or [{}]
+        route_to = str(latest[0].get("route_to") or "") if latest[0].get("status") == "open" else ""
+        owner = str(task.get("target_agent") or "")
+        if owner not in {"", "any", agent} and route_to != agent:
+            raise SystemExit(f"task {task_id} targets {owner}; {agent} is not an eligible claim lane")
+
+        underwriting = task_work_loan_readiness(task)
+        if not underwriting.ready:
+            raise SystemExit(underwriting.reason_code)
 
         readiness = runtime_requirements.evaluate_execution_requirements(task)
         if not readiness.ready:
@@ -117,7 +127,6 @@ def claim_task(data: dict[str, Any], task_id: str, agent: str, session_id: str) 
             raise SystemExit(f"typed intake blocked {task_id}: {exc}") from None
 
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        task["target_agent"] = agent
         task["status"] = "dispatched"
         task["updated"] = now
         task.setdefault("dispatch_log", []).append(
@@ -160,7 +169,7 @@ def main() -> int:
 
     if not args.live:
         print(
-            f"DRY-RUN claim: {task['id']} -> {task['target_agent']} status={task['status']} session={args.session_id}"
+            f"DRY-RUN claim: {task['id']} -> {args.agent} status={task['status']} session={args.session_id}"
         )
         return 0
 
@@ -171,7 +180,7 @@ def main() -> int:
         session_id=args.session_id,
         before=before,
     )
-    print(f"submitted claim {task['id']} for {task['target_agent']} to the canonical conduct broker")
+    print(f"submitted claim {task['id']} for {args.agent} to the canonical conduct broker")
     return 0
 
 
