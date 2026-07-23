@@ -115,7 +115,7 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     fake_jules = fake_bin / "jules"
     fake_jules.write_text(
         (
-            '#!/usr/bin/env bash\n'
+            "#!/usr/bin/env bash\n"
             'printf "%s\\n" "$@" > "$SESSION_ARGS_CAPTURE"\n'
             'printf "Session is created.\\nID: 12345678901234567890\\nTask: test\\n\\n'
             'URL: https://jules.google.com/session/12345678901234567890\\n"\n'
