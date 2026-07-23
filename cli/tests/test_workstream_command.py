@@ -234,7 +234,8 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     assert events_capture.read_text(encoding="utf-8").splitlines() == ["push", "jules", "push"]
 
     args_capture.unlink()
-    monkeypatch.setenv("FAKE_ORIGIN", "https://x-access-token:redacted@github.com/organvm/demo-repo.git")
+    credentialed_origin = "https://x-access-token:redacted@github.com/organvm/demo-repo.git"
+    monkeypatch.setenv("FAKE_ORIGIN", credentialed_origin)
     credentialed = CliRunner().invoke(
         main,
         [
@@ -334,7 +335,8 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
         ],
     )
     assert moving_default.exit_code != 0
-    assert events_capture.read_text(encoding="utf-8")[len(race_events_before) :].splitlines() == ["push"]
+    race_events = events_capture.read_text(encoding="utf-8")[len(race_events_before) :].splitlines()
+    assert race_events == ["push"]
     assert not args_capture.exists()
     monkeypatch.delenv("ADVANCE_REMOTE_AFTER_FIRST_CHECK")
 
