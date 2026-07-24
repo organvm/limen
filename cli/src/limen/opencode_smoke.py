@@ -128,9 +128,7 @@ def _tool_evidence(output: str, marker: str) -> tuple[bool, bool]:
         lowered = [value.lower() for value in values]
         event_text = "\n".join(values)
         marker_observed = marker_observed or marker in event_text
-        names_read = any(
-            value in {"read", "file_read", "read_file"} or value.endswith(".read") for value in lowered
-        )
+        names_read = any(value in {"read", "file_read", "read_file"} or value.endswith(".read") for value in lowered)
         names_smoke_file = any("smoke.txt" in value for value in lowered)
         tool_read_observed = tool_read_observed or (names_read and names_smoke_file)
     return tool_read_observed, marker_observed
@@ -197,7 +195,7 @@ def run_opencode_smoke(
             reason="no eligible model is awaiting smoke or healthy",
         )
 
-    marker = f"LIMEN_SMOKE_{secrets.token_hex(16)}"
+    marker = f"SMOKE_PROOF_{secrets.token_hex(16)}"
     prompt = "Use the file-reading tool to read SMOKE.txt. Return only the exact token stored in that file."
     started_at = _utc(clock())
     returncode: int | None = None

@@ -95,9 +95,7 @@ def test_success_requires_json_tool_read_and_marker_and_reenters(tmp_path, monke
 
     monkeypatch.setattr(opencode_smoke, "hold_lease", admitted)
     monkeypatch.setattr(opencode_smoke, "provider_health_policy", lambda: POLICY)
-    result = opencode_smoke.run_opencode_smoke(
-        ledger_path=ledger, models=[waiting], runner=runner, clock=lambda: NOW
-    )
+    result = opencode_smoke.run_opencode_smoke(ledger_path=ledger, models=[waiting], runner=runner, clock=lambda: NOW)
 
     assert result.succeeded is True
     assert result.terminal_class == "smoke_success"
@@ -118,9 +116,7 @@ def test_plain_text_marker_without_json_tool_evidence_fails(tmp_path, monkeypatc
     monkeypatch.setattr(opencode_smoke, "hold_lease", admitted)
     monkeypatch.setattr(opencode_smoke, "provider_health_policy", lambda: POLICY)
     ledger = tmp_path / "outcomes.jsonl"
-    result = opencode_smoke.run_opencode_smoke(
-        ledger_path=ledger, models=[item], runner=runner, clock=lambda: NOW
-    )
+    result = opencode_smoke.run_opencode_smoke(ledger_path=ledger, models=[item], runner=runner, clock=lambda: NOW)
 
     assert result.succeeded is False
     assert result.tool_read_observed is False
@@ -136,9 +132,7 @@ def test_timeout_is_bounded_and_recorded(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(opencode_smoke, "hold_lease", admitted)
     monkeypatch.setattr(opencode_smoke, "provider_health_policy", lambda: POLICY)
     ledger = tmp_path / "outcomes.jsonl"
-    result = opencode_smoke.run_opencode_smoke(
-        ledger_path=ledger, models=[item], runner=runner, clock=lambda: NOW
-    )
+    result = opencode_smoke.run_opencode_smoke(ledger_path=ledger, models=[item], runner=runner, clock=lambda: NOW)
 
     assert result.terminal_class == "timeout"
     assert load_provider_outcomes(ledger)[-1].terminal_class == "timeout"
@@ -167,9 +161,7 @@ def test_secret_shaped_failure_output_is_not_persisted(tmp_path, monkeypatch) ->
     monkeypatch.setattr(opencode_smoke, "hold_lease", admitted)
     monkeypatch.setattr(opencode_smoke, "provider_health_policy", lambda: POLICY)
     ledger = tmp_path / "outcomes.jsonl"
-    result = opencode_smoke.run_opencode_smoke(
-        ledger_path=ledger, models=[item], runner=runner, clock=lambda: NOW
-    )
+    result = opencode_smoke.run_opencode_smoke(ledger_path=ledger, models=[item], runner=runner, clock=lambda: NOW)
 
     assert "do-not-persist" not in ledger.read_text()
     assert result.receipt_reference and "do-not-persist" not in result.receipt_reference
