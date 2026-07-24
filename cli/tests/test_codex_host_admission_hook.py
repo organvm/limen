@@ -899,7 +899,7 @@ def test_hook_runner_delegates_host_admission_to_compatible_immutable_runtime(tm
         "    print(CAPABILITIES)\n"
         "else:\n"
         "    payload = json.load(sys.stdin)\n"
-        "    print(json.dumps({'systemMessage': 'immutable:' + payload['hook_event_name']}))\n"
+        "    print(json.dumps({'systemMessage': 'immutable:' + payload['hook_event_name']}))\n",
         encoding="utf-8",
     )
     runner = ROOT / "scripts" / "hooks" / "codex-hook-runner.sh"
