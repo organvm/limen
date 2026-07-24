@@ -29,11 +29,7 @@ def active_cwds() -> set[Path]:
     result = run(["lsof", "-a", "-d", "cwd", "-Fn"])
     if result.returncode not in {0, 1}:
         raise RuntimeError("process-cwd-sensor-unavailable")
-    return {
-        Path(line[1:]).resolve()
-        for line in result.stdout.splitlines()
-        if line.startswith("n") and len(line) > 1
-    }
+    return {Path(line[1:]).resolve() for line in result.stdout.splitlines() if line.startswith("n") and len(line) > 1}
 
 
 def repo_root(path: Path) -> Path | None:
