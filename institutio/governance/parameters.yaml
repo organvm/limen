@@ -881,11 +881,11 @@ parameters:
     owner: continuity
     note: "Absolute wall-clock bound in seconds for each capture.sh remote Git operation. timeout or gtimeout is preferred; the portable alarm fallback preserves the same finite bound when coreutils is absent."
   LIMEN_RECLAIM:
-    default: "1"
+    default: "0"
     env: LIMEN_RECLAIM
     self_update: none
     owner: continuity
-    note: "Master live-enable switch for the heartbeat worktree reaper. Worktree admission requires the registered live value 1; disabling reclaim blocks new local worktree creation while remote lanes continue."
+    note: "Master live-enable switch for the heartbeat worktree reaper. Defaults 0 during reacceptance containment. Worktree admission requires the registered live value 1; disabling reclaim blocks new local worktree creation while remote lanes continue."
   LIMEN_RECLAIM_MAX:
     default: 50
     env: LIMEN_RECLAIM_MAX
@@ -3339,11 +3339,11 @@ parameters:
     owner: limen-daemon
     note: "ON — before deleting a reap candidate, git ls-remote confirms origin STILL holds HEAD (guards the deleted/renamed-origin case where the local clone is the only copy). Fail-safe: unreachable/offline → skip, never reap. Set 0 to trust local remote-tracking refs without the network round-trip."
   LIMEN_RECLAIM_APPLY:
-    default: "1"               # ON — default beat removes only clean+content-preserved+idle roots
+    default: "0"               # OFF — explicit authorization is required for physical removal
     env: LIMEN_RECLAIM_APPLY
     self_update: none
     owner: limen-daemon
-    note: "When 1, scripts/drain.sh passes --apply to reclaim-worktrees.py. The reaper still refuses dirty, unique-unpushed, unmerged, active, or live/self roots. Set 0 for preview-only operation."
+    note: "When explicitly set to 1, scripts/drain.sh passes --apply to reclaim-worktrees.py. Defaults 0 for preview-only containment; the reaper also refuses dirty, unique-unpushed, unmerged, active, or live/self roots."
   LIMEN_WORKTREE_DEBT_GATE:
     default: "1"               # ON — per-candidate worktree custody admission active
     env: LIMEN_WORKTREE_DEBT_GATE
