@@ -96,6 +96,8 @@ def test_append_only_ledger_round_trips_and_skips_malformed_rows(tmp_path) -> No
     append_provider_outcome(path, row)
     with path.open("a", encoding="utf-8") as handle:
         handle.write("{malformed\n")
+        malformed_type = {**row.as_dict(), "retry_count": {"not": "an integer"}}
+        handle.write(json.dumps(malformed_type) + "\n")
 
     loaded = load_provider_outcomes(path)
 

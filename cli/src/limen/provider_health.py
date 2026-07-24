@@ -43,6 +43,12 @@ def _parse_time(value: object) -> datetime:
     return _utc(datetime.fromisoformat(text))
 
 
+def _retry_count(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("retry_count must be an integer")
+    return value
+
+
 def provider_for_model(model_id: str) -> str:
     provider, separator, _ = model_id.partition("/")
     return provider if separator else model_id
@@ -142,7 +148,7 @@ class ProviderOutcome:
             terminal_class=str(row.get("terminal_class") or ""),
             started_at=_parse_time(row.get("started_at")),
             finished_at=_parse_time(row.get("finished_at")),
-            retry_count=int(row.get("retry_count") or 0),
+            retry_count=_retry_count(row.get("retry_count", 0)),
             receipt_reference=str(row.get("receipt_reference") or ""),
         )
 
