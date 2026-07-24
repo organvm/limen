@@ -111,6 +111,20 @@ def test_reclaim_skips_antigravity_scratch_root_removal(tmp_path: Path) -> None:
     assert reason == "antigravity-scratch-uses-bridge-acceptance"
 
 
+def test_reclaim_skips_antigravity_system_generated_worktree(tmp_path: Path) -> None:
+    reclaim = load_reclaim_worktrees()
+    agy_root = tmp_path / "antigravity-cli"
+    root = agy_root / "brain" / "session" / ".system_generated" / "worktrees" / "child"
+    root.mkdir(parents=True)
+    reclaim.AGY_ROOT = agy_root
+    reclaim.AGY_SCRATCH_ROOT = agy_root / "scratch"
+
+    action, reason = reclaim.classify(root, time.time(), 0)
+
+    assert action == "skip"
+    assert reason == "antigravity-scratch-uses-bridge-acceptance"
+
+
 def test_reclaim_remote_reachability_uses_single_contains_query(tmp_path: Path, monkeypatch) -> None:
     reclaim = load_reclaim_worktrees()
     calls: list[list[str]] = []
