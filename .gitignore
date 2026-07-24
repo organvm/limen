@@ -27,3 +27,6 @@ web/app/public/
 
 # Next.js route source — protect from machine-global 'public/' ignore rules
 !web/app/app/public/
+
+# Claude Code session state
+.claude/sessions/
