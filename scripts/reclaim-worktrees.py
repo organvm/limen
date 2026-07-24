@@ -41,7 +41,7 @@ Env: LIMEN_WORKTREE_ROOT, LIMEN_RECLAIM_MIN_AGE_H (6), LIMEN_RECLAIM_CLAUDE_WT (
      LIMEN_RECLAIM_LEGACY_DISPATCH_WT, LIMEN_RECLAIM_LEGACY_WORKTREE_ROOTS,
      LIMEN_RECLAIM_LEGACY_DISPATCH_AGE_H,
      LIMEN_RECLAIM_CLAUDE_AGE_H (24), LIMEN_RECLAIM_REPO_LOCAL_WT, LIMEN_RECLAIM_REPO_LOCAL_AGE_H,
-     LIMEN_RECLAIM_AGY_SCRATCH, LIMEN_AGY_SCRATCH_ROOT, LIMEN_AGY_SCRATCH_MIN_IDLE_H,
+     LIMEN_RECLAIM_AGY_SCRATCH, LIMEN_AGY_ROOT, LIMEN_AGY_SCRATCH_ROOT, LIMEN_AGY_SCRATCH_MIN_IDLE_H,
      LIMEN_RECLAIM_REGISTERED_WT, LIMEN_RECLAIM_REGISTERED_AGE_H, LIMEN_RECLAIM_MAIN_REPOS,
      LIMEN_RECLAIM_WORKSPACE_ROOTS, LIMEN_RECLAIM_MAX (50), LIMEN_RECLAIM_EVERY_MIN (30),
      LIMEN_RECLAIM_ORPHANS (0 — observable-first arm for the dead-gitdir orphan sweep),
@@ -108,7 +108,8 @@ MAX_REMOVE = _int_env("LIMEN_RECLAIM_MAX", 50)
 EVERY_MIN = _float_env("LIMEN_RECLAIM_EVERY_MIN", 30)
 GENERATED_RECLAIM_MAX = _int_env("LIMEN_RECLAIM_GENERATED_MAX", 80)
 LIMEN_ROOT = Path(os.environ.get("LIMEN_ROOT", f"{HOME}/Workspace/limen"))
-AGY_SCRATCH_ROOT = Path(os.environ.get("LIMEN_AGY_SCRATCH_ROOT", f"{HOME}/.gemini/antigravity-cli/scratch"))
+AGY_ROOT = Path(os.environ.get("LIMEN_AGY_ROOT", f"{HOME}/.gemini/antigravity-cli"))
+AGY_SCRATCH_ROOT = Path(os.environ.get("LIMEN_AGY_SCRATCH_ROOT", str(AGY_ROOT / "scratch")))
 LOG = LIMEN_ROOT / "logs" / "reclaim-worktrees.jsonl"
 MARKER = LIMEN_ROOT / "logs" / ".reclaim-last"
 RECLAIM_ACCEPTANCE = LIMEN_ROOT / "docs" / "worktree-reclaim-acceptance.jsonl"
@@ -376,11 +377,19 @@ def patch_equivalent_to_default(cwd) -> bool:
 
 
 def inside_agy_scratch_root(path: Path) -> bool:
+    """Treat every Antigravity-owned cache as bridge-gated, not fleet-reapable."""
+
     try:
-        path.resolve().relative_to(AGY_SCRATCH_ROOT.expanduser().resolve())
-        return True
-    except (OSError, ValueError):
+        resolved = path.resolve()
+        for owned_root in (AGY_ROOT, AGY_SCRATCH_ROOT):
+            try:
+                resolved.relative_to(owned_root.expanduser().resolve())
+                return True
+            except ValueError:
+                continue
+    except OSError:
         return False
+    return False
 
 
 def load_preservation_receipts():
