@@ -5,7 +5,7 @@
   "effect": "add-label:lifecycle:preservation",
   "review_basis": "Each exact open draft head explicitly declares preservation in its title. This manifest types custody only; it neither merges nor closes a PR.",
   "plan_sha256": "3f47f6df543d7423945bf0b07708056876b06548b65c3e5db42f11a78ba993f9",
-  "status": "reviewed_pending_apply",
+  "status": "applied_verified",
   "items": [
     {
       "number": 931,
@@ -48,5 +48,12 @@
       "title": "docs: preserve laptop-wide recovery continuation"
     }
   ],
-  "apply_receipt": null
+  "apply_receipt": {
+    "applied_at": "2026-07-24T03:37:00Z",
+    "effect_count": 8,
+    "verified_count": 8,
+    "postcondition": "Every manifest PR remains open at the exact planned head with exactly one lifecycle:preservation label.",
+    "merge_effects": 0,
+    "close_effects": 0
+  }
 }
