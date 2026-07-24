@@ -176,3 +176,42 @@ measures the **distance from ideal** at a moment in time, and carries a **status
 - **Distance:** created 2026-06-25; not yet wired into a verification/heartbeat lane.
 - **Status:** SEEDED (this commit).
 - **Owner:** Claude.
+
+### IF-DECORUM — no public surface is ever egg-facing
+- **Ideal form:** DECORVM (`scripts/decorum-keeper.py`) federates the estate's six quality organs
+  (experience / visual / seo / countenance / links / moat) plus a new polish/voice lane into ONE
+  verdict (`logs/decorum.json`, schema `limen.decorum.v1`); departments + the severity floor are
+  declared data (`institutio/governance/decorum-surfaces.yaml`); an unmeasured department is
+  skipped fail-open, never failed. It runs every beat (the `decorum` sensor, cadence 6), files one
+  idempotent `DECORUM-<lane>-<surface>` ticket per finding through the tabularius broker when its
+  deliverable valve is armed (`LIMEN_DECORUM_APPLY=1`, dry-run otherwise), and re-queues a prose
+  surface for model-in-the-loop voice-judgment whenever its content changes. Fully alive ⟺
+  `--sweep` is green at a fixed point (nothing on any public surface is currently embarrassing).
+- **Distance:** Phases 0–2 + 4 landed and verified (2026-07-22): federator + beat-wire + HTML face
+  + deterministic polish lane + effector proven idempotent against an isolated board;
+  `check-sensors` green (53 sensors). First live sweep is RED — it correctly surfaced a moat leak,
+  the portfolio rendering as unstyled HTML, and 3 other broken frontends (these are real, pre-existing
+  egg-faces, now ticketable). Phase 3 voice-judge is the on-change queue + `decorum-judgments.yaml`
+  store; the model scoring is the companion judge (sibling of experience-judge), SEEDED. Off-platform
+  surfaces (LinkedIn / social bios / résumé PDF) are designed-in registry slots (`off_platform: {}`).
+- **Status:** PARTIAL — keeper + mentor live and green-wired; the estate it watches is red until its
+  findings are worked (that redness is the point, not a defect).
+- **Owner:** Claude + the `decorum` organ (beat) + `his-hand-levers.json` for any off-platform capture.
+
+### IF-LEARNING-ENGINE — one learning engine, many subjects (never build the 7th)
+- **Ideal form:** The operator's **Adaptive Personal Syllabus (`aps`)** is the sole curriculum +
+  personalization engine; **daily-engine** is the cadence spine; **application-pipeline/interview_prep.py**
+  owns interview content; **agon**'s spaced-repetition is the one plugin; **gamified-coach-interface** is
+  the reward surface; **my-knowledge-base** is the content-atom source. Every new study/prep need is a
+  *subject* authored as `aps` `PersonalizedLesson` records + a `LearnerProfile` — never a new engine.
+  Pedagogy primitives (Wings, personalization-first, ChainBlockARK provenance, quality gates, wave cycles,
+  5-persona critique, evaluation→growth, Studio-Quest ladder) are load-bearing and preserved.
+- **Distance:** Decision recorded + owners named (`docs/convergence/learning-engine.md`, 2026-07-23).
+  First subject — **ASI FSE interview prep** — authored in the `aps` schema and driven by `agon`
+  (ChainBlockARK ledger verifies intact). BLOCKER surfaced: `aps` can't run in-checkout (`koinonia-db`
+  absent + organ-coded `generate`); the subject conforms to the schema rather than being invoked via
+  `aps plan generate`. Phase 2 = lift daily-engine's core into a shared substrate, decouple `aps` from the
+  organ taxonomy, wire gamified surface + KB feed, implement the critique-synthesis fixes.
+- **Status:** PARTIAL — convergence decided + first subject converged (agon = thin tenant, greenfield
+  `curriculum.yaml` retired); full `aps`-invocation + the Phase-2 lift are pending.
+- **Owner:** Claude + the Adaptive Personal Syllabus (`aps`); ASI subject tracked in matter `job-asi-algora`.

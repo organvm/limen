@@ -150,6 +150,40 @@ def _is_execution_kind(kind: object) -> bool:
     return isinstance(kind, str) and (kind == "execution" or bool(SCOPED_EXECUTION_RE.fullmatch(kind)))
 
 
+def _is_interrupted_migration(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """Return True when two records with the same lease_id are a plausible crash-interrupted migration pair.
+
+    A write crash between the two ``_write_file()`` calls in ``_write()`` can
+    leave the same lease_id in both stores with only the ``kind`` field
+    differing: the legacy store retains the old ``"execution"`` kind and the
+    scoped store already holds the promoted ``"execution:<sha256>"`` kind.  All
+    other fields are identical in that case, so ``_load()`` can converge
+    automatically instead of permanently wedging the admission surface.
+    """
+    kinds = {str(a.get("kind", "")), str(b.get("kind", ""))}
+    if "execution" not in kinds:
+        return False
+    if not any(SCOPED_EXECUTION_RE.fullmatch(k) for k in kinds):
+        return False
+    # Every field except 'kind' must be identical for a plausible migration.
+    rest_a = {k: v for k, v in a.items() if k != "kind"}
+    rest_b = {k: v for k, v in b.items() if k != "kind"}
+    return rest_a == rest_b
+
+
+def _is_interrupted_scoped_refresh(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """Accept only one torn refresh of the same scoped lease identity."""
+
+    kind_a = str(a.get("kind", ""))
+    kind_b = str(b.get("kind", ""))
+    if kind_a != kind_b or not SCOPED_EXECUTION_RE.fullmatch(kind_a):
+        return False
+    volatile = {"refreshed_at", "refreshed_epoch", "expires_at", "expires_epoch"}
+    identity_a = {key: value for key, value in a.items() if key not in volatile}
+    identity_b = {key: value for key, value in b.items() if key not in volatile}
+    return identity_a == identity_b
+
+
 def worktree_scope(cwd: str | os.PathLike[str]) -> WorktreeScope:
     """Resolve a stable linked-worktree scope, folding symlink aliases together."""
 
@@ -761,12 +795,28 @@ class AdmissionController:
             prior = by_id.get(lease_id)
             if prior is not None:
                 if prior != lease:
-                    raise AdmissionStateError(
-                        "host admission lease identity is duplicated with different records; preserved for inspection",
-                        invalid_field=f"leases[{lease_id}].duplicate",
-                        writer_protocol=f"{STATE_SCHEMA}+{SCOPED_STATE_SCHEMA}",
-                        state_path=self.scoped_state_path,
-                    )
+                    if _is_interrupted_migration(prior, lease):
+                        # Write crash: the legacy store kept the old "execution" kind
+                        # while the scoped store already received the promoted kind.
+                        # Prefer the scoped record; prior is shared by both by_id and union.
+                        prior["kind"] = next(
+                            k
+                            for k in (str(prior.get("kind", "")), str(lease.get("kind", "")))
+                            if SCOPED_EXECUTION_RE.fullmatch(k)
+                        )
+                    elif _is_interrupted_scoped_refresh(prior, lease):
+                        # A refresh can tear between the two atomic store writes. Keep
+                        # the newest copy only when the durable lease identity matches.
+                        if float(lease["refreshed_epoch"]) > float(prior["refreshed_epoch"]):
+                            prior.clear()
+                            prior.update(lease)
+                    else:
+                        raise AdmissionStateError(
+                            "host admission lease identity is duplicated with different records; preserved for inspection",
+                            invalid_field=f"leases[{lease_id}].duplicate",
+                            writer_protocol=f"{STATE_SCHEMA}+{SCOPED_STATE_SCHEMA}",
+                            state_path=self.scoped_state_path,
+                        )
                 continue
             copied = dict(lease)
             by_id[lease_id] = copied
@@ -816,16 +866,21 @@ class AdmissionController:
     def _write(self, state: dict[str, Any]) -> None:
         legacy = {
             "schema": STATE_SCHEMA,
-            "leases": [dict(lease) for lease in state["leases"] if lease["kind"] in LEASE_KINDS],
+            "leases": [
+                ({**dict(lease), "kind": "execution"} if SCOPED_EXECUTION_RE.fullmatch(lease["kind"]) else dict(lease))
+                for lease in state["leases"]
+                if lease["kind"] in LEASE_KINDS or SCOPED_EXECUTION_RE.fullmatch(lease["kind"])
+            ],
             "pressure": state.get("pressure"),
         }
         scoped = {
             "schema": SCOPED_STATE_SCHEMA,
             "leases": [dict(lease) for lease in state["leases"] if SCOPED_EXECUTION_RE.fullmatch(lease["kind"])],
         }
-        # Both stores share the same advisory lock.  Publish the additive scoped
-        # file first, then the legacy-compatible view; an old reader therefore
-        # never observes a legacy file newly containing a scoped kind.
+        # Both stores share the same advisory lock. Publish the scoped file first,
+        # then project each scoped lease into legacy as a global execution lease.
+        # Older readers remain conservatively serialized during the rolling update,
+        # while current readers pair the projection with its exact scoped record.
         self._write_file(self.scoped_state_path, scoped)
         self._write_file(self.state_path, legacy)
         directory = os.open(self.root, os.O_RDONLY)

@@ -32,15 +32,17 @@ ratchets:
 
 # 1:1 mirror of deploy*.yml `on.push.paths` — check-gates.py enforces exact set equality.
 # A merge to main touching one of these IS a live deploy. Deploy sensitivity is a property
-# of PATHS, not gates: a docs PR touching tasks.yaml is website-sensitive even though it
-# implicates only cheap gates.
+# of PATHS, not gates: a docs PR touching firebase.json is website-sensitive even though it
+# implicates only cheap gates. tasks.yaml is deliberately NOT a trigger (the board fast
+# lane): the Worker serves the board live at runtime, and deploy.yml's hourly cron rebakes
+# the static dashboard.json when inputs changed — a board publish is data, not a deploy.
 deploy_triggers:
   dashboard:
     workflow: .github/workflows/deploy.yml
     paths:
       - "web/app/**"
+      - "scripts/assemble-dashboard-data.py"
       - "firebase.json"
-      - "tasks.yaml"
       - ".github/workflows/deploy.yml"
   api:
     workflow: .github/workflows/deploy-api.yml
@@ -120,6 +122,11 @@ gates:
     scoped: false
     owner: consulting
     note: "Sovereign Systems engagement records stay schema-clean."
+  constellation-registry:
+    command: "python3 organs/consulting/constellation/validate-constellation.py --quiet"
+    paths: ["organs/consulting/constellation/**", "institutio/github/access.yaml"]
+    owner: consulting
+    note: "The constellation register's Rules #1-7 (completeness, name discipline, PII lint, cross-refs, single-org, overlay parity, access cross-check) run per-diff — previously reachable only via constellation-done.sh. access.yaml implicates it because Rule #7 cross-checks every grant against the granted person's registered project rows."
   artist-records:
     command: "python3 organs/artist/validate-artist.py --fleet --quiet"
     paths: ["organs/artist/**"]
@@ -245,7 +252,7 @@ gates:
     command: "python3 -m pytest cli/tests/test_check_main_green.py -q"
     paths: ["scripts/check-main-green.py", "cli/tests/test_check_main_green.py", "scripts/omega.sh"]
     owner: omega
-    note: "Workflow-filtered completed CI must match the full current origin/main head; a prior or pending run is never green proof."
+    note: "Workflow-filtered completed CI must match the full current origin/main head — or, path-aware, the newest green run when every commit past it implicates none of ci.yml's push paths (docs/board-only merges never trigger the workflow). A pending run or a red newest run is never green proof."
   orphan-watchers-test:
     command: "python3 -m pytest cli/tests/test_orphan_watchers.py -q"
     paths: ["scripts/orphan-watchers.py", "scripts/hooks/session-closeout.sh", "cli/tests/test_orphan_watchers.py"]
@@ -339,6 +346,12 @@ gates:
     ci_job: "pr-gate.yml:pr-gate"
     owner: governance
     note: "SENSORS registry drift: the beat's continuous-runtime sensors are declared data (sensors.yaml), the third VIGILIA axis beside GATES + PARAMETERS. Asserts schema, that every step's script exists, every gate is declared (panel or baseline), and every registry gate appears in the beat sources — a drifted sensor is a red check, not a memory chore."
+  check-decorum:
+    command: "python3 scripts/check-decorum.py"
+    paths: ["institutio/governance/decorum-surfaces.yaml", "scripts/check-decorum.py", "scripts/decorum-keeper.py", "institutio/observatory/decorum-judgments.yaml"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: decorum
+    note: "DECORVM registry+wiring drift AND the offline egg-face gate: the professionalization keeper's sources are declared data (decorum-surfaces.yaml). Asserts registry schema + department addressability, that the keeper's own --doctor passes, the `decorum` sensor is beat-wired, the voice-judgment register pins every verdict to a content_sha256, and — the prevention — that no vendored misspelling exists in the tracked public prose (a typo cannot merge onto the front door; the network-dependent visual/experience classes stay in the continuous beat, not this gate)."
   check-mail-tiers:
     command: "python3 scripts/check-mail-tiers.py"
     paths: ["institutio/governance/mail-tiers.yaml", "scripts/check-mail-tiers.py"]
@@ -349,12 +362,12 @@ gates:
   # ── GitHub estate (GITVS — the GitHub custodian) ────────────────────────────
   gitvs-parity:
     command: "python3 scripts/gitvs.py doctor --offline --parity-only"
-    paths: ["scripts/gitvs.py", "institutio/github/estate.yaml", "scripts/setup-rulesets.py", "scripts/reap-branches.py", "scripts/sync-marketplace-config.py"]
+    paths: ["scripts/gitvs.py", "institutio/github/estate.yaml", "institutio/github/access.yaml", "scripts/setup-rulesets.py", "scripts/reap-branches.py", "scripts/sync-marketplace-config.py"]
     owner: gitvs
     note: "The GitHub-estate registry's own drift predicate (deterministic class-H rung): schema, wiring-integrity (every status:active resource type + active integration is wired + its delegate/reap effector scripts exist — the sensor-without-effector law), required_checks name real .github/workflows jobs. Cheap + deterministic, so scoped: runs whenever its inputs change; the live A–G posture rungs run in the beat, never as a PR gate."
   gitvs-test:
     command: "bash scripts/tests/gitvs.test.sh"
-    paths: ["scripts/gitvs.py", "institutio/github/estate.yaml", "scripts/tests/gitvs.test.sh"]
+    paths: ["scripts/gitvs.py", "institutio/github/estate.yaml", "institutio/github/access.yaml", "scripts/tests/gitvs.test.sh"]
     owner: gitvs
     note: "Parity + drift fixtures for the GITVS predicate: an unwired active resource type, a bad required_check, and a missing effector script must each red the doctor; a clean estate must pass."
   sync-marketplace-config-test:
@@ -392,13 +405,13 @@ gates:
     owner: verify
     note: "Format-check the same estate ruff-lint lints; ran unregistered in pr-gate until the scoped rewrite (issue #1048)."
   pytest-cli:
-    command: "env -u LIMEN_API_TOKEN -u LIMEN_OWNER_TOKEN -u LIMEN_CLIENT_TOKEN python3 -m pytest cli/tests -q"
+    command: "env -u LIMEN_API_TOKEN -u LIMEN_OWNER_TOKEN -u LIMEN_CLIENT_TOKEN python3 -m pytest cli/tests -q -n auto"
     paths: ["cli/**"]
     tier: heavy
     serialize: true
     ci_job: "pr-gate.yml:pr-gate"
     owner: verify
-    note: "Env-scrubbed: ambient persona tokens must not leak into test behavior. Serialized machine-wide (2026-07-15 host-thrash: two concurrent lawful verify.py runs each launched this full suite in parallel with the Backblaze crawl — the 1,200-test suite is a host-exhausting gate like the node/web estate; queueing is strictly cheaper than thrashing)."
+    note: "Env-scrubbed: ambient persona tokens must not leak into test behavior. Serialized machine-wide (2026-07-15 host-thrash: two concurrent lawful verify.py runs each launched this full suite in parallel with the Backblaze crawl — the 1,200-test suite is a host-exhausting gate like the node/web estate; queueing is strictly cheaper than thrashing). -n auto is WITHIN-run xdist fan-out and orthogonal to that cross-run flock: one run at a time, that run uses the cores."
   pytest-api:
     command: "env -u LIMEN_API_TOKEN -u LIMEN_OWNER_TOKEN -u LIMEN_CLIENT_TOKEN python3 -m pytest web/api/tests -q"
     paths: ["web/api/**", "cli/**"]
@@ -410,8 +423,8 @@ gates:
 
   # ── node/web estate (the host-exhausting gates; serialized machine-wide) ────
   web-build:
-    command: "bash -c 'cd web/app && npm run generate:data && npm run build' && node scripts/validate-contract-schemas.mjs"
-    paths: ["web/app/**", "spec/**"]
+    command: "bash -c 'cd web/app && npm run generate:data && npm run build' && python3 scripts/assemble-dashboard-data.py --app web/app && node web/app/scripts/validate-exported-pages.mjs && node scripts/validate-contract-schemas.mjs"
+    paths: ["web/app/**", "spec/**", "scripts/assemble-dashboard-data.py", "scripts/tests/test_assemble_dashboard_data.py"]
     tier: heavy
     serialize: true
     ci_job: "ci.yml:web"

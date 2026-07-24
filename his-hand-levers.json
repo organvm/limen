@@ -185,7 +185,8 @@
         "Decide styx — value-repos key organvm/styx 404s; the real public product is organvm/peer-audited--behavioral-blockchain, which is pre-revenue (deck live, API undeployed). Tell me to deploy it or reframe the door to admit built-but-not-live systems, and I'll seed it.",
         "Seed the remaining value-repos — session-meta, portfolio, the two limen mirrors. Point me at a repo's real proof (tests/deploy/scale) or just name it; I verify and draft the seed. No fabricated weight. Seeded & live: public-record-data-scrapper, universal-mail--automation, a-i-chat--exporter.",
         "Deeper lead capture — BUILT: the inbound-lead lane is now live end-to-end (UMA inbound-lead-hire/deploy/linkedin protocol family + the opportunity-pipeline beat sensor + a warm-lead badge on the obligations face). Detail in docs/positioning/_capture.md. No hand step remains here; the lane is armed by LIMEN_MAIL_SEND (the send valve) like every other SAFE reply.",
-        "LinkedIn — make email the front door (one profile pass, your hand): (1) mirror InMail + message notifications to Gmail (LinkedIn Settings → Communications → email notifications ON for messages/InMail) so a reach-out lands in the mail lane that already classifies it; (2) put the fastest channel in the open — profile headline/About and the Contact-info panel say 'fastest: contact@4444j99.dev'; (3) set Open To Work to recruiters-only (not the public #OpenToWork banner). This is your hand because it edits your public identity + account settings; it turns LinkedIn into an email-first inbound source the built lane already handles."
+        "LinkedIn — make email the front door (one profile pass, your hand): (1) mirror InMail + message notifications to Gmail (LinkedIn Settings → Communications → email notifications ON for messages/InMail) so a reach-out lands in the mail lane that already classifies it; (2) put the fastest channel in the open — profile headline/About and the Contact-info panel say 'fastest: contact@4444j99.dev'; (3) set Open To Work to recruiters-only (not the public #OpenToWork banner). This is your hand because it edits your public identity + account settings; it turns LinkedIn into an email-first inbound source the built lane already handles.",
+        "Pin the partner monuments — the front door now carries a derived 'Built with partners' section (constellation faces, first-name slugs only; regenerates as each face lands). When you republish it, also pin the flagship partner repos on your public profile. Publishes to your identity — which monuments ride your profile is your call."
       ],
       "note": "INVARIANT: none of this sends, deletes, or spends without you — capture drafts, it never reaches out. The system record docs/positioning/_his-hand.md is the full owner-record; this lever is its single canonical pointer on the obligations face (per this file's _doc: a his-hand task hangs HERE, not only in a satellite doc). See memory: [[repos-are-inbound-signal-surface]], [[publish-form-rent-operation]], [[his-hand-tasks-hang-in-permanent-registry]].",
       "issue": 267
@@ -504,6 +505,15 @@
       "issue": 257
     },
     {
+      "id": "L-PARTNER-GRANTS",
+      "label": "Fire staged partner-access commands when the repo_collaborators resource cites them: adding a grant row to institutio/github/access.yaml stages an invite (outbound — collab-sync.py --plan prints the exact `gh api -X PUT` command; the machine never sends it), and any role downgrade or relationship-sensitive removal of a DECLARED partner is your call the same way. Removal of UNDECLARED access is machine-runnable (collab-sync.py --apply, double-dark LIMEN_COLLAB_APPLY=1) but still rides this lever via the estate.yaml approval gate. GITVS doctor class N detects the drift; this lever fires the human half.",
+      "owner": "yours",
+      "cost": "~1 min per staged command; REVERSIBLE (a grant can be removed, an invite cancelled)",
+      "unlocks": "declared partner grants go live (invite fired) or stay clean (undeclared access removed); the GITVS repo_collaborators resource (class N) goes green",
+      "source_task": "GITVS estate (institutio/github/estate.yaml repo_collaborators) + institutio/github/access.yaml",
+      "issue": 1434
+    },
+    {
       "id": "L-OPENCODE-AUTH",
       "label": "Optionally run `opencode auth login` on this host, then verify `opencode models --verbose`. Authentication may expand the currently reachable catalog; Limen discovers capabilities and pricing from that live output and promises no tier, model name, or routing outcome.",
       "owner": "yours",
@@ -683,6 +693,83 @@
       "gate": "outward-facing domain identity — only the owner can sanction which hostname maps to which surface; once approved the DNS attach itself is fleet-executable",
       "note": "The effector (scripts/cf-wrangler.sh) already drives wrangler custom-domain commands headlessly. The apex 4444j99.dev additionally requires a new Cloudflare Pages project created from organvm/portfolio before the custom domain can be attached. studio.objectlessons.film is excluded from this signoff — its gate is L-STUDIO-GOLIVE (#538) which requires NS delegation at the registrar (a separate action not covered by cf-wrangler.sh). See institutio/identity/url-map.yaml for the full taxonomy with current_url, canonical_secondary, and deploy_mechanism per entry.",
       "issue": 1258
+    },
+    {
+      "id": "L-CCE-PROVIDER-BUNDLES",
+      "label": "Download conversation export bundles from the 6 non-scriptable AI-chat vendors (Gemini Takeout, Grok, Perplexity, Copilot, DeepSeek, Mistral) and drop each archive under the CCE source-drop inbox (conversation-corpus-check: cce provider import picks them up). ChatGPT + Claude are already live-session-scripted and imported (2026-07-22, 320MB); this lever only widens dossier coverage — the constellation program is green without it.",
+      "owner": "yours",
+      "cost": "~5-10 min per vendor, once per refresh cycle",
+      "status": "open",
+      "gate": "vendor-portal logins the organ cannot perform (interactive export flows)",
+      "unlocks": "widens AI-chat dossier coverage to all 8 vendors — adds Gemini, Grok, Perplexity, Copilot, DeepSeek, Mistral alongside the already-imported ChatGPT + Claude corpus. The constellation program is green without it; this deepens source breadth for the cross-vendor insights engine.",
+      "source_task": "constellation closeout filings (limen PR #1373); CCE provider-import lane in conversation-corpus-check picks up archives dropped under the source-drop inbox.",
+      "issue": 1394
+    },
+    {
+      "id": "L-DECORUM-LINKEDIN-HEADLINE",
+      "label": "Paste the CURRENT LinkedIn headline + About text into this lever (or a private capture file it names) so DECORVM can voice-judge it like any other public prose surface. LinkedIn has no write API without OAuth partner status, so the text can only be captured by you; once captured, the professionalization keeper checks it for stale title/claims and brand-voice on every change.",
+      "owner": "yours",
+      "cost": "~2 min once per headline change",
+      "status": "open",
+      "gate": "no LinkedIn write API without partner OAuth — the current headline/About text can only be captured by the account holder",
+      "unlocks": "DECORVM (the professionalization keeper) covers the LinkedIn headline/About as an off-platform surface — voice-judged for stale claims and brand-voice, closing an egg-face gap no organ can reach headlessly",
+      "source_task": "DECORVM off_platform slot linkedin_headline (institutio/governance/decorum-surfaces.yaml)",
+      "issue": 1426
+    },
+    {
+      "id": "L-DECORUM-X-BIO",
+      "label": "Paste the CURRENT X/Twitter bio (160 chars) into this lever so DECORVM can voice-judge it. No write path without the paid X API; the text is captured by you, then checked for stale positioning + voice on every change.",
+      "owner": "yours",
+      "cost": "~1 min once per bio change",
+      "status": "open",
+      "gate": "no free X write API — the current bio can only be captured by the account holder",
+      "unlocks": "DECORVM covers the X bio as an off-platform surface (voice + staleness), closing another human-facing egg-face gap",
+      "source_task": "DECORVM off_platform slot x_bio (institutio/governance/decorum-surfaces.yaml)",
+      "issue": 1427
+    },
+    {
+      "id": "L-DECORUM-EMAIL-SIGNATURE",
+      "label": "Paste the CURRENT outbound email signature block into this lever so DECORVM can check it for a stale title, dead links, and brand-voice. Signatures live in mail-client config the organ cannot read; capture it once and on any change.",
+      "owner": "yours",
+      "cost": "~1 min once per signature change",
+      "status": "open",
+      "gate": "mail-client signature config is not organ-readable — the current block can only be captured by you",
+      "unlocks": "DECORVM covers the email signature as an off-platform surface (stale title/links + voice)",
+      "source_task": "DECORVM off_platform slot email_signature (institutio/governance/decorum-surfaces.yaml)",
+      "issue": 1428
+    },
+    {
+      "id": "L-DECORUM-RESUME-PDF",
+      "label": "Drop the CURRENT public resume PDF (or its text) into the private capture this lever names so DECORVM can check it for stale dates and a narrative that matches the actual contribution mix (the same VVLTVS NVMERVS check it runs on the profile). A resume that claims a role the contribution graph doesn't support is a quiet egg-face.",
+      "owner": "yours",
+      "cost": "~2 min once per resume revision",
+      "status": "open",
+      "gate": "the canonical resume PDF lives off-repo — the current file/text can only be provided by you",
+      "unlocks": "DECORVM covers the public resume as an off-platform surface (stale dates + narrative-accuracy against the contribution mix)",
+      "source_task": "DECORVM off_platform slot resume_pdf (institutio/governance/decorum-surfaces.yaml)",
+      "issue": 1429
+    },
+    {
+      "id": "L-APPLY-FIRE",
+      "label": "THE SUBMIT ARM for the outbound job funnel. The application-funnel beat sensor already SOURCES roles, SCORES them (>=9.0), BUILDS tailored materials, and STAGES complete application packages autonomously — reversibly, submitting nothing. Arming this lets the daily cycle also run the `apply` phase: submit staged applications to ATS portals, capped by the pipeline's own precision limits (<=2/week, 1 per org). Mirrors the mail send-arm exactly (stage always / fire when armed).",
+      "owner": "yours",
+      "cost": "one-time paste, durable — OR leave off and review staged packages first; the funnel never blocks on it",
+      "status": "optional — the funnel stages fully autonomously without it; this opens only the final third-party submit step",
+      "gate": "set LIMEN_APPLY_FIRE=1 in ~/.limen.env (writing a persistence-arming LIMEN_*=1 is classifier-gated to the agent, so this line is yours to paste) AND the pipeline's .submit-config.yaml (personal info for ATS autofill) present",
+      "unlocks": "end-to-end autonomous applying — the beat sources, scores, builds, stages, and submits qualified applications on its own, capped by precision limits; until armed it stops at staged and you glance before submit",
+      "source_task": "outbound funnel wiring — application-funnel sensor + scripts/application-funnel.py (limen); mirrors LIMEN_MAIL_SEND for outbound mail",
+      "issue": 1441
+    },
+    {
+      "id": "L-VIC-SHARE-PITCH",
+      "label": "Send the pitch to admin@victoroffgroup.com. This is an external/sending action and must be executed by the human to comply with the DO NOT SEND/LEAK constraints.",
+      "owner": "yours",
+      "cost": "~1 min to draft and send the email with the link to https://vic-pub-001-ui-001.victoroff-os.pages.dev",
+      "status": "open",
+      "unlocks": "the pitch is sent to David",
+      "source_task": "victoroff-os pitch deploy",
+      "gate": "Sending emails is irreversible external communication. The human must send it.",
+      "issue": 1450
     }
   ]
 }

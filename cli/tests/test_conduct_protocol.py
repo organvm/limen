@@ -26,6 +26,7 @@ from limen.conduct import (
 from limen.conduct.models import PredicateEvidenceV1
 from limen.conduct.models import canonical_hash
 from limen.conduct.resources import resources_overlap
+from limen.work_loan import WorkLoanV1
 
 
 NOW = datetime(2026, 7, 18, 15, 0, tzinfo=timezone.utc)
@@ -72,6 +73,7 @@ def packet(
     claims: tuple[ResourceClaimV1, ...] | None = None,
     authority: AuthorityEnvelopeV1 | None = None,
     spend_limit: int = 4,
+    underwritten: bool = True,
 ) -> WorkPacketV1:
     return WorkPacketV1(
         root_run_id=root_run_id,
@@ -87,6 +89,17 @@ def packet(
         resource_claims=claims if claims is not None else (ResourceClaimV1(key=resource),),
         predicate="pytest -q",
         receipt_target=f"github:organvm/limen:pull-request:{work_id}",
+        work_loan=(
+            WorkLoanV1(
+                source_origin="human_prompt",
+                horizon="present",
+                value_case=f"Deliver the bounded conduct packet {work_id}",
+                budget_cost=spend_limit,
+                owner_surface="organvm/limen",
+            )
+            if underwritten
+            else None
+        ),
         authority=authority
         or AuthorityEnvelopeV1(
             actions=frozenset({"code", "review"}),
@@ -154,6 +167,39 @@ def test_executor_attempt_schema_matches_python_runtime() -> None:
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         **ExecutorAttemptV1.model_json_schema(mode="validation"),
     }
+
+
+def test_work_packet_schema_exposes_optional_work_loan_compatibly() -> None:
+    schema_path = Path(__file__).resolve().parents[2] / "spec" / "contracts" / "conduct" / "work-packet-v1.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    assert schema == {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        **WorkPacketV1.model_json_schema(mode="validation"),
+    }
+    assert "work_loan" not in schema["required"]
+
+
+def test_broker_reserve_and_claim_fail_closed_with_stable_underwriting_denial() -> None:
+    codex = session("codex")
+    broker = broker_with(codex)
+    legacy = packet(work_id="legacy-readable", conductor=codex.identity, underwritten=False)
+
+    assert legacy.work_loan is None
+    with pytest.raises(
+        ConductConflict,
+        match=("^task-not-underwritten:source_origin,horizon,value_case,budget_cost,owner_surface$"),
+    ):
+        broker.submit(legacy, now=NOW)
+
+    admitted = broker.submit(packet(work_id="underwritten", conductor=codex.identity), now=NOW)
+    stored = broker.store.snapshot()["runs"][admitted["run_id"]]
+    stored["packet"].pop("work_loan")
+    broker.store = MemoryStateStore(broker.store.snapshot() | {"runs": {admitted["run_id"]: stored}})
+    with pytest.raises(
+        ConductConflict,
+        match=("^task-not-underwritten:source_origin,horizon,value_case,budget_cost,owner_surface$"),
+    ):
+        broker.claim(admitted["lease"]["lease_id"], admitted["lease"]["generation"], now=NOW)
 
 
 def test_path_prefix_overlap_and_review_writer_coexistence() -> None:
@@ -282,6 +328,36 @@ def test_principals_bind_sessions_and_executor_claims_without_leaking_tokens() -
             reserved["run_id"],
             registered_conductor.session_id,
             principal=attacker_conductor,
+            now=NOW,
+        )
+
+
+def test_declared_conductor_identity_matches_after_principal_binding() -> None:
+    """A client may submit the identity it declared, not the register echo (#1408).
+
+    register() rebinds agent/surface to the token principal; submit must apply
+    the same binding before comparing or the tabularius relay can never match.
+    """
+    broker = ConductBroker(MemoryStateStore(), capability_secret="test-capability-secret")
+    relay_principal = principal("principal-relay", "codex", "observer", "conductor")
+    requested = session("claude", session_id="relay-session")
+    broker.register(requested, principal=relay_principal, now=NOW)
+    reserved = broker.submit(
+        packet(work_id="relay-declared-identity", conductor=requested.identity),
+        principal=relay_principal,
+        now=NOW,
+    )
+    assert reserved["run_id"]
+    with pytest.raises(ConductConflict, match="not bound to the authenticated principal"):
+        broker.submit(
+            packet(work_id="relay-imposter", conductor=requested.identity),
+            principal=principal("principal-imposter", "codex", "observer", "conductor"),
+            now=NOW,
+        )
+    with pytest.raises(ConductConflict, match="does not match its registered session"):
+        broker.submit(
+            packet(work_id="relay-foreign", conductor=requested.identity),
+            principal=principal("principal-foreign", "opencode", "observer", "conductor"),
             now=NOW,
         )
 
@@ -486,6 +562,13 @@ def test_spend_limit_and_permanent_failure_stop_retry() -> None:
     bounded = packet(work_id="attempt-spend", conductor=codex.identity).model_copy(
         update={
             "spend": SpendEnvelopeV1(limit=1),
+            "work_loan": WorkLoanV1(
+                source_origin="human_prompt",
+                horizon="present",
+                value_case="Exercise bounded retry spend enforcement",
+                budget_cost=1,
+                owner_surface="organvm/limen",
+            ),
             "retry": RetryPolicyV1(max_attempts=2, transient_only=True),
         }
     )
@@ -784,7 +867,7 @@ def test_child_authority_attenuates_and_cycles_are_rejected() -> None:
         depth=1,
         max_children=2,
         max_depth=2,
-        spend_limit=0,
+        spend_limit=1,
     )
     with pytest.raises(ConductConflict, match="cycle"):
         broker.split(parent_result["run_id"], cycle, now=NOW)
@@ -797,7 +880,7 @@ def test_child_authority_attenuates_and_cycles_are_rejected() -> None:
                 repositories=frozenset({"organvm/limen"}),
                 path_prefixes=frozenset({"cli"}),
             ),
-            "spend": SpendEnvelopeV1(limit=0),
+            "spend": SpendEnvelopeV1(limit=1),
         }
     )
     with pytest.raises(ConductConflict, match="authority"):
@@ -808,7 +891,7 @@ def test_child_authority_attenuates_and_cycles_are_rejected() -> None:
             "work_id": "extended",
             "work_key": "extended",
             "deadline": NOW + timedelta(hours=2),
-            "spend": SpendEnvelopeV1(limit=0),
+            "spend": SpendEnvelopeV1(limit=1),
         }
     )
     with pytest.raises(ConductConflict, match="deadline"):
@@ -819,7 +902,7 @@ def test_child_authority_attenuates_and_cycles_are_rejected() -> None:
             "work_id": "wider-fanout",
             "work_key": "wider-fanout",
             "fanout": FanoutBoundsV1(max_children=3, max_depth=3),
-            "spend": SpendEnvelopeV1(limit=0),
+            "spend": SpendEnvelopeV1(limit=1),
         }
     )
     with pytest.raises(ConductConflict, match="fanout"):

@@ -60,7 +60,9 @@ from limen.dispatch import (  # noqa: E402
     _REMOTE_SUBMISSION_RECEIPTS,
     _deps_met,
     _dispatchable,
+    task_work_loan_readiness,
     _down_lanes,
+    _effective_target_agent,
     _has_done_transition,
     _is_blocked_result,
     _queue_lock,
@@ -1202,13 +1204,14 @@ def _targeted_zero_launch_blocker(task_id: str, lanes: list[str]) -> dict[str, o
             "task_id": task_id,
             "reason": f"exact task {task_id} status is {task.status}; not in a dispatchable state",
         }
-    if task.target_agent not in lanes and task.target_agent != "any":
+    effective_target = _effective_target_agent(task)
+    if effective_target not in lanes and effective_target != "any":
         return {
             "id": "targeted-lane-mismatch",
             "task_id": task_id,
-            "reason": f"exact task targets {task.target_agent}; requested lanes {lanes}",
+            "reason": f"exact task routes to {effective_target}; requested lanes {lanes}",
         }
-    agent = task.target_agent if task.target_agent != "any" else (lanes[0] if lanes else "")
+    agent = effective_target if effective_target != "any" else (lanes[0] if lanes else "")
     if agent and not agent_can_run_task(agent, task):
         return {
             "id": "targeted-agent-capability-refused",
@@ -1514,6 +1517,18 @@ def _pick_reservations(
     unbounded_remaining = _effectively_unbounded_remaining(lf)
     value_repos = _value_tier_repos()
     disk_pressure = _disk_pressure_active()
+    # Loud-not-silent (PR #1329): the WorkLoan admission gate inside _dispatchable now filters
+    # un-underwritten candidates BEFORE they reach normalization, where the "INTAKE BLOCKED"
+    # notice used to surface.  Report each agent-relevant rejection here, once, so a legacy
+    # un-underwritten task is visibly blocked rather than silently dropped.
+    for _t in lf.tasks:
+        if task_id is not None and _t.id != task_id:
+            continue
+        if _t.target_agent != "any" and _t.target_agent not in agents:
+            continue
+        _readiness = task_work_loan_readiness(_t)
+        if not _readiness.ready:
+            print(f"  INTAKE BLOCKED {_t.id}: {_readiness.reason_code}")
     # Worktree admission is ALWAYS evaluated — an explicit --task does NOT bypass resource/VITALS/
     # reaper custody (a task-id run still creates a local worktree). The only override is the
     # documented LIMEN_WORKTREE_DEBT_GATE=0 lever (snapshot → inactive → gate returns False).
@@ -1551,7 +1566,7 @@ def _pick_reservations(
             for t in lf.tasks
             if _dispatchable(t)
             and (task_id is None or t.id == task_id)
-            and (t.target_agent == agent or t.target_agent == "any")
+            and _effective_target_agent(t) in {agent, "any"}
             and agent_can_run_task(agent, t)
             and t.budget_cost <= rem
             and _deps_met(t, id2)

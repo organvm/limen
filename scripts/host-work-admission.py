@@ -20,6 +20,7 @@ from limen.host_admission import (  # noqa: E402
     AdmissionStateError,
     host_admission_capabilities,
 )
+from limen.host_admission_capabilities import host_admission_capabilities  # noqa: E402
 
 
 def _controller(args: argparse.Namespace) -> AdmissionController:

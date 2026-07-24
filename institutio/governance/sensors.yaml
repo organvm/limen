@@ -241,6 +241,42 @@ sensors:
         tier: live
         command: "python3 scripts/seo-audit.py --check"
 
+  estate-audit-heal:
+    section: "heartbeat"
+    title: "estate audit-heal — the OTHER org repos' npm/pnpm audit CI must not sit red (verify-gated overrides fix PRs; dark until armed)"
+    gate: LIMEN_ESTATE_AUDIT_HEAL
+    default: "1"
+    source: [heartbeat]
+    owner: gitvs
+    cadence:
+      env: LIMEN_BEAT_ESTATE_AUDIT
+      default: 24
+    timeout:
+      env: LIMEN_ESTATE_AUDIT_TIMEOUT
+      default: 1200
+    steps:
+      - command: "python3 scripts/estate-audit-heal.py"
+        severity: advisory
+        escalation: "an org repo's npm/pnpm audit CI is red on a verify-fixable transitive advisory — the estate healer opens a verify-gated overrides fix PR (no auto-merge) once LIMEN_ESTATE_AUDIT_HEAL_APPLY=1 arms it (env lever, read internally; framework-major residue is deferred to Dependabot); until armed it is detection-only. Heavy (clones+installs); slow cadence + repo cap (LIMEN_ESTATE_AUDIT_MAX). See scripts/estate-audit-heal.py"
+
+  estate-audit-posture:
+    section: "heartbeat"
+    title: "estate audit posture — the single rollup: whole-estate dependency-audit health in one line + one exit code"
+    gate: LIMEN_ESTATE_AUDIT_POSTURE
+    default: "1"
+    source: [heartbeat]
+    owner: gitvs
+    cadence:
+      env: LIMEN_BEAT_ESTATE_AUDIT_POSTURE
+      default: 12
+    timeout:
+      env: LIMEN_ESTATE_AUDIT_POSTURE_TIMEOUT
+      default: 480
+    steps:
+      - command: "python3 scripts/estate-audit-posture.py --check"
+        severity: advisory
+        escalation: "the estate dependency-audit posture is UNHEALTHY — a Tier-2 owner (Dependabot security-updates) is OFF on an audit-CI repo, so an advisory can rot unowned. dependabot-security-guard heals it once armed. Composes the three ownership organs (npm-audit-autofix + estate-audit-heal Tier-1 leaves as telemetry, dependabot-security-guard Tier-2 as the hard predicate); read-only, no arm. See scripts/estate-audit-posture.py"
+
   observatory-run:
     section: "heartbeat"
     title: "run the OBSERVATORY legibility-and-traction loop (ships dark; armed by L-OBSERVATORY-ACTIVATE)"
@@ -268,6 +304,24 @@ sensors:
       - label: "observatory wiring"
         tier: det
         command: "python3 scripts/observatory-beat.py --doctor"
+
+  dependabot-security-guard:
+    section: "heartbeat"
+    title: "dependabot security-guard — the Tier-2 deferral's owner must stay enabled: audit-CI repos' Dependabot security-updates + alerts must not drift OFF (re-enables under the lever; dark until armed)"
+    gate: LIMEN_DEPENDABOT_GUARD
+    default: "1"
+    source: [heartbeat]
+    owner: gitvs
+    cadence:
+      env: LIMEN_BEAT_DEPENDABOT_GUARD
+      default: 24
+    timeout:
+      env: LIMEN_DEPENDABOT_GUARD_TIMEOUT
+      default: 300
+    steps:
+      - command: "python3 scripts/dependabot-security-guard.py"
+        severity: advisory
+        escalation: "an audit-CI repo's Dependabot security-updates or alerts drifted OFF — estate-audit-heal defers framework-major (Tier-2) advisories to Dependabot, so this silently breaks the deferral. The guard re-enables the benign ON-only setting once LIMEN_DEPENDABOT_GUARD_APPLY=1 arms it (env lever, read internally); until armed it is detection-only. See scripts/dependabot-security-guard.py"
 
   experience-drift:
     section: "heartbeat"
@@ -432,6 +486,21 @@ sensors:
       - command: "python3 scripts/check-main-green.py"
         severity: advisory
         escalation: "main trunk RED above — a heal PR is needed (arm LIMEN_MAIN_GREEN_APPLY=1 to auto-emit one canonical HEAL-mainred task); see scripts/check-main-green.py"
+
+  npm-audit-autofix:
+    section: "0g3b"
+    title: "npm-audit autofix — a new high/critical transitive advisory auto-produces an overrides fix PR, never a queue jam"
+    gate: LIMEN_NPM_AUDIT_AUTOFIX
+    default: "1"
+    source: [metabolize]
+    owner: tabularius
+    # No cadence — like its sibling trunk-green (§0g3), this runs every metabolize beat. A
+    # [metabolize]-source sensor WITH a cadence fires in neither beat path (the launch-agent-liveness
+    # incident); every-beat is also the right latency for keeping the queue unjammed.
+    steps:
+      - command: "python3 scripts/npm-audit-autofix.py"
+        severity: advisory
+        escalation: "a new high/critical npm advisory is red on ci.yml (web/app or web/worker) — the effector pins the patched transitive via overrides and opens a fix PR once LIMEN_NPM_AUDIT_AUTOFIX_APPLY=1 arms it (env lever, read internally like LIMEN_MAIN_GREEN_APPLY; merge-policy gates web/app until CI green); until armed it is detection-only. See scripts/npm-audit-autofix.py"
 
   launch-agent-liveness:
     section: "0g4"
@@ -916,7 +985,13 @@ sensors:
     owner: tabularius
     cadence:
       env: LIMEN_BEAT_RELATIONSHIP_REVIEW
-      default: 168
+      # daily-active (was 168 ≈ weekly, effectively dormant): this is a read-only,
+      # side-effect-free detector (surfaces a PII-clean review-due COUNT — no send, no
+      # draft, no outreach), so it can fire often at zero account-safety cost. At the
+      # slowest quiet tempo (~30min/beat) 24 beats ≈ 12h → the warm-network re-engagement
+      # signal surfaces at least twice a day instead of ~weekly. Half as frequent as the
+      # time-critical opportunity sensors (cadence 12), which is the right priority tier.
+      default: 24
     timeout:
       env: LIMEN_RELATIONSHIP_REVIEW_TIMEOUT
       default: 300
@@ -955,6 +1030,98 @@ sensors:
         severity: silent
         escalation: "opportunity sync skipped or exceeded its bound (reads obligations-ledger.json; fails open)"
 
+  application-funnel:
+    section: heartbeat
+    title: "the OUTBOUND funnel — mount the dormant application-pipeline on the beat: TRIGGER (detached, single-instance) its orchestrator to source roles from ATS/public boards, score >=9.0, build tailored materials, and STAGE complete application packages autonomously. Reversible by construction: nothing is submitted (the `apply`/ATS-submit phase stays behind the LIMEN_APPLY_FIRE arm, lever L-APPLY-FIRE) and nothing is sent (outreach only prepares follow-up dates). The inbound sibling of opportunity-pipeline"
+    gate: LIMEN_APPLICATION_SOURCE
+    default: "1"
+    source: [heartbeat]
+    owner: mail
+    cadence:
+      env: LIMEN_BEAT_APPLICATION_SOURCE
+      default: 48
+    timeout:
+      env: LIMEN_APPLICATION_SOURCE_TIMEOUT
+      default: 120
+    # The full cycle (match re-scores the whole pipeline) is a multi-minute job, so the driver
+    # TRIGGERS it detached under a single-instance lock and returns in <1s — the beat is never
+    # blocked, and the next trigger reports the last completed cycle's PII-clean counts. Dark
+    # until this rung: the mature funnel existed but nothing scheduled it (no working launchd
+    # agent, no beat sensor), so the outbound top-of-funnel never ran on its own.
+    steps:
+      - command: "python3 scripts/application-funnel.py"
+        args_when:
+          - env: LIMEN_APPLICATION_NOTIFY
+            default: "1"
+            equals: "1"
+            args: ["--notify"]
+            armed_valve_type: safety
+        severity: silent
+        escalation: "outbound funnel trigger skipped, or the pipeline runtime is missing — needs application-pipeline/.venv (the driver prints the exact bootstrap); fails open and never submits unless LIMEN_APPLY_FIRE=1"
+
+  conversion-funnel:
+    section: heartbeat
+    title: "name the single public-face bottleneck (DISCOVERY|FACE|CLOSE) — the constraint that routes Aug-1 ($10k/wk) effort, kept live on the beat instead of dark/manual"
+    gate: LIMEN_CONVERSION_FUNNEL
+    default: "1"
+    source: [heartbeat]
+    owner: mail
+    cadence:
+      env: LIMEN_BEAT_CONVERSION_FUNNEL
+      default: 48
+    timeout:
+      env: LIMEN_CONVERSION_FUNNEL_TIMEOUT
+      default: 300
+    # Two ORDERED steps: traffic-collect (gh /traffic per value-repo -> traffic.jsonl, the "seen"
+    # signal) must refresh BEFORE conversion-funnel fuses seen->inbound->revenue and writes the
+    # bottleneck to logs/profile-conversion-funnel-latest.json (which the daily brief then surfaces).
+    # Both read-only + fail-open (a 403 on a repo without push access is recorded, never fatal); both
+    # silent so a network hiccup can't red the beat. Dark until this rung — the bottleneck (currently
+    # DISCOVERY: repos provable but unseen) only refreshed when a human ran it by hand.
+    steps:
+      - command: "python3 scripts/traffic-collect.py"
+        severity: silent
+        escalation: "traffic-collect skipped/failed — the 'seen' signal may be stale (gh /traffic; 403 without push access is recorded, non-fatal)"
+      - command: "python3 scripts/conversion-funnel.py"
+        severity: silent
+        escalation: "conversion-funnel skipped/failed — the public-face bottleneck (DISCOVERY|FACE|CLOSE) may be stale in logs/profile-conversion-funnel-latest.json (reads traffic.jsonl + opportunity-status.json; fails open)"
+
+  opportunity-brief:
+    section: heartbeat
+    title: "the engine's daily VOICE — once per day compose a plain-text opportunity brief (inbound leads, what you owe, LinkedIn mirror status, correspondence, engine freshness) and EMAIL it to the operator's own inbox so the continuous engine is felt, not buried in a log"
+    gate: LIMEN_OPPORTUNITY_BRIEF
+    default: "1"
+    source: [heartbeat]
+    owner: mail
+    cadence:
+      env: LIMEN_BEAT_OPPORTUNITY_BRIEF
+      default: 12
+    timeout:
+      env: LIMEN_OPPORTUNITY_BRIEF_TIMEOUT
+      default: 180
+    steps:
+      - command: "python3 scripts/opportunity-brief.py"
+        severity: silent
+        escalation: "daily brief skipped or send failed (reads status/ledger, emails self via mail-send; idempotent once/day; fails open)"
+
+  opportunity-status-stale:
+    section: "0o2"
+    title: "opportunity engine is alive — the inbound-lead monitor's status file is still being refreshed, not silently frozen"
+    gate: LIMEN_OPPORTUNITY_STALE
+    default: "1"
+    source: [metabolize]
+    owner: mail
+    # The 2026-07-21 sibling of host-pressure-stale: the beat ticked but opportunity-review-delta
+    # stopped rewriting logs/opportunity-status.json for ~18h, so the daily brief + every downstream
+    # reader reported all-clear while the engine was blind. This rung watches the WRITER, not the
+    # leads: opportunity-pipeline fires every 12 beats (~6h worst-case tempo), so 13h = ~2 windows
+    # is stale without false-positiving a slow beat. Reuses the generic scripts/state-freshness.py
+    # (fails toward stale: absent/unparseable/old file all exit 1). Read-only; advisory; onset-deduped.
+    steps:
+      - command: 'python3 scripts/state-freshness.py --file logs/opportunity-status.json --field generated_at --max-age-seconds 46800 --key opportunity-status-stale --label "opportunity engine"'
+        severity: advisory
+        escalation: "opportunity-status.json has stopped refreshing — the inbound-lead monitor (opportunity-review-delta) is frozen and the daily brief is reporting stale state; check `python3 scripts/opportunity-review-delta.py` and the heartbeat (2026-07-21 18h-blind incident, WS0)"
+
   closeout-reconcile:
     section: "0z"
     title: "closeout reconciliation — every claimed-done outcome carries a verified receipt"
@@ -974,3 +1141,82 @@ sensors:
       - label: "closeout classifier self-test (verdicts correct)"
         tier: det
         command: "python3 scripts/reconcile-closeouts.py --doctor"
+
+  jules-quota:
+    section: "0z1"
+    title: "Jules daily quota — used-vs-target gauge, orphaned completions, recovery states"
+    gate: LIMEN_JULES_QUOTA
+    default: "1"
+    source: [metabolize]
+    owner: arms-agents
+    # The 183-day silent lane (2026-01-21 -> 2026-07-23: zero landed Jules output while the
+    # 100/day vendor quota expired unused) had no gauge: drain landed only receipt-mapped
+    # sessions and dropped orphans silently, and nothing measured used-vs-target. This sensor
+    # is the missing gauge; the EFFECTORS stay the existing rungs (drain.sh -> jules-land for
+    # landing, metabolize 4b dispatch for filling). Target derives from
+    # capacity.DEFAULT_DAILY_TASK_TARGETS / LIMEN_JULES_DAILY_TASKS — never pinned here.
+    # Read-only; advisory; fail-open when the jules CLI is unavailable (probe_unavailable noted).
+    steps:
+      - command: "python3 scripts/jules-quota.py"
+        severity: advisory
+        escalation: "Jules quota under target late-day, or orphan/recovery sessions pending — drain (jules-land) + dispatch (metabolize 4b) own the effectors; orphan list via `python3 scripts/jules-land.py`"
+
+  jules-supply:
+    section: "0z2"
+    title: "Jules packet supply — dispatchable-supply-vs-floor gauge with armed template minting"
+    gate: LIMEN_JULES_SUPPLY
+    default: "1"
+    source: [metabolize]
+    owner: arms-agents
+    # The quota sensor (jules-quota) measures used-vs-target; hitting 100/day also needs
+    # ~100 loan-complete open packets to dispatch. This organ measures supply-vs-floor and,
+    # when the LIMEN_JULES_SUPPLY_APPLY valve is armed, mints the deficit from the declared
+    # renewable series in docs/jules-supply-templates.yaml as TABVLARIVS upsert tickets —
+    # adding supply = adding one registry entry, never a hand-minting session. Floor derives
+    # from the jules capacity target — never pinned here. Dry-run (gauge-only) by default.
+    steps:
+      - command: "python3 scripts/jules-supply.py"
+        args_when:
+          # Armed by default (operator mandate 2026-07-23: the 100/day quota is consumed
+          # autonomously — "we shouldn't even have to think about it"). Disarm with
+          # LIMEN_JULES_SUPPLY_APPLY=0 for a gauge-only dry run.
+          - env: LIMEN_JULES_SUPPLY_APPLY
+            default: "1"
+            equals: "1"
+            args: ["--apply"]
+            armed_valve_type: deliverable
+        severity: advisory
+        escalation: "Dispatchable Jules supply is below floor and minting is unarmed — arm LIMEN_JULES_SUPPLY_APPLY=1 or extend docs/jules-supply-templates.yaml"
+
+  decorum:
+    section: "heartbeat"
+    title: "professionalization keeper — no public surface is currently egg-faced"
+    gate: LIMEN_DECORUM
+    default: "1"
+    source: [heartbeat]
+    owner: decorum
+    cadence:
+      env: LIMEN_BEAT_DECORUM
+      default: 6
+    timeout:
+      env: LIMEN_DECORUM_TIMEOUT
+      default: 120
+    # DECORVM federates the estate's six quality organs (experience/visual/seo/countenance/links/moat)
+    # into ONE verdict at logs/decorum.json + logs/decorum.html. Departments + the severity floor are
+    # declared data in institutio/governance/decorum-surfaces.yaml (derive-never-pin); an unmeasured
+    # department is skipped fail-open, never failed. Ships default-on but READ-ONLY — the effector that
+    # files tasks/issues from findings is a separate gate (LIMEN_DECORUM_APPLY), dry-run until armed.
+    steps:
+      - command: "python3 scripts/decorum-keeper.py --sweep"
+        args_when:
+          - env: LIMEN_DECORUM_APPLY
+            default: "0"
+            equals: "1"
+            args: ["--apply"]
+            armed_valve_type: deliverable
+        severity: advisory
+        escalation: "DECORVM found a public egg-face — see logs/decorum.json (blocking finding at/above floor 'high')"
+    omega_eligible:
+      - label: "keeper wiring self-test (registry + schema valid)"
+        tier: det
+        command: "python3 scripts/decorum-keeper.py --doctor"

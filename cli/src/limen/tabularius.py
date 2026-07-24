@@ -63,6 +63,7 @@ from limen.materialize import (
     diff_boards,
 )
 from limen.models import VALID_STATUSES, LimenFile, Task
+from limen.work_loan import task_work_loan_readiness
 from limen.workstream_contract import WORKSTREAM_SUCCESSOR_REQUIRED_LABEL
 
 # --- ticket intents (a superset of materialize's Event tags, plus the status convenience) --------
@@ -90,6 +91,13 @@ _PATCHABLE_TASK_FIELDS = frozenset(
         "context",
         "predicate",
         "receipt_target",
+        "origin",
+        "horizon",
+        "value_case",
+        "owner_surface",
+        "external_deadline",
+        "due_at",
+        "receipt_verified",
         "execution_requirements",
         "workstream_contract",
         "claude_tier",
@@ -113,6 +121,7 @@ _STRUCTURED_LOG_FIELDS = frozenset(
         "workflow_id",
         "workflow_path",
         "workflow_event",
+        "predicate_exit_code",
         "verification_context_digest",
         "remote_state",
         "remote_request_id",
@@ -269,6 +278,11 @@ def submit_task_upsert(
     """
     validated = task if isinstance(task, Task) else Task.model_validate(task)
     validate_intake_contract(validated, is_new=True)
+    underwriting = task_work_loan_readiness(validated)
+    if not underwriting.ready:
+        raise ValueError(underwriting.reason_code)
+    if validated.receipt_verified is True:
+        raise ValueError(f"task {validated.id} receipt credit requires an evidence-bound status transition")
     fields = validated.model_dump(mode="json", exclude_none=True)
     tid = fields.get("id")
     if not tid:
@@ -482,7 +496,7 @@ def _canonical_revision(fields: dict[str, Any]) -> str:
     if isinstance(value, datetime):
         if value.tzinfo is None:
             value = value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        return _revision_iso(value)
     if isinstance(value, date):
         return value.isoformat()
     rendered = str(value)
@@ -491,10 +505,17 @@ def _canonical_revision(fields: dict[str, Any]) -> str:
             parsed = datetime.fromisoformat(rendered.replace("Z", "+00:00"))
             if parsed.tzinfo is None:
                 parsed = parsed.replace(tzinfo=timezone.utc)
-            return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+            return _revision_iso(parsed)
         except ValueError:
             pass
     return rendered
+
+
+def _revision_iso(value: datetime) -> str:
+    # The keeper's canonicalRevision (projection.js) renders through JS
+    # Date.toISOString(), which always truncates to millisecond precision —
+    # a Python-side microsecond render can never CAS-match it.
+    return value.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def _compatibility_intent(ticket: Ticket, base: dict[str, Any] | None) -> dict[str, Any]:
@@ -581,6 +602,25 @@ def _local_conduct_log(event: dict[str, Any], status: str, fallback_output: str)
     }
 
 
+def _require_receipt_credit(
+    task_id: str,
+    prior: dict[str, Any],
+    patch: dict[str, Any],
+    log: dict[str, Any],
+) -> None:
+    if patch.get("receipt_verified") is not True:
+        return
+    if str(patch.get("status") or prior.get("status") or "") != "done":
+        raise ValueError(f"task {task_id} completion-not-verified:status")
+    if log.get("predicate_exit_code") != 0:
+        raise ValueError(f"task {task_id} completion-not-verified:predicate")
+    receipt_target = str(patch.get("receipt_target") or prior.get("receipt_target") or "")
+    if not receipt_target or log.get("remote_receipt") != receipt_target:
+        raise ValueError(f"task {task_id} completion-not-verified:receipt_target")
+    if not re.fullmatch(r"[0-9a-f]{64}", str(log.get("verification_context_digest") or "")):
+        raise ValueError(f"task {task_id} completion-not-verified:verification_context_digest")
+
+
 def _reset_local_budget_window(budget: dict[str, Any], timestamp: str) -> None:
     track = budget.setdefault("track", {"date": "", "spent": 0, "per_agent": {}})
     current_date = timestamp[:10]
@@ -597,10 +637,13 @@ def _local_budget_debit(
     amount = task.get("budget_cost", 0)
     if isinstance(amount, bool) or not isinstance(amount, int) or amount < 0:
         raise ValueError(f"task {task['id']} has invalid canonical budget_cost")
-    agent = str(patch.get("target_agent") or task.get("target_agent") or "")
+    log = dict((event.get("intent") or {}).get("log") or {})
+    agent = str(log.get("logical_agent") or log.get("agent") or "")
     if not agent or agent == "any":
-        raise ValueError(f"task {task['id']} claim requires one concrete target_agent")
-    if task.get("target_agent") not in {None, "", "any", agent}:
+        raise ValueError(f"task {task['id']} claim requires one concrete executor")
+    latest = (task.get("dispatch_log") or [])[-1:] or [{}]
+    route_to = str(latest[0].get("route_to") or "") if latest[0].get("status") == "open" else ""
+    if task.get("target_agent") not in {None, "", "any", agent} and route_to != agent:
         raise ValueError(f"task {task['id']} targets {task.get('target_agent')}, not claim agent {agent}")
     budget = (board.get("portal") or {}).get("budget") or {}
     if not budget or not amount:
@@ -620,7 +663,11 @@ def _local_budget_debit(
 
 def _local_budget_refund(board: dict[str, Any], task: dict[str, Any], event: dict[str, Any]) -> None:
     amount = task.get("budget_cost", 0)
-    agent = str(task.get("target_agent") or "")
+    claim: dict[str, Any] = next(
+        (entry for entry in reversed(task.get("dispatch_log") or []) if entry.get("status") == "dispatched"),
+        {},
+    )
+    agent = str(claim.get("logical_agent") or claim.get("agent") or task.get("target_agent") or "")
     if isinstance(amount, bool) or not isinstance(amount, int) or amount < 0 or not agent or agent == "any":
         raise ValueError(f"task {task['id']} cannot derive a canonical budget refund")
     budget = (board.get("portal") or {}).get("budget") or {}
@@ -816,6 +863,8 @@ def _project_local_task_event(board: LimenFile, event: dict[str, Any]) -> tuple[
             raise ValueError(f"task projection id {supplied.get('id')} does not match {task_id}")
         task = dict(supplied)
         is_new = existing is None
+        if supplied.get("receipt_verified") is True:
+            raise ValueError(f"task {task_id} receipt credit requires an evidence-bound status transition")
         if existing:
             if supplied.get("status") != existing.get("status"):
                 raise ValueError(f"task {task_id} upsert cannot change lifecycle status; submit task.status")
@@ -825,8 +874,6 @@ def _project_local_task_event(board: LimenFile, event: dict[str, Any]) -> tuple[
             task["dispatch_log"] = history
             if created is not None:
                 task["created"] = created
-        else:
-            tasks.append(task)
         task["updated"] = str(event["timestamp"])
         task.setdefault("dispatch_log", [])
         task["dispatch_log"].append(
@@ -838,6 +885,11 @@ def _project_local_task_event(board: LimenFile, event: dict[str, Any]) -> tuple[
         )
         validated = Task.model_validate(task)
         validate_intake_contract(validated, is_new=is_new)
+        if is_new:
+            underwriting = task_work_loan_readiness(validated)
+            if not underwriting.ready:
+                raise ValueError(underwriting.reason_code)
+            tasks.append(task)
     else:
         if kind not in {"task.status", "task.claim", "task.mutate"}:
             raise ValueError(f"unsupported task compatibility intent: {kind}")
@@ -863,7 +915,12 @@ def _project_local_task_event(board: LimenFile, event: dict[str, Any]) -> tuple[
             raise ValueError(f"task {task_id} status intent requires a status patch")
         prior_status = str(existing.get("status") or "")
         next_status = str(patch.get("status") or prior_status)
+        if next_status in {"dispatched", "in_progress"}:
+            underwriting = task_work_loan_readiness({**existing, **patch})
+            if not underwriting.ready:
+                raise ValueError(underwriting.reason_code)
         log = dict(intent.get("log") or {})
+        _require_receipt_credit(task_id, existing, patch, log)
         recovery = _held_jules_landing_recovery(existing, next_status, log)
         repair = kind == "task.status" and _lifecycle_repair_authorized(existing, next_status, log, patch)
         if not recovery and not repair:
@@ -938,7 +995,7 @@ def _submit_compatibility_ticket(
     board_path: Path | None = None,
     local_board: LimenFile | None = None,
 ) -> dict[str, Any]:
-    identity = AgentIdentityV1(
+    requested_identity = AgentIdentityV1(
         agent=_safe_identifier(ticket.agent, "tabularius-relay"),
         surface="tabularius-relay",
         session_id=_safe_identifier(
@@ -949,8 +1006,8 @@ def _submit_compatibility_ticket(
     )
     registration_now = datetime.now(timezone.utc)
     session = ConductorSessionV1(
-        session_id=identity.session_id,
-        identity=identity,
+        session_id=requested_identity.session_id,
+        identity=requested_identity,
         origin="relay",
         capabilities=frozenset({"task-submit"}),
         transport="ianva",
@@ -958,6 +1015,13 @@ def _submit_compatibility_ticket(
         registered_at=registration_now,
         heartbeat_at=registration_now,
     )
+    registration = remote.register(session)
+    registered_payload = registration.get("session", registration) if isinstance(registration, dict) else registration
+    try:
+        registered_session = ConductorSessionV1.model_validate(registered_payload)
+    except Exception as exc:
+        raise RuntimeError("conduct broker registration returned no canonical session identity") from exc
+    identity = registered_session.identity
     owner = os.environ.get("LIMEN_GITHUB_REPO", "").strip() or "organvm/limen"
     execution = {"adapter": "tabularius", "projection": "tasks.yaml", "observed_heads": {}}
     work_key = f"task-compat-{canonical_hash({'intent': intent, 'execution': execution})}"
@@ -986,7 +1050,6 @@ def _submit_compatibility_ticket(
         effect="write",
         task_id=ticket.task_id,
     )
-    remote.register(session)
 
     if isinstance(remote, LocalConductClient):
         if board_path is None or local_board is None:
@@ -1323,17 +1386,22 @@ def _apply(ticket: Ticket, tasks: OrderedDict[str, dict[str, Any]], meta: dict[s
         merged["updated"] = ticket.timestamp.isoformat()
         if ticket.log:
             status = ticket.log.get("status") or merged.get("status")
+            structured = {
+                key: value for key, value in ticket.log.items() if key in _STRUCTURED_LOG_FIELDS and value is not None
+            }
             entry = {
                 "timestamp": ticket.timestamp.isoformat(),
                 "agent": ticket.agent,
                 "session_id": ticket.session_id,
                 "status": status,
                 "output": ticket.log.get("output"),
+                **structured,
             }
             merged["dispatch_log"] = list(base.get("dispatch_log", [])) + [entry]
             # a task.status ticket carries the transition in its log payload; honor it as the status
             if ticket.intent == INTENT_STATUS and "status" not in (ticket.patch or {}) and status:
                 merged["status"] = status
+        _require_receipt_credit(ticket.task_id, base, ticket.patch or {}, ticket.log or {})
         if not is_new and WORKSTREAM_SUCCESSOR_REQUIRED_LABEL in (base.get("labels") or []):
             next_status = str(merged.get("status") or "")
             if next_status not in {"failed", "done", "archived"}:
@@ -1348,6 +1416,16 @@ def _apply(ticket: Ticket, tasks: OrderedDict[str, dict[str, Any]], meta: dict[s
         # The keeper repeats admission independently so that ticket is quarantined
         # alone while valid siblings still land.
         validate_intake_contract(validated, is_new=is_new)
+        if is_new:
+            if merged.get("receipt_verified") is True:
+                raise ValueError(f"task {ticket.task_id} receipt credit requires an evidence-bound status transition")
+            underwriting = task_work_loan_readiness(validated)
+            if not underwriting.ready:
+                raise ValueError(underwriting.reason_code)
+        elif str(merged.get("status") or "") in {"dispatched", "in_progress"}:
+            underwriting = task_work_loan_readiness(validated)
+            if not underwriting.ready:
+                raise ValueError(underwriting.reason_code)
         tasks[ticket.task_id] = merged  # dict update keeps first-seen position; new id appends
         return
 
