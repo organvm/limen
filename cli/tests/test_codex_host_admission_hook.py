@@ -195,10 +195,7 @@ def test_generated_cache_reclaimer_is_a_self_gated_sanctioned_control(tmp_path: 
     service = controller(tmp_path)
     for command in (
         "python3 scripts/reclaim-generated-caches.py --check --json",
-        (
-            "python3 scripts/reclaim-generated-caches.py --apply "
-            "--expected-plan-sha deadbeef --json"
-        ),
+        ("python3 scripts/reclaim-generated-caches.py --apply --expected-plan-sha deadbeef --json"),
     ):
         assert (
             hook.handle(
