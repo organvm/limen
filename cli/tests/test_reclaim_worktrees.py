@@ -239,17 +239,13 @@ def test_apply_requires_matching_plan_digest_before_abandonment(tmp_path: Path, 
     monkeypatch.setattr(
         reclaim,
         "quarantine_path",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("digest denial must precede abandonment")
-        ),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("digest denial must precede abandonment")),
     )
 
     assert reclaim.main() == 2
     payload = json.loads(capsys.readouterr().out)
     assert payload["mode"] == "APPLY-BLOCKED"
-    assert payload["failed"] == [
-        {"reason": "expected-plan-sha-required", "root": "plan"}
-    ]
+    assert payload["failed"] == [{"reason": "expected-plan-sha-required", "root": "plan"}]
     assert len(payload["plan_sha256"]) == 64
     assert candidate.exists()
 
