@@ -28,12 +28,12 @@
       "selection": "human_explicit"
     },
     "runway": {
-      "deadline_at": null,
-      "deadline_epoch": null,
+      "deadline_at": "2026-07-26T13:48:48+00:00",
+      "deadline_epoch": 1785073728,
       "duration_seconds": 28800,
       "requested": "8h",
-      "started_at": null,
-      "started_epoch": null
+      "started_at": "2026-07-26T05:48:48+00:00",
+      "started_epoch": 1785044928
     },
     "schema": "limen.workstream.contract.v2"
   },
