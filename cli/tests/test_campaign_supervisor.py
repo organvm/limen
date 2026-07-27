@@ -18,7 +18,7 @@ from limen.conduct.supervisor import (
 )
 from limen.omega_remediation import OmegaRemediationV1, remediation_payload
 from limen.work_loan import WorkLoanV1, packet_work_loan_missing
-from limen.workstream_contract import RECEIPT_MODULES, new_contract_v2
+from limen.workstream_contract import RECEIPT_MODULES, new_contract, new_contract_v2
 
 
 def _git(root: Path, *args: str) -> str:
@@ -200,6 +200,18 @@ def _identity() -> AgentIdentityV1:
         surface="workstream",
         session_id="campaign-session",
     )
+
+
+def test_campaign_rejects_a_legacy_launch_contract(campaign_repo) -> None:
+    root, receipt, now, _deadline = campaign_repo
+    payload = json.loads(receipt.read_text(encoding="utf-8"))
+    legacy = new_contract("8h")
+    legacy["runway"] = payload["contract"]["runway"]
+    payload["contract"] = legacy
+    receipt.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(CampaignSupervisorError, match="requires a v2 launch contract"):
+        load_capsule_receipt(receipt, root=root, now_epoch=now)
 
 
 def test_failed_rungs_submit_one_atomic_typed_graph(campaign_repo) -> None:
