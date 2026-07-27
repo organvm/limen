@@ -138,6 +138,22 @@ def test_real_registry_derives_nonempty_metabolize_loop(capsys):
     assert "scripts/creds-hydrate.py --apply" in out
 
 
+def test_recovery_sensors_never_render_apply_even_when_legacy_env_is_hostile(monkeypatch):
+    m = _mod()
+    sensors = m.load_sensors(REAL_REGISTRY)
+    monkeypatch.setenv("LIMEN_DISK_CAPACITY_APPLY", "1")
+    monkeypatch.setenv("LIMEN_HORREVM_APPLY", "1")
+
+    disk = sensors["disk-capacity"]["steps"][0]
+    horrevm_preview = sensors["horrevm-custody"]["steps"][0]
+    assert "args_when" not in disk
+    assert "args_when" not in horrevm_preview
+    assert m._step_command(disk) == "python3 scripts/disk-capacity.py --check"
+    assert m._step_command(horrevm_preview) == "python3 scripts/horrevm-custody.py --push"
+    assert "--apply" not in m._step_command(disk)
+    assert "--apply" not in m._step_command(horrevm_preview)
+
+
 def test_scheduled_sensor_is_identity_agnostic_and_stamps_only_when_due(tmp_path, monkeypatch):
     m = _mod()
     registry = tmp_path / "scheduled.yaml"
