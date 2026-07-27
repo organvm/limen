@@ -7,7 +7,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from limen.omega_remediation import (
     OmegaRemediationError,
     OmegaRungContractV1,
@@ -15,7 +14,6 @@ from limen.omega_remediation import (
     load_omega_remediations,
     materialize_remediations,
 )
-
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -34,7 +32,7 @@ def _registry() -> dict:
             },
             "effect": "read",
             "output_ceiling_bytes": 4096,
-            "receipt_target": "github:organvm/limen#1571",
+            "receipt_target": "github:organvm/limen:issue:1571",
             "required_capabilities": ["shell"],
             "work_loan": {
                 "schema_version": "limen.work_loan.v1",
@@ -119,6 +117,10 @@ def test_invalid_or_delegating_metadata_is_rejected() -> None:
     registry = _registry()
     registry["rungs"][0]["unexpected"] = "drift"
     with pytest.raises(OmegaRemediationError, match="extra_forbidden"):
+        materialize_remediations(registry, _rungs())
+    registry = _registry()
+    registry["defaults"]["receipt_target"] = "chat-only"
+    with pytest.raises(OmegaRemediationError, match="durable GitHub receipt"):
         materialize_remediations(registry, _rungs())
 
 

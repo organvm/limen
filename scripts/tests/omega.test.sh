@@ -126,7 +126,7 @@ payload = {
         },
         "effect": "read",
         "output_ceiling_bytes": 4096,
-        "receipt_target": "github:organvm/limen#1571",
+        "receipt_target": "github:organvm/limen:issue:1571",
         "required_capabilities": ["shell"],
         "work_loan": {
             "schema_version": "limen.work_loan.v1",

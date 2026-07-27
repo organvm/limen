@@ -8,7 +8,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
 from limen.omega_remediation import load_omega_remediations, remediation_payload
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -139,7 +138,7 @@ print((root / 'institutio/governance/sensor-rungs.json').read_text())
                 },
                 "effect": "read",
                 "output_ceiling_bytes": 4096,
-                "receipt_target": "github:organvm/limen#1571",
+                "receipt_target": "github:organvm/limen:issue:1571",
                 "required_capabilities": ["shell"],
                 "work_loan": {
                     "schema_version": "limen.work_loan.v1",

@@ -12,8 +12,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from limen.conduct.models import AuthorityEnvelopeV1
+from limen.intake import is_durable_receipt_target
 from limen.work_loan import WorkLoanV1
-
 
 REGISTRY_SCHEMA = "limen.omega_remediation_registry.v1"
 REMEDIATION_SCHEMA = "limen.omega_remediation.v1"
@@ -67,7 +67,10 @@ class OmegaRemediationDefaultsV1(_FrozenModel):
     @field_validator("receipt_target")
     @classmethod
     def validate_receipt_target(cls, value: str) -> str:
-        return _bounded(value, "receipt_target")
+        normalized = _bounded(value, "receipt_target")
+        if not is_durable_receipt_target(normalized):
+            raise ValueError("receipt_target must name a durable GitHub receipt or tracked Git path")
+        return normalized
 
     @field_validator("required_capabilities")
     @classmethod
@@ -79,7 +82,7 @@ class OmegaRemediationDefaultsV1(_FrozenModel):
         return value
 
     @model_validator(mode="after")
-    def authority_fits_effect(self) -> "OmegaRemediationDefaultsV1":
+    def authority_fits_effect(self) -> OmegaRemediationDefaultsV1:
         if self.effect not in self.authority.actions:
             raise ValueError("remediation effect must be present in authority.actions")
         if self.effect == "external" and not self.authority.external_effects:
@@ -113,7 +116,7 @@ class OmegaRemediationRegistryV1(_FrozenModel):
     rungs: tuple[OmegaRemediationEntryV1, ...]
 
     @model_validator(mode="after")
-    def unique_rungs(self) -> "OmegaRemediationRegistryV1":
+    def unique_rungs(self) -> OmegaRemediationRegistryV1:
         ids = [rung.id for rung in self.rungs]
         if not ids:
             raise ValueError("Omega remediation registry is empty")
@@ -155,7 +158,7 @@ class OmegaRemediationV1(_FrozenModel):
         return value
 
     @model_validator(mode="after")
-    def authority_is_attenuated(self) -> "OmegaRemediationV1":
+    def authority_is_attenuated(self) -> OmegaRemediationV1:
         if self.effect not in self.authority.actions:
             raise ValueError("remediation effect must be present in authority.actions")
         if self.effect == "external" and not self.authority.external_effects:
