@@ -16,7 +16,7 @@ from limen.intake import is_durable_receipt_target
 from limen.work_loan import WorkLoanV1
 
 REGISTRY_SCHEMA = "limen.omega_remediation_registry.v1"
-REMEDIATION_SCHEMA = "limen.omega_remediation.v1"
+REMEDIATION_SCHEMA: Literal["limen.omega_remediation.v1"] = "limen.omega_remediation.v1"
 CORE_SCHEMA = "limen.omega_rung_registry.v1"
 SENSOR_SCHEMA = "limen.omega_sensor_rungs.v1"
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,255}$")
