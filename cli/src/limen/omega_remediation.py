@@ -12,7 +12,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from limen.conduct.models import AuthorityEnvelopeV1
-from limen.intake import is_durable_receipt_target
+from limen.intake import is_durable_receipt_target, is_executable_predicate
 from limen.work_loan import WorkLoanV1
 
 REGISTRY_SCHEMA = "limen.omega_remediation_registry.v1"
@@ -50,10 +50,18 @@ class OmegaRungContractV1(_FrozenModel):
             raise ValueError("rung id must be a bounded protocol identifier")
         return value
 
-    @field_validator("label", "predicate")
+    @field_validator("label")
     @classmethod
     def validate_text(cls, value: str, info) -> str:
         return _bounded(value, info.field_name)
+
+    @field_validator("predicate")
+    @classmethod
+    def validate_predicate(cls, value: str) -> str:
+        normalized = _bounded(value, "predicate")
+        if not is_executable_predicate(normalized):
+            raise ValueError("predicate must be an executable command")
+        return normalized
 
 
 class OmegaRemediationDefaultsV1(_FrozenModel):
@@ -149,6 +157,20 @@ class OmegaRemediationV1(_FrozenModel):
     @classmethod
     def validate_text(cls, value: str, info) -> str:
         return _bounded(value, info.field_name)
+
+    @field_validator("predicate")
+    @classmethod
+    def validate_predicate(cls, value: str) -> str:
+        if not is_executable_predicate(value):
+            raise ValueError("predicate must be an executable command")
+        return value
+
+    @field_validator("receipt_target")
+    @classmethod
+    def validate_receipt_target(cls, value: str) -> str:
+        if not is_durable_receipt_target(value):
+            raise ValueError("receipt_target must name a durable GitHub receipt or tracked Git path")
+        return value
 
     @field_validator("required_capabilities")
     @classmethod

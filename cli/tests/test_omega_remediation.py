@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from limen.omega_remediation import (
     OmegaRemediationError,
+    OmegaRemediationV1,
     OmegaRungContractV1,
     annotate_omega_stamp,
     load_omega_remediations,
@@ -122,6 +123,13 @@ def test_invalid_or_delegating_metadata_is_rejected() -> None:
     registry["defaults"]["receipt_target"] = "chat-only"
     with pytest.raises(OmegaRemediationError, match="durable GitHub receipt"):
         materialize_remediations(registry, _rungs())
+    with pytest.raises(ValueError, match="executable command"):
+        _rungs("describe the check in prose")
+    remediation = materialize_remediations(_registry(), _rungs())["sensor.renamed"]
+    payload = remediation.model_dump(mode="json")
+    payload["receipt_target"] = "chat-only"
+    with pytest.raises(ValueError, match="durable GitHub receipt"):
+        OmegaRemediationV1.model_validate(payload)
 
 
 def test_stamp_annotation_is_typed_exact_order_and_content_free() -> None:
