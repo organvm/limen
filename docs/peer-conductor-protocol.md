@@ -62,6 +62,14 @@ campaign boundary, and any successor-capsule reference. The keeper authorizes a 
 only when its campaign ID and output ceiling match the leased packet. Historical packets and
 receipts without either extension remain readable and retain their original authorization rules.
 
+Strict Omega supplies campaign leaves from declared data rather than a hard-coded rung table.
+`institutio/governance/omega-remediations.json` must exactly cover the union of the core registry
+and live sensor discovery. Each materialized remediation carries its current predicate, owner,
+next action, required capabilities, attenuated non-delegating authority, work loan, output ceiling,
+and receipt target. `logs/omega.json` schema 3 embeds that typed contract on every rung. A missing,
+unknown, newly added, or tampered remediation makes the Omega contract invalid and cannot enter the
+two-pass settlement proof.
+
 Delegation is a bounded DAG. A child reserves through the broker before it consumes separate
 capacity or mutates state. Its authority, repository/path scope, deadline, spend, retry, depth, and
 fanout cannot exceed its parent. Repeated ancestry work keys are rejected. A dead conductor does
