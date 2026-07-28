@@ -23,6 +23,7 @@ from limen.prima_materia import (
     SourceCoverageV1,
     StandingAuthorityV1,
     TransformRecipeV1,
+    UniverseSourceRegistryV1,
 )
 
 MODELS = {
@@ -36,6 +37,7 @@ MODELS = {
     "composition-manifest-v1.schema.json": CompositionManifestV1,
     "standing-authority-v1.schema.json": StandingAuthorityV1,
     "source-coverage-v1.schema.json": SourceCoverageV1,
+    "universe-source-registry-v1.schema.json": UniverseSourceRegistryV1,
     "project-universe-manifest-v1.schema.json": ProjectUniverseManifestV1,
     "collaborator-universe-manifest-v1.schema.json": CollaboratorUniverseManifestV1,
 }

@@ -25,6 +25,8 @@ from limen.prima_materia import (
     SourceCoverageV1,
     StandingAuthorityV1,
     TransformRecipeV1,
+    UniverseSourceAdapterV1,
+    UniverseSourceRegistryV1,
 )
 
 DIGEST = "a" * 64
@@ -67,6 +69,73 @@ def _adapter(adapter_id: str, source_id: str) -> SourceAdapterV1:
         custody_target_refs=("encrypted-primary", "encrypted-recovery"),
         restoration_predicate="both targets restore",
     )
+
+
+def _universe_source(adapter_id: str, source_kind: str) -> UniverseSourceAdapterV1:
+    return UniverseSourceAdapterV1(
+        adapter_id=adapter_id,
+        source_kind=source_kind,
+        owner_ref=f"owner-{source_kind}",
+        project_enumerator_ref=f"{source_kind}-projects-v1",
+        collaborator_enumerator_ref=f"{source_kind}-collaborators-v1",
+        completeness_predicate=f"all {source_kind} source instances have terminal dispositions",
+        privacy_projection_ref=f"{source_kind}-privacy-projection-v1",
+    )
+
+
+def test_universe_source_registry_is_dynamic_order_independent_and_fail_closed() -> None:
+    source_a = _universe_source("adapter-a", "source-a")
+    source_b = _universe_source("adapter-b", "source-b")
+    source_c = _universe_source("adapter-c", "source-c")
+
+    first = UniverseSourceRegistryV1(
+        registry_id="universeSources001",
+        adapters=(source_b, source_a),
+    )
+    reordered = UniverseSourceRegistryV1(
+        registry_id="universeSources001",
+        adapters=(source_a, source_b),
+    )
+    added = UniverseSourceRegistryV1(
+        registry_id="universeSources001",
+        adapters=(source_a, source_b, source_c),
+    )
+    removed = UniverseSourceRegistryV1(
+        registry_id="universeSources001",
+        adapters=(source_a,),
+    )
+
+    assert first.source_kinds == ("source-a", "source-b")
+    assert first.canonical_digest == reordered.canonical_digest
+    assert added.canonical_digest != first.canonical_digest
+    assert removed.canonical_digest != first.canonical_digest
+
+    with pytest.raises(ValueError, match="adapter identities"):
+        UniverseSourceRegistryV1(
+            registry_id="universeSources001",
+            adapters=(source_a, source_a.model_copy(update={"source_kind": "source-z"})),
+        )
+    with pytest.raises(ValueError, match="source kinds"):
+        UniverseSourceRegistryV1(
+            registry_id="universeSources001",
+            adapters=(source_a, source_b.model_copy(update={"source_kind": "source-a"})),
+        )
+
+
+def test_tracked_universe_source_registry_binds_both_manifests_without_a_code_denominator() -> None:
+    root = Path(__file__).resolve().parents[2]
+    registry_path = root / "institutio" / "governance" / "prima-materia-universe-sources.json"
+    registry = UniverseSourceRegistryV1.model_validate_json(registry_path.read_text())
+    reordered = UniverseSourceRegistryV1(
+        registry_id=registry.registry_id,
+        adapters=tuple(reversed(registry.adapters)),
+    )
+
+    assert registry.source_kinds == tuple(sorted(registry.source_kinds))
+    assert registry.canonical_digest == reordered.canonical_digest
+    assert all(adapter.project_enumerator_ref for adapter in registry.adapters)
+    assert all(adapter.collaborator_enumerator_ref for adapter in registry.adapters)
+    assert all(adapter.privacy_projection_ref for adapter in registry.adapters)
 
 
 def test_arbitrary_adapter_order_and_unknown_source_debt() -> None:
@@ -574,6 +643,7 @@ def test_generated_schemas_match_models(tmp_path: Path) -> None:
         "source-coverage-v1.schema.json",
         "standing-authority-v1.schema.json",
         "transform-recipe-v1.schema.json",
+        "universe-source-registry-v1.schema.json",
     }
     assert {path.name for path in schemas.glob("*.json")} == expected
     assert all(json.loads(path.read_text())["$schema"].endswith("2020-12/schema") for path in schemas.glob("*.json"))

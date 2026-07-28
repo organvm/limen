@@ -599,6 +599,61 @@ def _validate_universe_identity_coverage(
         raise ValueError(f"unexpected {label} identities must equal observed minus required")
 
 
+class UniverseSourceAdapterV1(PrimaMateriaModel):
+    """One dynamically configured source class for both universe manifests."""
+
+    schema_version: Literal["limen.universe_source_adapter.v1"] = "limen.universe_source_adapter.v1"
+    adapter_id: str
+    source_kind: str
+    owner_ref: str
+    project_enumerator_ref: str
+    collaborator_enumerator_ref: str
+    completeness_predicate: str = Field(min_length=1, max_length=4096)
+    privacy_projection_ref: str
+
+    _registry = field_validator(
+        "adapter_id",
+        "source_kind",
+        "owner_ref",
+        "project_enumerator_ref",
+        "collaborator_enumerator_ref",
+        "privacy_projection_ref",
+    )(_validate_registry_key)
+
+
+class UniverseSourceRegistryV1(PrimaMateriaModel):
+    """Order-independent registry whose members define the live source denominator."""
+
+    schema_version: Literal["limen.universe_source_registry.v1"] = "limen.universe_source_registry.v1"
+    registry_id: str
+    adapters: tuple[UniverseSourceAdapterV1, ...] = Field(min_length=1, max_length=4096)
+
+    _registry_id = field_validator("registry_id")(_validate_opaque_id)
+
+    @model_validator(mode="after")
+    def source_classes_are_unique(self) -> UniverseSourceRegistryV1:
+        adapter_ids = tuple(adapter.adapter_id for adapter in self.adapters)
+        source_kinds = tuple(adapter.source_kind for adapter in self.adapters)
+        if len(adapter_ids) != len(set(adapter_ids)):
+            raise ValueError("universe source adapter identities must be unique")
+        if len(source_kinds) != len(set(source_kinds)):
+            raise ValueError("universe source kinds must be unique")
+        return self
+
+    @property
+    def source_kinds(self) -> tuple[str, ...]:
+        return tuple(sorted(adapter.source_kind for adapter in self.adapters))
+
+    @property
+    def canonical_digest(self) -> str:
+        payload = self.model_dump(mode="json")
+        payload["adapters"] = sorted(
+            payload["adapters"],
+            key=lambda adapter: (adapter["source_kind"], adapter["adapter_id"]),
+        )
+        return _canonical_digest(payload)
+
+
 class ProjectUniverseEntryV1(PrimaMateriaModel):
     project_id: str
     source_lineage_ids: tuple[str, ...] = Field(min_length=1, max_length=4096)
