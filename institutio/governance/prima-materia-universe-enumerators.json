@@ -115,6 +115,63 @@
       "timeout_seconds": 10,
       "max_output_bytes": 262144,
       "requires_custody_receipt": false
+    },
+    {
+      "enumerator_ref": "engagements-census-v1",
+      "dimension": "census",
+      "command": [
+        "python3",
+        "scripts/prima-materia-enumerate-engagements.py",
+        "--dimension",
+        "census"
+      ],
+      "command_sha256": "96df2c666f385bbd0ed3ec763b26538d5959fd13f69b0e638c95851b0f6030ad",
+      "input_files": [
+        "cli/src/limen/engagement_ledger_enumerator.py",
+        "scripts/prima-materia-enumerate-engagements.py",
+        "state/aug1/engagements.json"
+      ],
+      "timeout_seconds": 10,
+      "max_output_bytes": 262144,
+      "requires_custody_receipt": false
+    },
+    {
+      "enumerator_ref": "engagement-collaborators-v1",
+      "dimension": "collaborator",
+      "command": [
+        "python3",
+        "scripts/prima-materia-enumerate-engagements.py",
+        "--dimension",
+        "collaborator"
+      ],
+      "command_sha256": "5fa5516d4ae342c1ed1371392f5e4f9d4c6905330f9e3b81357918661ded1fbd",
+      "input_files": [
+        "cli/src/limen/engagement_ledger_enumerator.py",
+        "scripts/prima-materia-enumerate-engagements.py",
+        "state/aug1/engagements.json"
+      ],
+      "timeout_seconds": 10,
+      "max_output_bytes": 262144,
+      "requires_custody_receipt": false
+    },
+    {
+      "enumerator_ref": "engagement-projects-v1",
+      "dimension": "project",
+      "command": [
+        "python3",
+        "scripts/prima-materia-enumerate-engagements.py",
+        "--dimension",
+        "project"
+      ],
+      "command_sha256": "739e1a806ec50746d701b1105c2301e00529106f7db59a40141cf081b173a5d5",
+      "input_files": [
+        "cli/src/limen/engagement_ledger_enumerator.py",
+        "scripts/prima-materia-enumerate-engagements.py",
+        "state/aug1/engagements.json"
+      ],
+      "timeout_seconds": 10,
+      "max_output_bytes": 262144,
+      "requires_custody_receipt": false
     }
   ]
 }

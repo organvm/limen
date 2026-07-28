@@ -160,8 +160,21 @@ class UniverseProjectInstanceFragmentV1(PrimaMateriaModel):
     required_project_ids: tuple[str, ...] = Field(max_length=100_000)
     projects: tuple[SourceProjectObservationV1, ...] = Field(max_length=100_000)
     non_project_row_ids: tuple[str, ...] = Field(default_factory=tuple, max_length=1_000_000)
+    unclassified_row_ids: tuple[str, ...] = Field(default_factory=tuple, max_length=1_000_000)
 
     _instance = field_validator("source_instance_id")(_validate_opaque)
+
+    @model_validator(mode="after")
+    def row_dispositions_are_distinct(self) -> UniverseProjectInstanceFragmentV1:
+        for label, values in (
+            ("non-project rows", self.non_project_row_ids),
+            ("unclassified rows", self.unclassified_row_ids),
+        ):
+            if values != tuple(sorted(values)) or len(values) != len(set(values)):
+                raise ValueError(f"{label} must be sorted and unique")
+        if set(self.non_project_row_ids) & set(self.unclassified_row_ids):
+            raise ValueError("classified and unclassified row identities must not overlap")
+        return self
 
 
 class UniverseProjectFragmentV1(PrimaMateriaModel):
@@ -181,6 +194,8 @@ class UniverseProjectFragmentV1(PrimaMateriaModel):
         identities = tuple(item.source_instance_id for item in self.instances)
         if len(identities) != len(set(identities)):
             raise ValueError("project fragment source instances must be unique")
+        if self.enumeration_complete and any(item.unclassified_row_ids for item in self.instances):
+            raise ValueError("complete project enumeration cannot retain unclassified rows")
         return self
 
 
@@ -193,8 +208,21 @@ class UniverseCollaboratorInstanceFragmentV1(PrimaMateriaModel):
         max_length=100_000,
     )
     non_project_row_ids: tuple[str, ...] = Field(default_factory=tuple, max_length=1_000_000)
+    unclassified_row_ids: tuple[str, ...] = Field(default_factory=tuple, max_length=1_000_000)
 
     _instance = field_validator("source_instance_id")(_validate_opaque)
+
+    @model_validator(mode="after")
+    def row_dispositions_are_distinct(self) -> UniverseCollaboratorInstanceFragmentV1:
+        for label, values in (
+            ("non-project rows", self.non_project_row_ids),
+            ("unclassified rows", self.unclassified_row_ids),
+        ):
+            if values != tuple(sorted(values)) or len(values) != len(set(values)):
+                raise ValueError(f"{label} must be sorted and unique")
+        if set(self.non_project_row_ids) & set(self.unclassified_row_ids):
+            raise ValueError("classified and unclassified row identities must not overlap")
+        return self
 
 
 class UniverseCollaboratorFragmentV1(PrimaMateriaModel):
@@ -214,6 +242,8 @@ class UniverseCollaboratorFragmentV1(PrimaMateriaModel):
         identities = tuple(item.source_instance_id for item in self.instances)
         if len(identities) != len(set(identities)):
             raise ValueError("collaborator fragment source instances must be unique")
+        if self.enumeration_complete and any(item.unclassified_row_ids for item in self.instances):
+            raise ValueError("complete collaborator enumeration cannot retain unclassified rows")
         return self
 
 
@@ -587,6 +617,9 @@ def run_universe_adapters(
                     reference_only_identity_ids=collaborator.reference_only_identity_ids,
                     non_project_row_ids=tuple(
                         sorted(set(project.non_project_row_ids) | set(collaborator.non_project_row_ids))
+                    ),
+                    unclassified_row_ids=tuple(
+                        sorted(set(project.unclassified_row_ids) | set(collaborator.unclassified_row_ids))
                     ),
                 )
             )

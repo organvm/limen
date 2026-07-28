@@ -410,6 +410,24 @@ def test_fragment_with_raw_private_fields_fails_closed_as_adapter_debt(
     assert len(result.receipt.placeholder_source_instance_ids) == 1
 
 
+def test_complete_fragment_cannot_hide_unclassified_source_rows() -> None:
+    with pytest.raises(ValueError, match="unclassified rows"):
+        UniverseProjectFragmentV1(
+            source_kind="fixture_source",
+            observed_at=FROZEN_AT,
+            enumeration_complete=True,
+            receipt_ref="fixture-project-receipt",
+            instances=(
+                UniverseProjectInstanceFragmentV1(
+                    source_instance_id=SOURCE_INSTANCE,
+                    required_project_ids=(),
+                    projects=(),
+                    unclassified_row_ids=("opaque-row-debt",),
+                ),
+            ),
+        )
+
+
 def test_tracked_executable_registry_runs_public_source_families(
     tmp_path: Path,
 ) -> None:
@@ -437,13 +455,16 @@ def test_tracked_executable_registry_runs_public_source_families(
         "curated-registry-census-v1",
         "curated-registry-collaborators-v1",
         "curated-registry-projects-v1",
+        "engagement-collaborators-v1",
+        "engagement-projects-v1",
+        "engagements-census-v1",
     )
-    assert len(result.receipt.missing_enumerator_refs) == 27
+    assert len(result.receipt.missing_enumerator_refs) == 24
     assert result.receipt.failed_enumerator_refs == ()
-    assert len(result.receipt.placeholder_source_instance_ids) == 9
-    assert len(result.observations) == 2
+    assert len(result.receipt.placeholder_source_instance_ids) == 8
+    assert len(result.observations) == 3
     observations = {item.source_kind: item for item in result.observations}
-    assert set(observations) == {"constellation", "curated_registry"}
+    assert set(observations) == {"constellation", "curated_registry", "engagements"}
 
     curated = observations["curated_registry"]
     assert curated.enumeration_complete
@@ -459,6 +480,15 @@ def test_tracked_executable_registry_runs_public_source_families(
     assert len(constellation.projects) == 19
     assert len(constellation.required_collaborator_ids) == 14
     assert len(constellation.collaborators) == 14
+
+    engagements = observations["engagements"]
+    assert engagements.enumeration_complete
+    assert engagements.required_project_ids == ()
+    assert engagements.projects == ()
+    assert engagements.required_collaborator_ids == ()
+    assert engagements.collaborators == ()
+    assert len(engagements.non_project_row_ids) == 1
+    assert engagements.unclassified_row_ids == ()
 
     frozen = freeze_universe(
         source_registry=source_registry,

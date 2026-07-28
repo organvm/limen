@@ -171,6 +171,7 @@ class UniverseSourceObservationV1(PrimaMateriaModel):
     )
     reference_only_identity_ids: tuple[str, ...] = Field(default_factory=tuple, max_length=100_000)
     non_project_row_ids: tuple[str, ...] = Field(default_factory=tuple, max_length=1_000_000)
+    unclassified_row_ids: tuple[str, ...] = Field(default_factory=tuple, max_length=1_000_000)
 
     _instance = field_validator("source_instance_id")(_validate_opaque)
     _kind = field_validator("source_kind")(_validate_key)
@@ -184,6 +185,11 @@ class UniverseSourceObservationV1(PrimaMateriaModel):
         _unique(self.required_collaborator_ids, "required collaborators")
         _unique(self.reference_only_identity_ids, "reference-only identities")
         _unique(self.non_project_row_ids, "non-project rows", _validate_key)
+        _unique(self.unclassified_row_ids, "unclassified rows", _validate_key)
+        if set(self.non_project_row_ids) & set(self.unclassified_row_ids):
+            raise ValueError("classified and unclassified row identities must not overlap")
+        if self.enumeration_complete and self.unclassified_row_ids:
+            raise ValueError("complete source observation cannot retain unclassified rows")
         project_ids = tuple(record.canonical_project_id for record in self.projects)
         collaborator_ids = tuple(record.canonical_collaborator_id for record in self.collaborators)
         if len(project_ids) != len(set(project_ids)):
