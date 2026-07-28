@@ -29,6 +29,14 @@
           "title": "Enumerator Ref",
           "type": "string"
         },
+        "input_files": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 256,
+          "title": "Input Files",
+          "type": "array"
+        },
         "max_output_bytes": {
           "maximum": 16777216,
           "minimum": 1024,

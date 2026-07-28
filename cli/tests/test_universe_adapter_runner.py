@@ -145,6 +145,7 @@ def _spec(
     payload: object,
     counter: Path,
     requires_custody: bool = False,
+    input_files: tuple[str, ...] = (),
 ) -> UniverseEnumeratorSpecV1:
     payload_json = json.dumps(payload.model_dump(mode="json"))
     code = (
@@ -161,6 +162,7 @@ def _spec(
         dimension=dimension,
         command=command,
         command_sha256=command_digest(command),
+        input_files=input_files,
         timeout_seconds=5,
         max_output_bytes=256 * 1024,
         requires_custody_receipt=requires_custody,
@@ -322,6 +324,59 @@ def test_bounded_runner_stops_timeout_and_excess_output() -> None:
         )
 
 
+def test_cache_input_binds_tracked_file_bytes(tmp_path: Path) -> None:
+    tracked_input = tmp_path / "source.txt"
+    tracked_input.write_text("first\n")
+    registry = _enumerator_registry(tmp_path)
+    registry = registry.model_copy(
+        update={
+            "enumerators": tuple(
+                item.model_copy(update={"input_files": ("source.txt",)}) if item.dimension == "census" else item
+                for item in registry.enumerators
+            )
+        }
+    )
+    first = run_universe_adapters(
+        source_registry=_source_registry(),
+        enumerator_registry=registry,
+        frozen_wave_sha256=WAVE,
+        frozen_at=FROZEN_AT,
+        cache_dir=tmp_path / "cache",
+        repository_root=tmp_path,
+    )
+    tracked_input.write_text("second\n")
+    second = run_universe_adapters(
+        source_registry=_source_registry(),
+        enumerator_registry=registry,
+        frozen_wave_sha256=WAVE,
+        frozen_at=FROZEN_AT,
+        cache_dir=tmp_path / "cache",
+        repository_root=tmp_path,
+    )
+
+    assert len(first.receipt.executed_enumerator_refs) == 3
+    assert second.receipt.executed_enumerator_refs == ("fixture-census",)
+    assert second.receipt.reused_enumerator_refs == (
+        "fixture-collaborators",
+        "fixture-projects",
+    )
+    assert (tmp_path / "census-count").read_text() == "2"
+
+
+def test_enumerator_input_files_reject_path_escape() -> None:
+    command = (sys.executable, "-c", "print('{}')")
+    with pytest.raises(ValueError, match="repository-relative"):
+        UniverseEnumeratorSpecV1(
+            enumerator_ref="fixture-census",
+            dimension="census",
+            command=command,
+            command_sha256=command_digest(command),
+            input_files=("../private",),
+            timeout_seconds=5,
+            max_output_bytes=1024,
+        )
+
+
 def test_fragment_with_raw_private_fields_fails_closed_as_adapter_debt(
     tmp_path: Path,
 ) -> None:
@@ -355,7 +410,7 @@ def test_fragment_with_raw_private_fields_fails_closed_as_adapter_debt(
     assert len(result.receipt.placeholder_source_instance_ids) == 1
 
 
-def test_tracked_empty_executable_registry_exposes_every_adapter_as_debt(
+def test_tracked_executable_registry_runs_only_curated_registry_family(
     tmp_path: Path,
 ) -> None:
     root = Path(__file__).resolve().parents[2]
@@ -371,9 +426,24 @@ def test_tracked_empty_executable_registry_exposes_every_adapter_as_debt(
         frozen_wave_sha256=WAVE,
         frozen_at=FROZEN_AT,
         cache_dir=tmp_path / "cache",
+        repository_root=root,
     )
 
     assert not result.census.enumeration_complete
-    assert len(result.receipt.missing_enumerator_refs) == 33
-    assert len(result.receipt.placeholder_source_instance_ids) == 11
-    assert result.observations == ()
+    assert result.receipt.executed_enumerator_refs == (
+        "curated-registry-census-v1",
+        "curated-registry-collaborators-v1",
+        "curated-registry-projects-v1",
+    )
+    assert len(result.receipt.missing_enumerator_refs) == 30
+    assert result.receipt.failed_enumerator_refs == ()
+    assert len(result.receipt.placeholder_source_instance_ids) == 10
+    assert len(result.observations) == 1
+    observation = result.observations[0]
+    assert observation.source_kind == "curated_registry"
+    assert observation.enumeration_complete
+    assert observation.required_project_ids == ()
+    assert observation.projects == ()
+    assert observation.required_collaborator_ids == ()
+    assert observation.collaborators == ()
+    assert len(observation.non_project_row_ids) == 25

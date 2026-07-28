@@ -12,7 +12,7 @@ import subprocess
 import sys
 import time
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
 import rfc8785
@@ -72,6 +72,7 @@ class UniverseEnumeratorSpecV1(PrimaMateriaModel):
     dimension: Dimension
     command: tuple[str, ...] = Field(min_length=1, max_length=64)
     command_sha256: str
+    input_files: tuple[str, ...] = Field(default_factory=tuple, max_length=256)
     timeout_seconds: int = Field(ge=1, le=900)
     max_output_bytes: int = Field(ge=1024, le=16 * 1024 * 1024)
     requires_custody_receipt: bool = False
@@ -85,6 +86,19 @@ class UniverseEnumeratorSpecV1(PrimaMateriaModel):
             raise ValueError("enumerator command arguments must be nonempty and NUL-free")
         if self.command_sha256 != command_digest(self.command):
             raise ValueError("enumerator command digest does not match its exact argv")
+        if self.input_files != tuple(sorted(set(self.input_files))):
+            raise ValueError("enumerator input files must be sorted and unique")
+        for value in self.input_files:
+            path = PurePosixPath(value)
+            if (
+                not value
+                or "\x00" in value
+                or path.is_absolute()
+                or "." in path.parts
+                or ".." in path.parts
+                or str(path) != value
+            ):
+                raise ValueError("enumerator input files must be normalized repository-relative paths")
         return self
 
 
@@ -271,6 +285,7 @@ def _bounded_command(
     *,
     timeout_seconds: int,
     max_output_bytes: int,
+    cwd: Path | None = None,
 ) -> bytes:
     if len(context) > MAX_CONTEXT_BYTES:
         raise ValueError("enumerator input context exceeds the bounded protocol")
@@ -280,6 +295,7 @@ def _bounded_command(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         start_new_session=True,
+        cwd=cwd,
     )
     assert process.stdin is not None
     assert process.stdout is not None
@@ -340,8 +356,27 @@ def _run_one(
     spec: UniverseEnumeratorSpecV1,
     context: dict[str, Any],
     cache_dir: Path,
+    repository_root: Path,
 ) -> tuple[dict[str, Any], bool]:
-    input_sha256 = _digest_payload({"spec": spec.model_dump(mode="json"), "context": context})
+    root = repository_root.resolve()
+    input_file_sha256: dict[str, str] = {}
+    for relative in spec.input_files:
+        candidate = root / relative
+        if candidate.is_symlink():
+            raise ValueError("enumerator input files cannot be symlinks")
+        resolved = candidate.resolve()
+        if resolved.parent != root and root not in resolved.parents:
+            raise ValueError("enumerator input file escaped the repository root")
+        if not resolved.is_file():
+            raise ValueError("enumerator input file is unavailable")
+        input_file_sha256[relative] = hashlib.sha256(resolved.read_bytes()).hexdigest()
+    input_sha256 = _digest_payload(
+        {
+            "spec": spec.model_dump(mode="json"),
+            "context": context,
+            "input_file_sha256": input_file_sha256,
+        }
+    )
     cache_path = cache_dir / f"{hashlib.sha256(spec.enumerator_ref.encode()).hexdigest()}.json"
     if cache_path.is_file():
         try:
@@ -359,6 +394,7 @@ def _run_one(
         json.dumps(context, separators=(",", ":"), sort_keys=True).encode(),
         timeout_seconds=spec.timeout_seconds,
         max_output_bytes=spec.max_output_bytes,
+        cwd=root,
     )
     payload = json.loads(output)
     if not isinstance(payload, dict):
@@ -390,11 +426,13 @@ def run_universe_adapters(
     frozen_at: datetime,
     cache_dir: Path,
     custody_receipt_sha256: str | None = None,
+    repository_root: Path | None = None,
 ) -> UniverseAdapterRunV1:
     """Execute each registered dimension once and merge only census-bound pairs."""
 
     _validate_digest(frozen_wave_sha256)
     frozen_at = _validate_aware(frozen_at)
+    repository_root = (repository_root or Path.cwd()).resolve()
     if custody_receipt_sha256 is not None:
         _validate_digest(custody_receipt_sha256)
     source_registry_sha256 = source_registry.canonical_digest
@@ -444,6 +482,7 @@ def run_universe_adapters(
                     spec=spec,
                     context=context,
                     cache_dir=cache_dir,
+                    repository_root=repository_root,
                 )
                 fragment = fragment_model.model_validate(payload)
                 if fragment.source_kind != adapter.source_kind:
@@ -618,6 +657,7 @@ def main(argv: list[str] | None = None, *, root: Path | None = None) -> int:
             frozen_at=datetime.fromisoformat(arguments.frozen_at),
             cache_dir=arguments.cache_dir,
             custody_receipt_sha256=arguments.custody_receipt_sha,
+            repository_root=repository_root,
         )
         _write_run(arguments.output_dir, result)
         passed = (
