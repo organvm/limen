@@ -539,7 +539,16 @@ class SourceCoverageV1(PrimaMateriaModel):
 
 ProjectCoverageDisposition = Literal["complete", "partial", "unknown", "blocked", "superseded"]
 ProjectBuildStatus = Literal["not_started", "passed", "failed", "blocked", "unknown"]
-RelationshipRole = Literal["reference", "research", "audience", "advisor", "contributor", "co_builder"]
+RelationshipRole = Literal[
+    "reference",
+    "research",
+    "audience",
+    "prospect",
+    "client",
+    "advisor",
+    "contributor",
+    "co_builder",
+]
 ProjectAccessLevel = Literal["none", "read", "write", "admin"]
 RepositoryAccessLevel = Literal["none", "read", "triage", "write", "maintain", "admin"]
 AccessStatus = Literal["not_granted", "pending", "active", "declined", "identity_unresolved"]
@@ -863,7 +872,7 @@ class CollaboratorUniverseEntryV1(PrimaMateriaModel):
         _validate_sorted_unique_registry_values(project_ids, "collaborator project relationships")
         if (self.github_login_sha256 is None) != (self.github_identity_receipt_ref is None):
             raise ValueError("GitHub identity digest and proof receipt must appear together")
-        collaborator_roles = {"advisor", "contributor", "co_builder"}
+        collaborator_roles = {"prospect", "client", "advisor", "contributor", "co_builder"}
         if not any(collaborator_roles.intersection(relationship.roles) for relationship in self.relationships):
             raise ValueError("reference-only identities stay outside the collaborator universe")
         access_needs_identity = any(

@@ -410,7 +410,7 @@ def test_fragment_with_raw_private_fields_fails_closed_as_adapter_debt(
     assert len(result.receipt.placeholder_source_instance_ids) == 1
 
 
-def test_tracked_executable_registry_runs_only_curated_registry_family(
+def test_tracked_executable_registry_runs_public_source_families(
     tmp_path: Path,
 ) -> None:
     root = Path(__file__).resolve().parents[2]
@@ -431,19 +431,42 @@ def test_tracked_executable_registry_runs_only_curated_registry_family(
 
     assert not result.census.enumeration_complete
     assert result.receipt.executed_enumerator_refs == (
+        "constellation-census-v1",
+        "constellation-collaborators-v1",
+        "constellation-projects-v1",
         "curated-registry-census-v1",
         "curated-registry-collaborators-v1",
         "curated-registry-projects-v1",
     )
-    assert len(result.receipt.missing_enumerator_refs) == 30
+    assert len(result.receipt.missing_enumerator_refs) == 27
     assert result.receipt.failed_enumerator_refs == ()
-    assert len(result.receipt.placeholder_source_instance_ids) == 10
-    assert len(result.observations) == 1
-    observation = result.observations[0]
-    assert observation.source_kind == "curated_registry"
-    assert observation.enumeration_complete
-    assert observation.required_project_ids == ()
-    assert observation.projects == ()
-    assert observation.required_collaborator_ids == ()
-    assert observation.collaborators == ()
-    assert len(observation.non_project_row_ids) == 25
+    assert len(result.receipt.placeholder_source_instance_ids) == 9
+    assert len(result.observations) == 2
+    observations = {item.source_kind: item for item in result.observations}
+    assert set(observations) == {"constellation", "curated_registry"}
+
+    curated = observations["curated_registry"]
+    assert curated.enumeration_complete
+    assert curated.required_project_ids == ()
+    assert curated.projects == ()
+    assert curated.required_collaborator_ids == ()
+    assert curated.collaborators == ()
+    assert len(curated.non_project_row_ids) == 25
+
+    constellation = observations["constellation"]
+    assert constellation.enumeration_complete
+    assert len(constellation.required_project_ids) == 19
+    assert len(constellation.projects) == 19
+    assert len(constellation.required_collaborator_ids) == 14
+    assert len(constellation.collaborators) == 14
+
+    frozen = freeze_universe(
+        source_registry=source_registry,
+        census=result.census,
+        observations=result.observations,
+    )
+    assert len(frozen.project_manifest.projects) == 19
+    assert len(frozen.collaborator_manifest.collaborators) == 14
+    assert not frozen.project_manifest.source_coverage_complete
+    assert not frozen.project_manifest.all_canonical_projects_built
+    assert not frozen.collaborator_manifest.reconciled

@@ -3,6 +3,63 @@
   "registry_id": "organvmEnumeratorRegistryV1",
   "enumerators": [
     {
+      "enumerator_ref": "constellation-census-v1",
+      "dimension": "census",
+      "command": [
+        "python3",
+        "scripts/prima-materia-enumerate-constellation.py",
+        "--dimension",
+        "census"
+      ],
+      "command_sha256": "6093bd6f26e62d2efa4a4d1d856d7f034ab584fd662c6eba1b66f230cf687e22",
+      "input_files": [
+        "cli/src/limen/constellation_registry_enumerator.py",
+        "organs/consulting/constellation/registry.yaml",
+        "scripts/prima-materia-enumerate-constellation.py"
+      ],
+      "timeout_seconds": 10,
+      "max_output_bytes": 1048576,
+      "requires_custody_receipt": false
+    },
+    {
+      "enumerator_ref": "constellation-collaborators-v1",
+      "dimension": "collaborator",
+      "command": [
+        "python3",
+        "scripts/prima-materia-enumerate-constellation.py",
+        "--dimension",
+        "collaborator"
+      ],
+      "command_sha256": "2bca8bb93b75a0761c47a6c555a4cd39d3552a0bf26754c0737329404c03e152",
+      "input_files": [
+        "cli/src/limen/constellation_registry_enumerator.py",
+        "organs/consulting/constellation/registry.yaml",
+        "scripts/prima-materia-enumerate-constellation.py"
+      ],
+      "timeout_seconds": 10,
+      "max_output_bytes": 1048576,
+      "requires_custody_receipt": false
+    },
+    {
+      "enumerator_ref": "constellation-projects-v1",
+      "dimension": "project",
+      "command": [
+        "python3",
+        "scripts/prima-materia-enumerate-constellation.py",
+        "--dimension",
+        "project"
+      ],
+      "command_sha256": "acecd9bbee6cb412e2bac48401ac619eda8e74cd31c55babab5ae38b50c8ed50",
+      "input_files": [
+        "cli/src/limen/constellation_registry_enumerator.py",
+        "organs/consulting/constellation/registry.yaml",
+        "scripts/prima-materia-enumerate-constellation.py"
+      ],
+      "timeout_seconds": 10,
+      "max_output_bytes": 1048576,
+      "requires_custody_receipt": false
+    },
+    {
       "enumerator_ref": "curated-registry-census-v1",
       "dimension": "census",
       "command": [

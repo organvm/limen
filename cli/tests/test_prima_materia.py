@@ -605,6 +605,30 @@ def test_collaborator_roles_and_access_fail_closed() -> None:
             project_access_status="active",
         )
 
+    client = _collaborator(
+        "clientIdentity001",
+        roles=("client",),
+        project_access_level="none",
+        project_access_status="not_granted",
+        coverage_disposition="identity_unresolved",
+    )
+    prospect = _collaborator(
+        "prospectIdentity01",
+        roles=("prospect",),
+        project_access_level="none",
+        project_access_status="not_granted",
+        coverage_disposition="identity_unresolved",
+    )
+    assert client.relationships[0].project_access_level == "none"
+    assert prospect.relationships[0].project_access_level == "none"
+    with pytest.raises(ValueError, match="exceeds the source-classified"):
+        _collaborator(
+            "clientOvergrant01",
+            roles=("client",),
+            project_access_level="read",
+            project_access_status="active",
+        )
+
     relationship = CollaboratorProjectRelationshipV1(
         project_id="project-a",
         roles=("advisor",),
