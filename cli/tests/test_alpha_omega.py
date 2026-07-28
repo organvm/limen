@@ -9,16 +9,22 @@ from pathlib import Path
 import pytest
 from limen.alpha_omega import (
     LAMBDA_PREDICATES,
+    UNIVERSE_FIXED_POINT_PREDICATES,
     AlphaOmegaError,
     LambdaRungRegistryV1,
     LambdaRungV1,
     ReclaimCensusReceiptV1,
     SourceInventoryReceiptV1,
+    UniverseRungRegistryV1,
+    UniverseRungV1,
     build_reconciliation_manifest,
     fixed_point_pair,
     frozen_wave_digest,
     lambda_rung_registry_digest,
+    load_universe_rungs,
     repository_projection,
+    universe_owner_receipts,
+    universe_rung_registry_digest,
 )
 from limen.omega_owner_receipt import build_owner_receipt, write_owner_receipt
 from limen.prima_materia import (
@@ -120,6 +126,149 @@ def _rungs() -> LambdaRungRegistryV1:
             for rung_id in sorted(LAMBDA_PREDICATES)
         )
     )
+
+
+def _universe_rungs() -> UniverseRungRegistryV1:
+    return UniverseRungRegistryV1(
+        rungs=tuple(
+            UniverseRungV1(
+                rung_id=rung_id,
+                predicate=(
+                    f"python3 universe-owner.py --rung-id {rung_id} "
+                    "--frozen-wave-sha {frozen_wave_sha256} "
+                    "--installed-runtime-sha {installed_runtime_sha}"
+                ),
+                timeout_seconds=60,
+                max_age_seconds=3600,
+                receipt_path=f"logs/universe-owner/{rung_id}.json",
+            )
+            for rung_id in sorted(UNIVERSE_FIXED_POINT_PREDICATES)
+        )
+    )
+
+
+def _write_universe_owner_receipts(
+    repository: Path,
+    registry: UniverseRungRegistryV1,
+    *,
+    wave_sha256: str = DIGEST,
+    installed_runtime_sha: str = RUNTIME_SHA,
+    observed_at: datetime = INSTANT,
+    failed_rung: str | None = None,
+) -> None:
+    for rung in registry.rungs:
+        predicate = rung.predicate.replace("{frozen_wave_sha256}", wave_sha256).replace(
+            "{installed_runtime_sha}", installed_runtime_sha
+        )
+        receipt = build_owner_receipt(
+            rung_id=rung.rung_id,
+            predicate=predicate,
+            returncode=1 if rung.rung_id == failed_rung else 0,
+            observed_at=observed_at,
+        )
+        write_owner_receipt(repository / rung.receipt_path, receipt)
+
+
+def test_tracked_universe_rungs_bind_the_complete_fixed_point() -> None:
+    root = Path(__file__).resolve().parents[2]
+    registry = load_universe_rungs(root / "institutio" / "governance" / "prima-materia-universe-rungs.json")
+
+    assert tuple(rung.rung_id for rung in registry.rungs) == tuple(sorted(UNIVERSE_FIXED_POINT_PREDICATES))
+    assert len(universe_rung_registry_digest(registry)) == 64
+
+
+def test_universe_rungs_reject_boolean_and_incomplete_denominators() -> None:
+    with pytest.raises(ValueError):
+        UniverseRungRegistryV1.model_validate(
+            {
+                "schema": "limen.prima_materia_universe_rungs.v1",
+                "rungs": {rung_id: True for rung_id in UNIVERSE_FIXED_POINT_PREDICATES},
+            }
+        )
+    with pytest.raises(ValueError, match="all and only"):
+        UniverseRungRegistryV1(
+            rungs=tuple(rung for rung in _universe_rungs().rungs if rung.rung_id != "source_coverage_complete")
+        )
+
+
+def test_universe_owner_receipts_fail_closed_for_missing_stale_and_wrong_runtime(
+    tmp_path: Path,
+) -> None:
+    registry = _universe_rungs()
+    _write_universe_owner_receipts(tmp_path, registry)
+
+    passed, _projection, complete = universe_owner_receipts(
+        repository_root=tmp_path,
+        registry=registry,
+        wave_sha256=DIGEST,
+        installed_runtime_sha=RUNTIME_SHA,
+        now=INSTANT,
+    )
+    assert complete
+    assert all(passed.values())
+
+    missing_path = tmp_path / registry.rungs[0].receipt_path
+    missing_path.unlink()
+    missing, _projection, missing_complete = universe_owner_receipts(
+        repository_root=tmp_path,
+        registry=registry,
+        wave_sha256=DIGEST,
+        installed_runtime_sha=RUNTIME_SHA,
+        now=INSTANT,
+    )
+    assert not missing_complete
+    assert missing[registry.rungs[0].rung_id] is False
+
+    _write_universe_owner_receipts(
+        tmp_path,
+        registry,
+        observed_at=INSTANT - timedelta(days=2),
+    )
+    stale, _projection, stale_complete = universe_owner_receipts(
+        repository_root=tmp_path,
+        registry=registry,
+        wave_sha256=DIGEST,
+        installed_runtime_sha=RUNTIME_SHA,
+        now=INSTANT,
+    )
+    assert not stale_complete
+    assert not any(stale.values())
+
+    _write_universe_owner_receipts(tmp_path, registry)
+    wrong_runtime, _projection, runtime_complete = universe_owner_receipts(
+        repository_root=tmp_path,
+        registry=registry,
+        wave_sha256=DIGEST,
+        installed_runtime_sha="d" * 40,
+        now=INSTANT,
+    )
+    assert not runtime_complete
+    assert not any(wrong_runtime.values())
+
+
+def test_universe_dependency_failure_propagates_to_downstream_rungs(tmp_path: Path) -> None:
+    registry = load_universe_rungs(
+        Path(__file__).resolve().parents[2] / "institutio" / "governance" / "prima-materia-universe-rungs.json"
+    )
+    _write_universe_owner_receipts(
+        tmp_path,
+        registry,
+        failed_rung="source_coverage_complete",
+    )
+
+    passed, _projection, complete = universe_owner_receipts(
+        repository_root=tmp_path,
+        registry=registry,
+        wave_sha256=DIGEST,
+        installed_runtime_sha=RUNTIME_SHA,
+        now=INSTANT,
+    )
+
+    assert complete
+    assert passed["source_coverage_complete"] is False
+    assert passed["canonical_project_coverage_complete"] is False
+    assert passed["all_canonical_projects_built"] is False
+    assert passed["github_projection_idempotent"] is False
 
 
 def _claim() -> ResourceClaimV1:

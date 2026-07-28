@@ -37,6 +37,9 @@ AUDIT_PAIR_SCHEMA = "limen.alpha_omega_fixed_point_pair.v2"
 SOURCE_INVENTORY_SCHEMA: Literal["limen.prima_materia_source_inventory.v1"] = "limen.prima_materia_source_inventory.v1"
 RECLAIM_CENSUS_SCHEMA: Literal["limen.prima_materia_reclaim_census.v1"] = "limen.prima_materia_reclaim_census.v1"
 LAMBDA_RUNG_REGISTRY_SCHEMA: Literal["limen.prima_materia_lambda_rungs.v1"] = "limen.prima_materia_lambda_rungs.v1"
+UNIVERSE_RUNG_REGISTRY_SCHEMA: Literal["limen.prima_materia_universe_rungs.v1"] = (
+    "limen.prima_materia_universe_rungs.v1"
+)
 MAX_INPUT_FRESHNESS_SECONDS = 86_400
 MAX_LOCAL_PROBE_THREADS = 3
 MAX_FROZEN_ROOTS = 4096
@@ -70,6 +73,14 @@ LAMBDA_PREDICATES = (
     "replay_passed",
     "composition_passed",
     "dematerialization_passed",
+)
+UNIVERSE_FIXED_POINT_PREDICATES = (
+    "source_coverage_complete",
+    "canonical_project_coverage_complete",
+    "all_canonical_projects_built",
+    "collaborator_universe_reconciled",
+    "github_projection_idempotent",
+    "privacy_safe_projection",
 )
 
 
@@ -222,11 +233,76 @@ class LambdaRungRegistryV1(_Contract):
         return self
 
 
+class UniverseRungV1(_Contract):
+    rung_id: str = Field(min_length=1, max_length=256, pattern=r"^[a-z0-9][a-z0-9_.-]*$")
+    predicate: str = Field(min_length=1, max_length=8192)
+    dependencies: tuple[str, ...] = Field(default_factory=tuple, max_length=32)
+    timeout_seconds: int = Field(ge=1, le=7200)
+    max_age_seconds: int = Field(ge=1, le=604_800)
+    receipt_path: str = Field(min_length=1, max_length=1024)
+
+    @model_validator(mode="after")
+    def bindings_are_safe(self) -> UniverseRungV1:
+        if self.predicate.count("{frozen_wave_sha256}") != 1:
+            raise ValueError("universe predicate must bind exactly one frozen-wave digest")
+        if self.predicate.count("{installed_runtime_sha}") != 1:
+            raise ValueError("universe predicate must bind exactly one installed runtime SHA")
+        path = Path(self.receipt_path)
+        if path.is_absolute() or ".." in path.parts or path in {Path(), Path(".")}:
+            raise ValueError("universe owner receipt path must be safe and relative")
+        if self.rung_id in self.dependencies or len(self.dependencies) != len(set(self.dependencies)):
+            raise ValueError("universe rung dependencies must be unique and non-recursive")
+        return self
+
+
+class UniverseRungRegistryV1(_Contract):
+    schema_id: Literal["limen.prima_materia_universe_rungs.v1"] = Field(
+        default=UNIVERSE_RUNG_REGISTRY_SCHEMA,
+        alias="schema",
+        serialization_alias="schema",
+    )
+    rungs: tuple[UniverseRungV1, ...] = Field(min_length=1, max_length=256)
+
+    @model_validator(mode="after")
+    def denominator_matches_universe_fixed_point(self) -> UniverseRungRegistryV1:
+        identifiers = tuple(rung.rung_id for rung in self.rungs)
+        if identifiers != tuple(sorted(identifiers)):
+            raise ValueError("universe rung registry must be sorted")
+        if set(identifiers) != set(UNIVERSE_FIXED_POINT_PREDICATES):
+            raise ValueError("universe rung registry must bind all and only the fixed-point predicates")
+        for rung in self.rungs:
+            unknown = set(rung.dependencies) - set(identifiers)
+            if unknown:
+                raise ValueError(f"{rung.rung_id}: universe dependency is not registered")
+        dependencies = {rung.rung_id: rung.dependencies for rung in self.rungs}
+        visiting: set[str] = set()
+        visited: set[str] = set()
+
+        def visit(rung_id: str) -> None:
+            if rung_id in visiting:
+                raise ValueError("universe rung registry contains a dependency cycle")
+            if rung_id in visited:
+                return
+            visiting.add(rung_id)
+            for dependency in dependencies[rung_id]:
+                visit(dependency)
+            visiting.remove(rung_id)
+            visited.add(rung_id)
+
+        for identifier in identifiers:
+            visit(identifier)
+        return self
+
+
 def frozen_wave_digest(manifest: FrozenWaveManifestV1) -> str:
     return _digest(manifest.model_dump(mode="json"))
 
 
 def lambda_rung_registry_digest(registry: LambdaRungRegistryV1) -> str:
+    return _digest(registry.model_dump(mode="json"))
+
+
+def universe_rung_registry_digest(registry: UniverseRungRegistryV1) -> str:
     return _digest(registry.model_dump(mode="json"))
 
 
@@ -275,6 +351,10 @@ def load_reclaim_census(path: Path) -> ReclaimCensusReceiptV1:
 
 def load_lambda_rungs(path: Path) -> LambdaRungRegistryV1:
     return LambdaRungRegistryV1.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+def load_universe_rungs(path: Path) -> UniverseRungRegistryV1:
+    return UniverseRungRegistryV1.model_validate_json(path.read_text(encoding="utf-8"))
 
 
 def _run(
@@ -699,6 +779,65 @@ def _owner_receipts(
         for rung in registry.rungs
     }
     return passes, projection, complete
+
+
+def universe_owner_receipts(
+    *,
+    repository_root: Path,
+    registry: UniverseRungRegistryV1,
+    wave_sha256: str,
+    installed_runtime_sha: str,
+    now: datetime,
+) -> tuple[dict[str, bool], dict[str, Any], bool]:
+    """Validate source-owned universe receipts against one wave and installed runtime."""
+
+    _validate_digest(wave_sha256)
+    if len(installed_runtime_sha) != 40 or any(
+        character not in "0123456789abcdef" for character in installed_runtime_sha
+    ):
+        raise ValueError("installed runtime SHA must be a full lowercase SHA-1")
+    base_passes: dict[str, bool] = {}
+    projection: dict[str, Any] = {}
+    complete = True
+    for rung in registry.rungs:
+        predicate = rung.predicate.replace("{frozen_wave_sha256}", wave_sha256).replace(
+            "{installed_runtime_sha}", installed_runtime_sha
+        )
+        try:
+            receipt = load_owner_receipt(
+                repository_root / rung.receipt_path,
+                rung_id=rung.rung_id,
+                predicate=predicate,
+                max_age_seconds=rung.max_age_seconds,
+                now=now,
+                require_pass=False,
+            )
+        except OmegaOwnerReceiptError as exc:
+            complete = False
+            base_passes[rung.rung_id] = False
+            projection[rung.rung_id] = {
+                "available": False,
+                "reason": str(exc),
+            }
+            continue
+        normalized = normalized_owner_receipt(receipt)
+        base_passes[rung.rung_id] = receipt.status == "PASS"
+        projection[rung.rung_id] = {
+            "available": True,
+            "status": receipt.status,
+            "receipt_sha256": _digest(normalized),
+            "predicate_digest": receipt.predicate_digest,
+        }
+
+    dependencies = {rung.rung_id: rung.dependencies for rung in registry.rungs}
+    resolved: dict[str, bool] = {}
+
+    def passes(rung_id: str) -> bool:
+        if rung_id not in resolved:
+            resolved[rung_id] = base_passes[rung_id] and all(passes(dependency) for dependency in dependencies[rung_id])
+        return resolved[rung_id]
+
+    return ({rung.rung_id: passes(rung.rung_id) for rung in registry.rungs}, projection, complete)
 
 
 def _project_repositories(
