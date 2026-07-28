@@ -656,6 +656,7 @@ class UniverseSourceRegistryV1(PrimaMateriaModel):
 
 class ProjectUniverseEntryV1(PrimaMateriaModel):
     project_id: str
+    alias_ids: tuple[str, ...] = Field(default_factory=tuple, max_length=4096)
     source_lineage_ids: tuple[str, ...] = Field(min_length=1, max_length=4096)
     repository_ids: tuple[str, ...] = Field(default_factory=tuple, max_length=1024)
     child_task_ids: tuple[str, ...] = Field(default_factory=tuple, max_length=100_000)
@@ -673,6 +674,7 @@ class ProjectUniverseEntryV1(PrimaMateriaModel):
     @model_validator(mode="after")
     def evidence_is_canonical_and_build_is_proven(self) -> ProjectUniverseEntryV1:
         for label, values in (
+            ("alias_ids", self.alias_ids),
             ("source_lineage_ids", self.source_lineage_ids),
             ("repository_ids", self.repository_ids),
             ("child_task_ids", self.child_task_ids),
@@ -682,6 +684,8 @@ class ProjectUniverseEntryV1(PrimaMateriaModel):
             ("receipt_refs", self.receipt_refs),
         ):
             _validate_sorted_unique_registry_values(values, label)
+        if self.project_id in self.alias_ids:
+            raise ValueError("project aliases must not repeat the canonical project identity")
         if self.coverage_disposition == "complete" and not self.receipt_refs:
             raise ValueError("complete project coverage requires a durable receipt")
         if self.build_status == "passed" and (not self.artifact_refs or not self.receipt_refs):
@@ -830,6 +834,7 @@ class CollaboratorProjectRelationshipV1(PrimaMateriaModel):
 
 class CollaboratorUniverseEntryV1(PrimaMateriaModel):
     collaborator_id: str
+    alias_ids: tuple[str, ...] = Field(default_factory=tuple, max_length=4096)
     source_lineage_ids: tuple[str, ...] = Field(min_length=1, max_length=4096)
     github_login_sha256: _Digest | None = None
     github_identity_receipt_ref: str | None = None
@@ -847,8 +852,11 @@ class CollaboratorUniverseEntryV1(PrimaMateriaModel):
 
     @model_validator(mode="after")
     def identity_is_private_proven_and_actually_collaborative(self) -> CollaboratorUniverseEntryV1:
+        _validate_sorted_unique_registry_values(self.alias_ids, "collaborator aliases")
         _validate_sorted_unique_registry_values(self.source_lineage_ids, "collaborator source lineages")
         _validate_sorted_unique_registry_values(self.disposition_receipt_refs, "collaborator disposition receipts")
+        if self.collaborator_id in self.alias_ids:
+            raise ValueError("collaborator aliases must not repeat the canonical collaborator identity")
         project_ids = tuple(relationship.project_id for relationship in self.relationships)
         _validate_sorted_unique_registry_values(project_ids, "collaborator project relationships")
         if (self.github_login_sha256 is None) != (self.github_identity_receipt_ref is None):

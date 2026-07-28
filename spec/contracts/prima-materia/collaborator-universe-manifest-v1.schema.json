@@ -145,6 +145,14 @@
     "CollaboratorUniverseEntryV1": {
       "additionalProperties": false,
       "properties": {
+        "alias_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4096,
+          "title": "Alias Ids",
+          "type": "array"
+        },
         "collaborator_id": {
           "title": "Collaborator Id",
           "type": "string"
