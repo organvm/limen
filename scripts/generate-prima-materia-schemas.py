@@ -12,10 +12,12 @@ sys.path.insert(0, str(ROOT / "cli" / "src"))
 
 from limen.prima_materia import (
     ActionReceiptV1,
+    CollaboratorUniverseManifestV1,
     CompositionManifestV1,
     CustodyReceiptV1,
     FrozenWaveManifestV1,
     PrimaMateriaEventV1,
+    ProjectUniverseManifestV1,
     ResourceClaimV1,
     SourceAdapterV1,
     SourceCoverageV1,
@@ -34,6 +36,8 @@ MODELS = {
     "composition-manifest-v1.schema.json": CompositionManifestV1,
     "standing-authority-v1.schema.json": StandingAuthorityV1,
     "source-coverage-v1.schema.json": SourceCoverageV1,
+    "project-universe-manifest-v1.schema.json": ProjectUniverseManifestV1,
+    "collaborator-universe-manifest-v1.schema.json": CollaboratorUniverseManifestV1,
 }
 
 
