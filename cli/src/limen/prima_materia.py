@@ -606,6 +606,7 @@ class UniverseSourceAdapterV1(PrimaMateriaModel):
     adapter_id: str
     source_kind: str
     owner_ref: str
+    census_enumerator_ref: str
     project_enumerator_ref: str
     collaborator_enumerator_ref: str
     completeness_predicate: str = Field(min_length=1, max_length=4096)
@@ -615,6 +616,7 @@ class UniverseSourceAdapterV1(PrimaMateriaModel):
         "adapter_id",
         "source_kind",
         "owner_ref",
+        "census_enumerator_ref",
         "project_enumerator_ref",
         "collaborator_enumerator_ref",
         "privacy_projection_ref",

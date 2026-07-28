@@ -8,6 +8,10 @@
           "title": "Adapter Id",
           "type": "string"
         },
+        "census_enumerator_ref": {
+          "title": "Census Enumerator Ref",
+          "type": "string"
+        },
         "collaborator_enumerator_ref": {
           "title": "Collaborator Enumerator Ref",
           "type": "string"
@@ -45,6 +49,7 @@
         "adapter_id",
         "source_kind",
         "owner_ref",
+        "census_enumerator_ref",
         "project_enumerator_ref",
         "collaborator_enumerator_ref",
         "completeness_predicate",

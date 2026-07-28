@@ -36,6 +36,7 @@ def _source_registry() -> UniverseSourceRegistryV1:
                 adapter_id="source-adapter",
                 source_kind="fixture_source",
                 owner_ref="fixture-owner",
+                census_enumerator_ref="fixture-census",
                 project_enumerator_ref="fixture-projects",
                 collaborator_enumerator_ref="fixture-collaborators",
                 completeness_predicate="every fixture source is observed",

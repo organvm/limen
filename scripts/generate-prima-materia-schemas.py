@@ -25,6 +25,7 @@ from limen.prima_materia import (
     TransformRecipeV1,
     UniverseSourceRegistryV1,
 )
+from limen.universe_adapter_runner import UniverseEnumeratorRegistryV1
 
 MODELS = {
     "prima-materia-event-v1.schema.json": PrimaMateriaEventV1,
@@ -38,6 +39,7 @@ MODELS = {
     "standing-authority-v1.schema.json": StandingAuthorityV1,
     "source-coverage-v1.schema.json": SourceCoverageV1,
     "universe-source-registry-v1.schema.json": UniverseSourceRegistryV1,
+    "universe-enumerator-registry-v1.schema.json": UniverseEnumeratorRegistryV1,
     "project-universe-manifest-v1.schema.json": ProjectUniverseManifestV1,
     "collaborator-universe-manifest-v1.schema.json": CollaboratorUniverseManifestV1,
 }

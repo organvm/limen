@@ -1,0 +1,379 @@
+from __future__ import annotations
+
+import json
+import sys
+from datetime import UTC, datetime
+from pathlib import Path
+
+import pytest
+from limen.prima_materia import (
+    CollaboratorProjectRelationshipV1,
+    CollaboratorUniverseEntryV1,
+    ProjectUniverseEntryV1,
+    UniverseSourceAdapterV1,
+    UniverseSourceRegistryV1,
+)
+from limen.universe_adapter_runner import (
+    UniverseCensusFragmentV1,
+    UniverseCollaboratorFragmentV1,
+    UniverseCollaboratorInstanceFragmentV1,
+    UniverseEnumeratorRegistryV1,
+    UniverseEnumeratorSpecV1,
+    UniverseProjectFragmentV1,
+    UniverseProjectInstanceFragmentV1,
+    _bounded_command,
+    command_digest,
+    run_universe_adapters,
+)
+from limen.universe_freezer import (
+    SourceCollaboratorObservationV1,
+    SourceProjectObservationV1,
+    UniverseSourceInstanceExpectationV1,
+    freeze_universe,
+)
+
+WAVE = "a" * 64
+FROZEN_AT = datetime(2026, 7, 28, 20, tzinfo=UTC)
+SOURCE_INSTANCE = "sourceInstanceA01"
+PROJECT_ID = "projectIdentifierA1"
+COLLABORATOR_ID = "collaboratorIdA01"
+
+
+def _source_registry() -> UniverseSourceRegistryV1:
+    return UniverseSourceRegistryV1(
+        registry_id="universeSources001",
+        adapters=(
+            UniverseSourceAdapterV1(
+                adapter_id="fixture-adapter",
+                source_kind="fixture_source",
+                owner_ref="fixture-owner",
+                census_enumerator_ref="fixture-census",
+                project_enumerator_ref="fixture-projects",
+                collaborator_enumerator_ref="fixture-collaborators",
+                completeness_predicate="every fixture row is classified",
+                privacy_projection_ref="fixture-privacy",
+            ),
+        ),
+    )
+
+
+def _fragments() -> dict[str, object]:
+    project = ProjectUniverseEntryV1(
+        project_id=PROJECT_ID,
+        source_lineage_ids=("fixture-project-lineage",),
+        repository_ids=("repository-a", "repository-b"),
+        child_task_ids=("task-row-001",),
+        artifact_refs=("artifact-project-a",),
+        collaborator_ids=(COLLABORATOR_ID,),
+        lifecycle_stage="live",
+        predicate_refs=("build-project-a",),
+        receipt_refs=("receipt-project-a",),
+        coverage_disposition="complete",
+        build_status="passed",
+    )
+    collaborator = CollaboratorUniverseEntryV1(
+        collaborator_id=COLLABORATOR_ID,
+        source_lineage_ids=("fixture-collaborator-lineage",),
+        relationships=(
+            CollaboratorProjectRelationshipV1(
+                project_id=PROJECT_ID,
+                roles=("advisor",),
+            ),
+        ),
+        coverage_disposition="reconciled",
+        disposition_receipt_refs=("collaborator-disposition",),
+    )
+    return {
+        "census": UniverseCensusFragmentV1(
+            source_kind="fixture_source",
+            observed_at=FROZEN_AT,
+            enumeration_complete=True,
+            receipt_ref="fixture-census-receipt",
+            source_instances=(
+                UniverseSourceInstanceExpectationV1(
+                    source_instance_id=SOURCE_INSTANCE,
+                    source_kind="fixture_source",
+                    owner_receipt_ref="fixture-source-owner-receipt",
+                ),
+            ),
+        ),
+        "project": UniverseProjectFragmentV1(
+            source_kind="fixture_source",
+            observed_at=FROZEN_AT,
+            enumeration_complete=True,
+            receipt_ref="fixture-project-receipt",
+            instances=(
+                UniverseProjectInstanceFragmentV1(
+                    source_instance_id=SOURCE_INSTANCE,
+                    required_project_ids=(PROJECT_ID,),
+                    projects=(
+                        SourceProjectObservationV1(
+                            canonical_project_id=PROJECT_ID,
+                            project=project,
+                        ),
+                    ),
+                    non_project_row_ids=("ledger-task-classified-row",),
+                ),
+            ),
+        ),
+        "collaborator": UniverseCollaboratorFragmentV1(
+            source_kind="fixture_source",
+            observed_at=FROZEN_AT,
+            enumeration_complete=True,
+            receipt_ref="fixture-collaborator-receipt",
+            instances=(
+                UniverseCollaboratorInstanceFragmentV1(
+                    source_instance_id=SOURCE_INSTANCE,
+                    required_collaborator_ids=(COLLABORATOR_ID,),
+                    collaborators=(
+                        SourceCollaboratorObservationV1(
+                            canonical_collaborator_id=COLLABORATOR_ID,
+                            collaborator=collaborator,
+                        ),
+                    ),
+                    reference_only_identity_ids=("referenceIdentity01",),
+                ),
+            ),
+        ),
+    }
+
+
+def _spec(
+    *,
+    ref: str,
+    dimension: str,
+    payload: object,
+    counter: Path,
+    requires_custody: bool = False,
+) -> UniverseEnumeratorSpecV1:
+    payload_json = json.dumps(payload.model_dump(mode="json"))
+    code = (
+        "import pathlib,sys\n"
+        "sys.stdin.buffer.read()\n"
+        f"counter=pathlib.Path({str(counter)!r})\n"
+        "value=int(counter.read_text())+1 if counter.exists() else 1\n"
+        "counter.write_text(str(value))\n"
+        f"print({payload_json!r})\n"
+    )
+    command = (sys.executable, "-c", code)
+    return UniverseEnumeratorSpecV1(
+        enumerator_ref=ref,
+        dimension=dimension,
+        command=command,
+        command_sha256=command_digest(command),
+        timeout_seconds=5,
+        max_output_bytes=256 * 1024,
+        requires_custody_receipt=requires_custody,
+    )
+
+
+def _enumerator_registry(
+    tmp_path: Path,
+    *,
+    reverse: bool = False,
+    requires_custody: bool = False,
+) -> UniverseEnumeratorRegistryV1:
+    fragments = _fragments()
+    specs = (
+        _spec(
+            ref="fixture-census",
+            dimension="census",
+            payload=fragments["census"],
+            counter=tmp_path / "census-count",
+            requires_custody=requires_custody,
+        ),
+        _spec(
+            ref="fixture-projects",
+            dimension="project",
+            payload=fragments["project"],
+            counter=tmp_path / "project-count",
+            requires_custody=requires_custody,
+        ),
+        _spec(
+            ref="fixture-collaborators",
+            dimension="collaborator",
+            payload=fragments["collaborator"],
+            counter=tmp_path / "collaborator-count",
+            requires_custody=requires_custody,
+        ),
+    )
+    return UniverseEnumeratorRegistryV1(
+        registry_id="enumeratorRegistry01",
+        enumerators=tuple(reversed(specs)) if reverse else specs,
+    )
+
+
+def test_runner_executes_then_reuses_exact_receipts_and_feeds_the_freezer(
+    tmp_path: Path,
+) -> None:
+    source_registry = _source_registry()
+    enumerators = _enumerator_registry(tmp_path)
+    first = run_universe_adapters(
+        source_registry=source_registry,
+        enumerator_registry=enumerators,
+        frozen_wave_sha256=WAVE,
+        frozen_at=FROZEN_AT,
+        cache_dir=tmp_path / "cache",
+    )
+    second = run_universe_adapters(
+        source_registry=source_registry,
+        enumerator_registry=_enumerator_registry(tmp_path, reverse=True),
+        frozen_wave_sha256=WAVE,
+        frozen_at=FROZEN_AT,
+        cache_dir=tmp_path / "cache",
+    )
+
+    assert first.census.enumeration_complete
+    assert len(first.observations) == 1
+    assert len(first.receipt.executed_enumerator_refs) == 3
+    assert second.receipt.executed_enumerator_refs == ()
+    assert len(second.receipt.reused_enumerator_refs) == 3
+    assert first.receipt.enumerator_registry_sha256 == second.receipt.enumerator_registry_sha256
+    assert all(
+        (tmp_path / f"{dimension}-count").read_text() == "1" for dimension in ("census", "project", "collaborator")
+    )
+
+    frozen = freeze_universe(
+        source_registry=source_registry,
+        census=second.census,
+        observations=second.observations,
+    )
+    assert frozen.project_manifest.all_canonical_projects_built
+    assert frozen.collaborator_manifest.reconciled
+
+
+def test_missing_enumerator_stays_visible_and_prevents_observation_completion(
+    tmp_path: Path,
+) -> None:
+    source_registry = _source_registry()
+    complete_registry = _enumerator_registry(tmp_path)
+    missing_registry = complete_registry.model_copy(
+        update={
+            "enumerators": tuple(item for item in complete_registry.enumerators if item.dimension != "collaborator")
+        }
+    )
+    result = run_universe_adapters(
+        source_registry=source_registry,
+        enumerator_registry=missing_registry,
+        frozen_wave_sha256=WAVE,
+        frozen_at=FROZEN_AT,
+        cache_dir=tmp_path / "cache",
+    )
+
+    assert not result.census.enumeration_complete
+    assert result.observations == ()
+    assert result.receipt.missing_enumerator_refs == ("fixture-collaborators",)
+
+
+def test_custody_gated_enumerators_do_not_run_without_a_restore_receipt(
+    tmp_path: Path,
+) -> None:
+    source_registry = _source_registry()
+    enumerators = _enumerator_registry(tmp_path, requires_custody=True)
+    blocked = run_universe_adapters(
+        source_registry=source_registry,
+        enumerator_registry=enumerators,
+        frozen_wave_sha256=WAVE,
+        frozen_at=FROZEN_AT,
+        cache_dir=tmp_path / "cache",
+    )
+    assert not blocked.census.enumeration_complete
+    assert len(blocked.receipt.missing_enumerator_refs) == 3
+    assert len(blocked.receipt.placeholder_source_instance_ids) == 1
+    assert not any((tmp_path / f"{dimension}-count").exists() for dimension in ("census", "project", "collaborator"))
+
+    admitted = run_universe_adapters(
+        source_registry=source_registry,
+        enumerator_registry=enumerators,
+        frozen_wave_sha256=WAVE,
+        frozen_at=FROZEN_AT,
+        cache_dir=tmp_path / "cache",
+        custody_receipt_sha256="b" * 64,
+    )
+    assert admitted.census.enumeration_complete
+    assert len(admitted.observations) == 1
+
+
+def test_bounded_runner_stops_timeout_and_excess_output() -> None:
+    timeout_command = (
+        sys.executable,
+        "-c",
+        "import sys,time;sys.stdin.buffer.read();time.sleep(2)",
+    )
+    with pytest.raises(TimeoutError):
+        _bounded_command(
+            timeout_command,
+            b"{}",
+            timeout_seconds=1,
+            max_output_bytes=1024,
+        )
+
+    excessive_command = (
+        sys.executable,
+        "-c",
+        "import sys;sys.stdin.buffer.read();sys.stdout.write('x'*2048)",
+    )
+    with pytest.raises(ValueError, match="output limit"):
+        _bounded_command(
+            excessive_command,
+            b"{}",
+            timeout_seconds=2,
+            max_output_bytes=1024,
+        )
+
+
+def test_fragment_with_raw_private_fields_fails_closed_as_adapter_debt(
+    tmp_path: Path,
+) -> None:
+    source_registry = _source_registry()
+    registry = _enumerator_registry(tmp_path)
+    census = next(item for item in registry.enumerators if item.dimension == "census")
+    payload = _fragments()["census"].model_dump(mode="json")
+    payload["raw_private_name"] = "must not cross the adapter"
+    bad = _spec(
+        ref="fixture-census",
+        dimension="census",
+        payload=type("Payload", (), {"model_dump": lambda self, mode: payload})(),
+        counter=tmp_path / "bad-census-count",
+    )
+    registry = registry.model_copy(
+        update={
+            "enumerators": tuple(
+                bad if item.enumerator_ref == census.enumerator_ref else item for item in registry.enumerators
+            )
+        }
+    )
+    result = run_universe_adapters(
+        source_registry=source_registry,
+        enumerator_registry=registry,
+        frozen_wave_sha256=WAVE,
+        frozen_at=FROZEN_AT,
+        cache_dir=tmp_path / "cache",
+    )
+
+    assert result.receipt.failed_enumerator_refs == ("fixture-census",)
+    assert len(result.receipt.placeholder_source_instance_ids) == 1
+
+
+def test_tracked_empty_executable_registry_exposes_every_adapter_as_debt(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).resolve().parents[2]
+    source_registry = UniverseSourceRegistryV1.model_validate_json(
+        (root / "institutio" / "governance" / "prima-materia-universe-sources.json").read_text()
+    )
+    enumerators = UniverseEnumeratorRegistryV1.model_validate_json(
+        (root / "institutio" / "governance" / "prima-materia-universe-enumerators.json").read_text()
+    )
+    result = run_universe_adapters(
+        source_registry=source_registry,
+        enumerator_registry=enumerators,
+        frozen_wave_sha256=WAVE,
+        frozen_at=FROZEN_AT,
+        cache_dir=tmp_path / "cache",
+    )
+
+    assert not result.census.enumeration_complete
+    assert len(result.receipt.missing_enumerator_refs) == 33
+    assert len(result.receipt.placeholder_source_instance_ids) == 11
+    assert result.observations == ()

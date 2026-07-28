@@ -76,6 +76,7 @@ def _universe_source(adapter_id: str, source_kind: str) -> UniverseSourceAdapter
         adapter_id=adapter_id,
         source_kind=source_kind,
         owner_ref=f"owner-{source_kind}",
+        census_enumerator_ref=f"{source_kind}-census-v1",
         project_enumerator_ref=f"{source_kind}-projects-v1",
         collaborator_enumerator_ref=f"{source_kind}-collaborators-v1",
         completeness_predicate=f"all {source_kind} source instances have terminal dispositions",
@@ -643,6 +644,7 @@ def test_generated_schemas_match_models(tmp_path: Path) -> None:
         "source-coverage-v1.schema.json",
         "standing-authority-v1.schema.json",
         "transform-recipe-v1.schema.json",
+        "universe-enumerator-registry-v1.schema.json",
         "universe-source-registry-v1.schema.json",
     }
     assert {path.name for path in schemas.glob("*.json")} == expected
