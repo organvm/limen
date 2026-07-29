@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -547,6 +547,8 @@ def test_tracked_executable_registry_runs_public_source_families(
     )
     funnel_manifest = json.loads((root / "institutio" / "governance" / "prima-materia-funnel-sources.json").read_text())
     funnel_paths = tuple(sorted(item["path"] for item in funnel_manifest["sources"]))
+    github_snapshot = json.loads((root / "docs" / "github-universe-snapshot.json").read_text())
+    frozen_at = datetime.fromisoformat(github_snapshot["observed_at"]) + timedelta(seconds=1)
     funnel_specs = tuple(
         item
         for item in enumerators.enumerators
@@ -563,7 +565,7 @@ def test_tracked_executable_registry_runs_public_source_families(
         source_registry=source_registry,
         enumerator_registry=enumerators,
         frozen_wave_sha256=WAVE,
-        frozen_at=FROZEN_AT,
+        frozen_at=frozen_at,
         cache_dir=tmp_path / "cache",
         repository_root=root,
     )
@@ -582,11 +584,14 @@ def test_tracked_executable_registry_runs_public_source_families(
         "funnel-record-collaborators-v1",
         "funnel-record-projects-v1",
         "funnel-records-census-v1",
+        "github-estate-census-v1",
+        "github-estate-collaborators-v1",
+        "github-estate-projects-v1",
     )
-    assert len(result.receipt.missing_enumerator_refs) == 21
+    assert len(result.receipt.missing_enumerator_refs) == 18
     assert result.receipt.failed_enumerator_refs == ()
-    assert len(result.receipt.placeholder_source_instance_ids) == 7
-    assert len(result.observations) == 6
+    assert len(result.receipt.placeholder_source_instance_ids) == 6
+    assert len(result.observations) == 9
     observations_by_kind: dict[str, list] = {}
     for observation in result.observations:
         observations_by_kind.setdefault(observation.source_kind, []).append(observation)
@@ -595,6 +600,7 @@ def test_tracked_executable_registry_runs_public_source_families(
         "curated_registry",
         "engagements",
         "funnel_records",
+        "github_estate",
     }
 
     curated = observations_by_kind["curated_registry"][0]
@@ -629,6 +635,19 @@ def test_tracked_executable_registry_runs_public_source_families(
     assert all(not item.required_collaborator_ids for item in funnel_records)
     assert all(not item.collaborators for item in funnel_records)
     assert sum(len(item.unclassified_row_ids) for item in funnel_records) == 3
+
+    github_estate = observations_by_kind["github_estate"]
+    assert len(github_estate) == 3
+    assert all(not item.enumeration_complete for item in github_estate)
+    assert all(not item.required_project_ids for item in github_estate)
+    assert all(not item.projects for item in github_estate)
+    assert all(not item.required_collaborator_ids for item in github_estate)
+    assert all(not item.collaborators for item in github_estate)
+    assert sum(len(item.unclassified_row_ids) for item in github_estate) == len(
+        github_snapshot["repository_ids"]
+    ) + len(github_snapshot["access_rows"]) + len(github_snapshot["project_row_ids"]) + len(
+        github_snapshot["repository_debt_ids"]
+    ) + len(github_snapshot["collaborator_debt_ids"]) + len(github_snapshot["project_debt_ids"])
 
     frozen = freeze_universe(
         source_registry=source_registry,

@@ -253,6 +253,69 @@
       "timeout_seconds": 10,
       "max_output_bytes": 1048576,
       "requires_custody_receipt": false
+    },
+    {
+      "enumerator_ref": "github-estate-census-v1",
+      "dimension": "census",
+      "command": [
+        "python3",
+        "scripts/prima-materia-github-estate.py",
+        "enumerate",
+        "--dimension",
+        "census"
+      ],
+      "command_sha256": "dcc4de5c5c6251e31026908abe5a8f9663a91c199e385469b22a3ff8708855d3",
+      "input_files": [
+        "cli/src/limen/github_estate_enumerator.py",
+        "docs/github-universe-snapshot.json",
+        "institutio/github/estate.yaml",
+        "scripts/prima-materia-github-estate.py"
+      ],
+      "timeout_seconds": 10,
+      "max_output_bytes": 4194304,
+      "requires_custody_receipt": false
+    },
+    {
+      "enumerator_ref": "github-estate-collaborators-v1",
+      "dimension": "collaborator",
+      "command": [
+        "python3",
+        "scripts/prima-materia-github-estate.py",
+        "enumerate",
+        "--dimension",
+        "collaborator"
+      ],
+      "command_sha256": "84f3b82c918ee5c6bdac13f0b87507bdc883290848b58afa125b94a7c59cf291",
+      "input_files": [
+        "cli/src/limen/github_estate_enumerator.py",
+        "docs/github-universe-snapshot.json",
+        "institutio/github/estate.yaml",
+        "scripts/prima-materia-github-estate.py"
+      ],
+      "timeout_seconds": 10,
+      "max_output_bytes": 4194304,
+      "requires_custody_receipt": false
+    },
+    {
+      "enumerator_ref": "github-estate-projects-v1",
+      "dimension": "project",
+      "command": [
+        "python3",
+        "scripts/prima-materia-github-estate.py",
+        "enumerate",
+        "--dimension",
+        "project"
+      ],
+      "command_sha256": "932372a8460f920e5d1f8afec86d27c90626868e40705e87ec467d9c944e65d2",
+      "input_files": [
+        "cli/src/limen/github_estate_enumerator.py",
+        "docs/github-universe-snapshot.json",
+        "institutio/github/estate.yaml",
+        "scripts/prima-materia-github-estate.py"
+      ],
+      "timeout_seconds": 10,
+      "max_output_bytes": 4194304,
+      "requires_custody_receipt": false
     }
   ]
 }
