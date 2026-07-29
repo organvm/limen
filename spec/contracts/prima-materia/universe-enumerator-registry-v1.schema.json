@@ -43,6 +43,14 @@
           "title": "Max Output Bytes",
           "type": "integer"
         },
+        "optional_input_files": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 256,
+          "title": "Optional Input Files",
+          "type": "array"
+        },
         "requires_custody_receipt": {
           "default": false,
           "title": "Requires Custody Receipt",

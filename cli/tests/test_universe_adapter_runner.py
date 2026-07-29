@@ -363,6 +363,90 @@ def test_cache_input_binds_tracked_file_bytes(tmp_path: Path) -> None:
     assert (tmp_path / "census-count").read_text() == "2"
 
 
+def test_cache_input_binds_optional_file_absence_and_appearance(tmp_path: Path) -> None:
+    registry = _enumerator_registry(tmp_path)
+    registry = registry.model_copy(
+        update={
+            "enumerators": tuple(
+                item.model_copy(update={"optional_input_files": ("runtime-state.json",)})
+                if item.dimension == "census"
+                else item
+                for item in registry.enumerators
+            )
+        }
+    )
+    first = run_universe_adapters(
+        source_registry=_source_registry(),
+        enumerator_registry=registry,
+        frozen_wave_sha256=WAVE,
+        frozen_at=FROZEN_AT,
+        cache_dir=tmp_path / "cache",
+        repository_root=tmp_path,
+    )
+    second = run_universe_adapters(
+        source_registry=_source_registry(),
+        enumerator_registry=registry,
+        frozen_wave_sha256=WAVE,
+        frozen_at=FROZEN_AT,
+        cache_dir=tmp_path / "cache",
+        repository_root=tmp_path,
+    )
+    (tmp_path / "runtime-state.json").write_text("{}\n")
+    third = run_universe_adapters(
+        source_registry=_source_registry(),
+        enumerator_registry=registry,
+        frozen_wave_sha256=WAVE,
+        frozen_at=FROZEN_AT,
+        cache_dir=tmp_path / "cache",
+        repository_root=tmp_path,
+    )
+
+    assert len(first.receipt.executed_enumerator_refs) == 3
+    assert second.receipt.executed_enumerator_refs == ()
+    assert third.receipt.executed_enumerator_refs == ("fixture-census",)
+    assert (tmp_path / "census-count").read_text() == "2"
+
+
+def test_input_drift_during_enumeration_fails_closed(tmp_path: Path) -> None:
+    tracked_input = tmp_path / "source.txt"
+    tracked_input.write_text("before\n")
+    registry = _enumerator_registry(tmp_path)
+    census = next(item for item in registry.enumerators if item.dimension == "census")
+    payload = json.dumps(_fragments()["census"].model_dump(mode="json"))
+    command = (
+        sys.executable,
+        "-c",
+        (
+            "import pathlib,sys\n"
+            "sys.stdin.buffer.read()\n"
+            "pathlib.Path('source.txt').write_text('after\\n')\n"
+            f"print({payload!r})\n"
+        ),
+    )
+    drifting = census.model_copy(
+        update={
+            "command": command,
+            "command_sha256": command_digest(command),
+            "input_files": ("source.txt",),
+        }
+    )
+    registry = registry.model_copy(
+        update={"enumerators": tuple(drifting if item.dimension == "census" else item for item in registry.enumerators)}
+    )
+
+    result = run_universe_adapters(
+        source_registry=_source_registry(),
+        enumerator_registry=registry,
+        frozen_wave_sha256=WAVE,
+        frozen_at=FROZEN_AT,
+        cache_dir=tmp_path / "cache",
+        repository_root=tmp_path,
+    )
+
+    assert result.receipt.failed_enumerator_refs == ("fixture-census",)
+    assert len(result.receipt.placeholder_source_instance_ids) == 1
+
+
 def test_enumerator_input_files_reject_path_escape() -> None:
     command = (sys.executable, "-c", "print('{}')")
     with pytest.raises(ValueError, match="repository-relative"):
@@ -374,6 +458,29 @@ def test_enumerator_input_files_reject_path_escape() -> None:
             input_files=("../private",),
             timeout_seconds=5,
             max_output_bytes=1024,
+        )
+
+
+def test_enumerator_optional_input_files_reject_overlap_and_path_escape() -> None:
+    command = (sys.executable, "-c", "print('{}')")
+    common = {
+        "enumerator_ref": "fixture-census",
+        "dimension": "census",
+        "command": command,
+        "command_sha256": command_digest(command),
+        "timeout_seconds": 5,
+        "max_output_bytes": 1024,
+    }
+    with pytest.raises(ValueError, match="repository-relative"):
+        UniverseEnumeratorSpecV1(
+            **common,
+            optional_input_files=("../runtime-state",),
+        )
+    with pytest.raises(ValueError, match="must not overlap"):
+        UniverseEnumeratorSpecV1(
+            **common,
+            input_files=("runtime-state.json",),
+            optional_input_files=("runtime-state.json",),
         )
 
 
@@ -438,6 +545,20 @@ def test_tracked_executable_registry_runs_public_source_families(
     enumerators = UniverseEnumeratorRegistryV1.model_validate_json(
         (root / "institutio" / "governance" / "prima-materia-universe-enumerators.json").read_text()
     )
+    funnel_manifest = json.loads((root / "institutio" / "governance" / "prima-materia-funnel-sources.json").read_text())
+    funnel_paths = tuple(sorted(item["path"] for item in funnel_manifest["sources"]))
+    funnel_specs = tuple(
+        item
+        for item in enumerators.enumerators
+        if item.enumerator_ref
+        in {
+            "funnel-records-census-v1",
+            "funnel-record-projects-v1",
+            "funnel-record-collaborators-v1",
+        }
+    )
+    assert len(funnel_specs) == 3
+    assert all(item.optional_input_files == funnel_paths for item in funnel_specs)
     result = run_universe_adapters(
         source_registry=source_registry,
         enumerator_registry=enumerators,
@@ -458,15 +579,25 @@ def test_tracked_executable_registry_runs_public_source_families(
         "engagement-collaborators-v1",
         "engagement-projects-v1",
         "engagements-census-v1",
+        "funnel-record-collaborators-v1",
+        "funnel-record-projects-v1",
+        "funnel-records-census-v1",
     )
-    assert len(result.receipt.missing_enumerator_refs) == 24
+    assert len(result.receipt.missing_enumerator_refs) == 21
     assert result.receipt.failed_enumerator_refs == ()
-    assert len(result.receipt.placeholder_source_instance_ids) == 8
-    assert len(result.observations) == 3
-    observations = {item.source_kind: item for item in result.observations}
-    assert set(observations) == {"constellation", "curated_registry", "engagements"}
+    assert len(result.receipt.placeholder_source_instance_ids) == 7
+    assert len(result.observations) == 6
+    observations_by_kind: dict[str, list] = {}
+    for observation in result.observations:
+        observations_by_kind.setdefault(observation.source_kind, []).append(observation)
+    assert set(observations_by_kind) == {
+        "constellation",
+        "curated_registry",
+        "engagements",
+        "funnel_records",
+    }
 
-    curated = observations["curated_registry"]
+    curated = observations_by_kind["curated_registry"][0]
     assert curated.enumeration_complete
     assert curated.required_project_ids == ()
     assert curated.projects == ()
@@ -474,14 +605,14 @@ def test_tracked_executable_registry_runs_public_source_families(
     assert curated.collaborators == ()
     assert len(curated.non_project_row_ids) == 25
 
-    constellation = observations["constellation"]
+    constellation = observations_by_kind["constellation"][0]
     assert constellation.enumeration_complete
     assert len(constellation.required_project_ids) == 19
     assert len(constellation.projects) == 19
     assert len(constellation.required_collaborator_ids) == 14
     assert len(constellation.collaborators) == 14
 
-    engagements = observations["engagements"]
+    engagements = observations_by_kind["engagements"][0]
     assert engagements.enumeration_complete
     assert engagements.required_project_ids == ()
     assert engagements.projects == ()
@@ -489,6 +620,15 @@ def test_tracked_executable_registry_runs_public_source_families(
     assert engagements.collaborators == ()
     assert len(engagements.non_project_row_ids) == 1
     assert engagements.unclassified_row_ids == ()
+
+    funnel_records = observations_by_kind["funnel_records"]
+    assert len(funnel_records) == 3
+    assert all(not item.enumeration_complete for item in funnel_records)
+    assert all(not item.required_project_ids for item in funnel_records)
+    assert all(not item.projects for item in funnel_records)
+    assert all(not item.required_collaborator_ids for item in funnel_records)
+    assert all(not item.collaborators for item in funnel_records)
+    assert sum(len(item.unclassified_row_ids) for item in funnel_records) == 3
 
     frozen = freeze_universe(
         source_registry=source_registry,

@@ -73,6 +73,7 @@ class UniverseEnumeratorSpecV1(PrimaMateriaModel):
     command: tuple[str, ...] = Field(min_length=1, max_length=64)
     command_sha256: str
     input_files: tuple[str, ...] = Field(default_factory=tuple, max_length=256)
+    optional_input_files: tuple[str, ...] = Field(default_factory=tuple, max_length=256)
     timeout_seconds: int = Field(ge=1, le=900)
     max_output_bytes: int = Field(ge=1024, le=16 * 1024 * 1024)
     requires_custody_receipt: bool = False
@@ -86,9 +87,15 @@ class UniverseEnumeratorSpecV1(PrimaMateriaModel):
             raise ValueError("enumerator command arguments must be nonempty and NUL-free")
         if self.command_sha256 != command_digest(self.command):
             raise ValueError("enumerator command digest does not match its exact argv")
-        if self.input_files != tuple(sorted(set(self.input_files))):
-            raise ValueError("enumerator input files must be sorted and unique")
-        for value in self.input_files:
+        for label, values in (
+            ("enumerator input files", self.input_files),
+            ("enumerator optional input files", self.optional_input_files),
+        ):
+            if values != tuple(sorted(set(values))):
+                raise ValueError(f"{label} must be sorted and unique")
+        if set(self.input_files) & set(self.optional_input_files):
+            raise ValueError("required and optional enumerator input files must not overlap")
+        for value in (*self.input_files, *self.optional_input_files):
             path = PurePosixPath(value)
             if (
                 not value
@@ -381,6 +388,31 @@ def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def _input_file_digests(
+    spec: UniverseEnumeratorSpecV1,
+    *,
+    root: Path,
+) -> dict[str, str | None]:
+    input_file_sha256: dict[str, str | None] = {}
+    for relative, required in (
+        *((value, True) for value in spec.input_files),
+        *((value, False) for value in spec.optional_input_files),
+    ):
+        candidate = root / relative
+        if candidate.is_symlink():
+            raise ValueError("enumerator input files cannot be symlinks")
+        resolved = candidate.resolve()
+        if resolved.parent != root and root not in resolved.parents:
+            raise ValueError("enumerator input file escaped the repository root")
+        if not resolved.is_file():
+            if required or resolved.exists():
+                raise ValueError("enumerator input file is unavailable")
+            input_file_sha256[relative] = None
+        else:
+            input_file_sha256[relative] = hashlib.sha256(resolved.read_bytes()).hexdigest()
+    return input_file_sha256
+
+
 def _run_one(
     *,
     spec: UniverseEnumeratorSpecV1,
@@ -389,17 +421,7 @@ def _run_one(
     repository_root: Path,
 ) -> tuple[dict[str, Any], bool]:
     root = repository_root.resolve()
-    input_file_sha256: dict[str, str] = {}
-    for relative in spec.input_files:
-        candidate = root / relative
-        if candidate.is_symlink():
-            raise ValueError("enumerator input files cannot be symlinks")
-        resolved = candidate.resolve()
-        if resolved.parent != root and root not in resolved.parents:
-            raise ValueError("enumerator input file escaped the repository root")
-        if not resolved.is_file():
-            raise ValueError("enumerator input file is unavailable")
-        input_file_sha256[relative] = hashlib.sha256(resolved.read_bytes()).hexdigest()
+    input_file_sha256 = _input_file_digests(spec, root=root)
     input_sha256 = _digest_payload(
         {
             "spec": spec.model_dump(mode="json"),
@@ -416,6 +438,8 @@ def _run_one(
                 and cached.input_sha256 == input_sha256
                 and cached.output_sha256 == _digest_payload(cached.output_payload)
             ):
+                if _input_file_digests(spec, root=root) != input_file_sha256:
+                    raise ValueError("enumerator input files drifted during cache validation")
                 return cached.output_payload, True
         except (OSError, UnicodeError, ValueError):
             pass
@@ -429,6 +453,8 @@ def _run_one(
     payload = json.loads(output)
     if not isinstance(payload, dict):
         raise TypeError("enumerator output must be one JSON object")
+    if _input_file_digests(spec, root=root) != input_file_sha256:
+        raise ValueError("enumerator input files drifted during execution")
     receipt = EnumeratorCacheReceiptV1(
         enumerator_ref=spec.enumerator_ref,
         input_sha256=input_sha256,

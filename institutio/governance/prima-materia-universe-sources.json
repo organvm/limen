@@ -61,7 +61,7 @@
       "schema_version": "limen.universe_source_adapter.v1",
       "adapter_id": "funnel-records-v1",
       "source_kind": "funnel_records",
-      "owner_ref": "scripts/conversion-funnel.py",
+      "owner_ref": "institutio/governance/prima-materia-funnel-sources.json",
       "census_enumerator_ref": "funnel-records-census-v1",
       "project_enumerator_ref": "funnel-record-projects-v1",
       "collaborator_enumerator_ref": "funnel-record-collaborators-v1",

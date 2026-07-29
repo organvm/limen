@@ -172,6 +172,87 @@
       "timeout_seconds": 10,
       "max_output_bytes": 262144,
       "requires_custody_receipt": false
+    },
+    {
+      "enumerator_ref": "funnel-records-census-v1",
+      "dimension": "census",
+      "command": [
+        "python3",
+        "scripts/prima-materia-enumerate-funnel-records.py",
+        "--dimension",
+        "census"
+      ],
+      "command_sha256": "5f39a62231d7b8329b6c3d66ff61921a29020328a339c766ccdc6a1f52b411f4",
+      "input_files": [
+        "cli/src/limen/funnel_record_enumerator.py",
+        "institutio/governance/prima-materia-funnel-sources.json",
+        "scripts/conversion-funnel.py",
+        "scripts/opportunity-review-delta.py",
+        "scripts/prima-materia-enumerate-funnel-records.py",
+        "scripts/traffic-collect.py"
+      ],
+      "optional_input_files": [
+        "logs/observatory/traffic.jsonl",
+        "logs/opportunity-status.json",
+        "logs/profile-conversion-funnel-latest.json"
+      ],
+      "timeout_seconds": 10,
+      "max_output_bytes": 1048576,
+      "requires_custody_receipt": false
+    },
+    {
+      "enumerator_ref": "funnel-record-collaborators-v1",
+      "dimension": "collaborator",
+      "command": [
+        "python3",
+        "scripts/prima-materia-enumerate-funnel-records.py",
+        "--dimension",
+        "collaborator"
+      ],
+      "command_sha256": "8f38a9a1e3a5b5569c39b1a34cbfd2e28ded5f8a139d1f7fbff730b6c26419c3",
+      "input_files": [
+        "cli/src/limen/funnel_record_enumerator.py",
+        "institutio/governance/prima-materia-funnel-sources.json",
+        "scripts/conversion-funnel.py",
+        "scripts/opportunity-review-delta.py",
+        "scripts/prima-materia-enumerate-funnel-records.py",
+        "scripts/traffic-collect.py"
+      ],
+      "optional_input_files": [
+        "logs/observatory/traffic.jsonl",
+        "logs/opportunity-status.json",
+        "logs/profile-conversion-funnel-latest.json"
+      ],
+      "timeout_seconds": 10,
+      "max_output_bytes": 1048576,
+      "requires_custody_receipt": false
+    },
+    {
+      "enumerator_ref": "funnel-record-projects-v1",
+      "dimension": "project",
+      "command": [
+        "python3",
+        "scripts/prima-materia-enumerate-funnel-records.py",
+        "--dimension",
+        "project"
+      ],
+      "command_sha256": "419ee5e26e045d8ba61bba6fbfb9f80c57c8b1936b6836e5a486f5b0b21ff895",
+      "input_files": [
+        "cli/src/limen/funnel_record_enumerator.py",
+        "institutio/governance/prima-materia-funnel-sources.json",
+        "scripts/conversion-funnel.py",
+        "scripts/opportunity-review-delta.py",
+        "scripts/prima-materia-enumerate-funnel-records.py",
+        "scripts/traffic-collect.py"
+      ],
+      "optional_input_files": [
+        "logs/observatory/traffic.jsonl",
+        "logs/opportunity-status.json",
+        "logs/profile-conversion-funnel-latest.json"
+      ],
+      "timeout_seconds": 10,
+      "max_output_bytes": 1048576,
+      "requires_custody_receipt": false
     }
   ]
 }
