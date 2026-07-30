@@ -17,6 +17,23 @@ workstream_native_binary() {
   return 1
 }
 
+workstream_jules_repository() {
+  local repository=""
+  local origin="$(git remote get-url origin 2>/dev/null || true)"
+
+  case "$origin" in
+    git@github.com:*) repository="${origin#git@github.com:}" ;;
+    https://github.com/*) repository="${origin#https://github.com/}" ;;
+    ssh://git@github.com/*) repository="${origin#ssh://git@github.com/}" ;;
+  esac
+  repository="${repository%.git}"
+
+  if [[ ! "$repository" =~ ^[^/[:space:]]+/[^/[:space:]]+$ ]]; then
+    return 1
+  fi
+  printf '%s\n' "$repository"
+}
+
 workstream_export_context() {
   local agent="$1"
   local wt="$2"
@@ -102,7 +119,7 @@ workstream_launch_native_agent() {
   local autonomous="$3"
   local readme="$4"
   local allow_shell_fallback="$5"
-  local binary capsule_prompt=""
+  local binary capsule_prompt="" jules_repo="" intent_path=""
 
   # A broker credential belongs to the registration client, never to the model process.
   unset LIMEN_CONDUCT_TOKEN
@@ -130,6 +147,20 @@ workstream_launch_native_agent() {
         ;;
       agy|gemini)
         exec "$binary" --prompt-interactive "$capsule_prompt"
+        ;;
+      jules)
+        if ! jules_repo="$(workstream_jules_repository)"; then
+          printf 'Jules workstream launch could not derive an owner/repo from the GitHub origin\n' >&2
+          return 2
+        fi
+        intent_path="${readme%/*}/intent.md"
+        if [[ ! -s "$intent_path" ]]; then
+          printf 'Jules workstream launch requires a non-empty intent module\n' >&2
+          return 2
+        fi
+        IFS= read -r -d '' capsule_prompt < "$intent_path" || true
+        capsule_prompt="Do NOT ask for feedback or approval. Work autonomously and return the requested durable receipts. $capsule_prompt"
+        exec "$binary" remote new --repo "$jules_repo" --session "$capsule_prompt"
         ;;
       *)
         exec "$binary" "$capsule_prompt"
@@ -423,6 +454,7 @@ PY
   launch_helpers="$(
     declare -f \
       workstream_native_binary \
+      workstream_jules_repository \
       workstream_export_context \
       workstream_register_conduct_session \
       workstream_launch_native_agent

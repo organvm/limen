@@ -99,6 +99,70 @@ def test_workstream_command_writes_private_kickstart_packet(tmp_path: Path, monk
     assert "workstream contract is missing" in partial.output
 
 
+def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "demo-repo"
+    repo.mkdir()
+    _git("init", "-q", "-b", "main", cwd=repo)
+    _git("config", "user.email", "test@example.invalid", cwd=repo)
+    _git("config", "user.name", "Test User", cwd=repo)
+    _git("remote", "add", "origin", "git@github.com:organvm/demo-repo.git", cwd=repo)
+    (repo / "README.md").write_text("demo\n", encoding="utf-8")
+    _git("add", "README.md", cwd=repo)
+    _git("commit", "-qm", "init", cwd=repo)
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_jules = fake_bin / "jules"
+    fake_jules.write_text(
+        '#!/usr/bin/env bash\nprintf "%s\\n" "$@" > "$SESSION_ARGS_CAPTURE"\n',
+        encoding="utf-8",
+    )
+    fake_jules.chmod(0o755)
+    real_git = shutil.which("git")
+    assert real_git is not None
+    fake_git = fake_bin / "git"
+    fake_git.write_text(
+        (
+            "#!/usr/bin/env bash\n"
+            'if [[ "$*" == *"remote get-url origin"* ]]; then\n'
+            '  printf "git@github.com:organvm/demo-repo.git\\n"\n'
+            "  exit 0\n"
+            "fi\n"
+            'if [[ "$*" == *"fetch --prune"* ]]; then exit 0; fi\n'
+            'exec "$REAL_GIT" "$@"\n'
+        ),
+        encoding="utf-8",
+    )
+    fake_git.chmod(0o755)
+    args_capture = tmp_path / "jules-args.txt"
+    monkeypatch.setenv("LIMEN_ROOT", str(ROOT))
+    monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ['PATH']}")
+    monkeypatch.setenv("REAL_GIT", real_git)
+    monkeypatch.setenv("SESSION_ARGS_CAPTURE", str(args_capture))
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "workstream",
+            "--autonomous",
+            "--agent",
+            "jules",
+            "--prompt",
+            "Ship the exact bounded packet.",
+            str(repo),
+            "Jules Cloud",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    args = args_capture.read_text(encoding="utf-8").splitlines()
+    assert args[:4] == ["remote", "new", "--repo", "organvm/demo-repo"]
+    assert args[4] == "--session"
+    assert args[5].startswith("Do NOT ask for feedback or approval.")
+    assert "Ship the exact bounded packet." in args[5]
+    assert "# Continuation capsule:" not in args[5]
+
+
 def test_shell_launcher_hands_off_to_generated_kickstart_without_a_tty(tmp_path: Path) -> None:
     repo = tmp_path / "demo-repo"
     repo.mkdir()
