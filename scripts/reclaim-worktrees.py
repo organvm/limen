@@ -799,15 +799,9 @@ def _print_json_result(
                 "scanned": len(dirs),
                 "candidate_manifest": manifest,
                 "plan_sha256": plan_sha256,
-                "reclaimed": (
-                    [{"root": root, "detail": detail} for root, detail in removed]
-                    if apply
-                    else []
-                ),
+                "reclaimed": ([{"root": root, "detail": detail} for root, detail in removed] if apply else []),
                 "would_reclaim": manifest["candidates"] if not apply else [],
-                "kept_safe": [
-                    {"root": root, "reason": reason} for root, reason in skipped
-                ],
+                "kept_safe": [{"root": root, "reason": reason} for root, reason in skipped],
                 "failed": [{"root": root, "reason": reason} for root, reason in failed],
                 "deferred_over_cap": deferred,
                 "generated_reclaim": generated_reclaim,
@@ -845,9 +839,7 @@ def main():
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(now))
     if GENERATED_ONLY:
         generated_reclaim = (
-            reclaim_generated_payloads(targets)
-            if APPLY
-            else {"enabled": False, "cleaned": [], "failed": []}
+            reclaim_generated_payloads(targets) if APPLY else {"enabled": False, "cleaned": [], "failed": []}
         )
         cleaned = generated_reclaim.get("cleaned") or []
         gen_failed = generated_reclaim.get("failed") or []
@@ -915,11 +907,7 @@ def main():
             action, reason = classify(
                 directory,
                 time.time(),
-                next(
-                    min_age_h
-                    for path, min_age_h, _source in dirs
-                    if path == directory
-                ),
+                next(min_age_h for path, min_age_h, _source in dirs if path == directory),
                 preservation_receipts,
                 source=planned["source"],
             )
@@ -929,25 +917,15 @@ def main():
                 reason,
                 reclaim_acceptance,
             )
-            if (
-                not accepted
-                or action != planned["action"]
-                or reason != planned["reason"]
-            ):
-                detail = (
-                    accept_reason
-                    if not accepted
-                    else f"candidate-drift:{action}:{reason}"
-                )
+            if not accepted or action != planned["action"] or reason != planned["reason"]:
+                detail = accept_reason if not accepted else f"candidate-drift:{action}:{reason}"
                 failed.append((directory.name, detail))
                 continue
             try:
                 if action == "remove-worktree":
                     super_root = superproject(directory)
                     if not super_root or Path(super_root).resolve() == directory.resolve():
-                        failed.append(
-                            (directory.name, "registered-superproject-unavailable")
-                        )
+                        failed.append((directory.name, "registered-superproject-unavailable"))
                         continue
                     receipt = detach_registered_worktree(
                         Path(super_root),
@@ -966,9 +944,7 @@ def main():
                         "result": {"destination": destination},
                     }
                 else:
-                    destination_name = (
-                        f"{stamp}-{directory.name}-{directory.lstat().st_ino}"
-                    )
+                    destination_name = f"{stamp}-{directory.name}-{directory.lstat().st_ino}"
                     receipt = quarantine_path(
                         directory,
                         abandonment_quarantine_root(directory),
@@ -980,8 +956,7 @@ def main():
                 removed.append(
                     (
                         directory.name,
-                        f"{action}:{reason}:abandonment="
-                        f"{Path(str(receipt['receipt_path'])).name}",
+                        f"{action}:{reason}:abandonment={Path(str(receipt['receipt_path'])).name}",
                     )
                 )
             except (OSError, WorktreeAbandonmentError) as exc:
