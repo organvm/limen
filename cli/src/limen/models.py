@@ -16,6 +16,13 @@ VALID_STATUSES = {
     "needs_human",
     "archived",
 }
+JULES_LANDING_HOLD_LABEL = "jules:landing-held"
+
+
+def has_jules_landing_hold(task: object) -> bool:
+    """Whether Jules landing temporarily owns this row without changing lifecycle status."""
+
+    return JULES_LANDING_HOLD_LABEL in (getattr(task, "labels", None) or [])
 
 
 class DispatchLogEntry(BaseModel):

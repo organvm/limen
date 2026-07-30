@@ -79,6 +79,23 @@ def test_scoped_verifier_returns_temporary_failure_on_admission_denial(monkeypat
     assert verify.cmd_changed(registry(), None) == 75
 
 
+def test_scoped_verifier_returns_temporary_failure_when_process_identity_is_unavailable(monkeypatch) -> None:
+    verify = load_verify()
+    from limen import host_admission
+
+    @contextmanager
+    def identity_unavailable(*_args, **_kwargs):
+        raise ValueError("lease owner PID/start identity is unavailable")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(host_admission, "hold_lease", identity_unavailable)
+    monkeypatch.setattr(verify, "changed_set", lambda _base: ["changed.py"])
+    monkeypatch.setattr(verify, "select", lambda _registry, _changed: (["heavy"], []))
+    monkeypatch.setattr(verify, "run_gate", lambda *_args: True)
+
+    assert verify.cmd_changed(registry(), None) == 75
+
+
 def test_verify_whole_takes_legacy_flock_before_host_admission() -> None:
     text = (ROOT / "scripts" / "verify-whole.sh").read_text(encoding="utf-8")
     assert text.index("fcntl.flock") < text.index('host_admission_acquire "verify-whole"')

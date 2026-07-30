@@ -2637,6 +2637,48 @@ parameters:
     self_update: "set per-cell by cells.sh conduct (--workstream <handle>) to pin a scoped conductor to a single workstream channel"
     owner: limen-daemon
     note: "The purpose channel a scoped conductor is pinned to (the one-worker-one-workstream invariant). cells.sh filters the cell board to this channel via `limen channels --emit`, so the conductor structurally sees only its lane. Unset ⇒ the cell sees the full board. See docs/lanes/ and limen.workstream."
+  LIMEN_WORKSTREAM_RUNWAY:
+    default: "1d"
+    env: LIMEN_WORKSTREAM_RUNWAY
+    self_update: none
+    owner: continuity
+    note: "Finite requested duration used when a new workstream is configured without an inherited admitted contract. The validated range is 15m through 30d; an admitted capsule never rereads this value to reset its deadline."
+  LIMEN_WORKSTREAM_REQUESTED:
+    default: null
+    env: LIMEN_WORKSTREAM_REQUESTED
+    self_update: "exported from the validated admitted workstream contract by kickstart.sh"
+    owner: continuity
+    note: "Normalized duration text inherited by successor sessions and packet fanout. Unset outside an admitted capsule."
+  LIMEN_WORKSTREAM_RUNWAY_SECONDS:
+    default: null
+    env: LIMEN_WORKSTREAM_RUNWAY_SECONDS
+    self_update: "exported from the validated admitted workstream contract by kickstart.sh"
+    owner: continuity
+    note: "Validated total workstream duration in seconds. This is contract state, not a mutable provider timeout."
+  LIMEN_WORKSTREAM_STARTED_EPOCH:
+    default: null
+    env: LIMEN_WORKSTREAM_STARTED_EPOCH
+    self_update: "set once by the first serialized capsule admission and inherited thereafter"
+    owner: continuity
+    note: "UTC epoch of first workstream admission. Missing or contradictory timing state invalidates an existing capsule."
+  LIMEN_WORKSTREAM_DEADLINE_EPOCH:
+    default: null
+    env: LIMEN_WORKSTREAM_DEADLINE_EPOCH
+    self_update: "derived once as started epoch plus validated runway and inherited thereafter"
+    owner: continuity
+    note: "Immutable UTC deadline rechecked at packet and provider-spawn boundaries. Reaching zero blocks new launches without preempting an already-running provider."
+  LIMEN_WORKSTREAM_REMAINING_SECONDS:
+    default: null
+    env: LIMEN_WORKSTREAM_REMAINING_SECONDS
+    self_update: "refreshed from the immutable deadline at each capsule launch boundary"
+    owner: continuity
+    note: "Read-only remaining-runway observation exported to the current successor session."
+  LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS:
+    default: 120
+    env: LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS
+    self_update: none
+    owner: continuity
+    note: "Finite 1..300 second ceiling for capsule git fetch and status preflights before the final deadline recheck."
 
   # --- BOARD INTEGRITY — the SSOT can never collapse, and self-heals if it somehow does ---
   # (limen.io.save_limen_file collapse-guard + scripts/heal-board.py). Root-caused 2026-06-26:
@@ -3168,24 +3210,18 @@ parameters:
     self_update: none
     owner: dispatch
     note: "Optional operator override. It is usable only when the exact value is present and code-capable in the current `opencode models --verbose` catalog; blank derives from live capabilities."
-  LIMEN_CODEX_TIER_SELECT:
-    default: "1"
-    env: LIMEN_CODEX_TIER_SELECT
+  LIMEN_CODEX_MODEL:
+    default: ""
+    env: LIMEN_CODEX_MODEL
     self_update: none
     owner: dispatch
-    note: "Enable per-task tier derivation for the Codex lane. 1 (default) derives haiku->o4-mini, opus/fable->o3 via _claude_tier_for; 0 disables derivation (provider Auto, prior behaviour). Per-tier overrides via LIMEN_CODEX_MODEL_<TIER>."
+    note: "Blank delegates to provider Auto because the Codex CLI exposes no live model catalog. Any nonblank LIMEN_CODEX_MODEL* override fails blocked until it can be validated from live provider metadata."
   LIMEN_GEMINI_MODEL:
     default: ""
     env: LIMEN_GEMINI_MODEL
     self_update: none
     owner: dispatch
-    note: "Blanket operator override for the Gemini agent model. Nonblank wins over all per-task tier derivation. Blank enables tier derivation (see LIMEN_GEMINI_TIER_SELECT)."
-  LIMEN_GEMINI_TIER_SELECT:
-    default: "1"
-    env: LIMEN_GEMINI_TIER_SELECT
-    self_update: none
-    owner: dispatch
-    note: "Enable per-task tier derivation for the Gemini lane. 1 (default) derives haiku/sonnet->gemini-2.5-flash, opus/fable->gemini-2.5-pro via _claude_tier_for; 0 disables derivation (bare invocation, prior behaviour). Per-tier overrides via LIMEN_GEMINI_MODEL_<TIER>."
+    note: "Blank delegates to provider Auto because the Gemini CLI exposes no live model catalog. Any nonblank LIMEN_GEMINI_MODEL* override fails blocked until it can be validated from live provider metadata."
   LIMEN_OPENCODE_CATALOG_TIMEOUT:
     default: 30
     env: LIMEN_OPENCODE_CATALOG_TIMEOUT

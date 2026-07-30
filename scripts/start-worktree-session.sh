@@ -32,9 +32,10 @@ Creates or reuses:
   <repo>/.worktrees/<slug> on branch work/<slug>
   <repo>/.worktrees/<slug>/.limen-workstream/README.md as a thin prompt index
   <repo>/.worktrees/<slug>/.limen-workstream/{manifest,intent,runtime,closeout}.md
+  <repo>/.worktrees/<slug>/docs/continuations/<slug>/workstream.json as a tracked redacted receipt
 
 The target repo's .git/info/exclude is updated so .worktrees/ and the private
-capsule never appear as Git noise.
+capsule never appear as Git noise. The receipt remains visible for commit and remote custody.
 USAGE
 }
 
