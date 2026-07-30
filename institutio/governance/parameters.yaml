@@ -410,10 +410,60 @@ parameters:
     owner: continuity
     note: "A handoff summary shorter than this is degenerate (this session got 200). Trigger transcript reconstruction."
   CONTINUITY_TRANSCRIPT_GLOB:
-    default: "~/.claude/projects/*/*.jsonl"
+    # "auto" = derive from limen.harness_paths. A hard-coded ~/.claude literal silently matched
+    # zero files once the harness relocated its tree to <repo>/.agent-runtime/claude, and the
+    # organ kept reporting ok. Set an explicit glob only to pin a non-standard layout.
+    default: "auto"
     env: LIMEN_CONTINUITY_TRANSCRIPTS
     self_update: none
     owner: continuity
+
+  # --- HARNESS ROOT: declare the external dependency the fleet reads from --------
+  # The Claude harness keeps its session tree (transcripts, plan files, job scratch) outside the
+  # workspace, and it moved once already: ~/.claude -> <repo>/.agent-runtime/claude. That location
+  # was hard-coded in ten places, so the move blinded every consumer at once with nothing going
+  # red. Declared here, resolved in limen.harness_paths, sensed by scripts/harness-root-probe.py.
+  LIMEN_CLAUDE_HARNESS_ROOT:
+    default: ""
+    env: LIMEN_CLAUDE_HARNESS_ROOT
+    self_update: none
+    owner: continuity
+    note: "Operator override for the harness runtime root. Empty (default) = resolve automatically: env -> <repo>/.agent-runtime/claude -> the shared checkout's copy when running in a worktree -> ~/.claude. Set only to pin a non-standard layout."
+
+  LIMEN_HARNESS_ROOT_PROBE:
+    default: "1"
+    env: LIMEN_HARNESS_ROOT_PROBE
+    self_update: none
+    owner: continuity
+    note: "ARMED 2026-07-30. Gates the harness-root-probe sensor: asserts the resolved root still holds transcripts (empty-while-a-sibling-is-full = the harness relocated) and scans for the three structural plan-mode fault signatures. Probe: python3 scripts/harness-root-probe.py."
+
+  LIMEN_BEAT_HARNESS_PROBE:
+    default: 6
+    env: LIMEN_BEAT_HARNESS_PROBE
+    self_update: none
+    owner: continuity
+    note: "Heartbeat cadence for the harness-root probe. A relocation is rare but total, so a slow cadence is enough; the cost is a bounded transcript scan."
+
+  LIMEN_HARNESS_PROBE_TIMEOUT:
+    default: 120
+    env: LIMEN_HARNESS_PROBE_TIMEOUT
+    self_update: none
+    owner: continuity
+    note: "Wall-clock ceiling for the harness-root probe. The corpus is ~200MB; the scan is bounded by LIMEN_HARNESS_PROBE_DAYS and LIMEN_HARNESS_PROBE_MAX_FILES so it never walks all of it."
+
+  LIMEN_HARNESS_PROBE_DAYS:
+    default: 7
+    env: LIMEN_HARNESS_PROBE_DAYS
+    self_update: none
+    owner: continuity
+    note: "Age bound for the harness-root probe's transcript scan. Bounds cost on a 16GB host; the fault signatures are recent-session properties, so a week is ample."
+
+  LIMEN_HARNESS_PROBE_MAX_FILES:
+    default: 60
+    env: LIMEN_HARNESS_PROBE_MAX_FILES
+    self_update: none
+    owner: continuity
+    note: "File-count bound for the harness-root probe, newest first. Caps peak RSS on the beta machine's logged-jetsam host."
 
   # --- INTEGRITY: govern the autoupdater lever (build order #1) ------------------
   INTEGRITY_AUTOUPDATER:
@@ -1520,6 +1570,54 @@ parameters:
     self_update: "inherited from an admitted successor or generated once at launch"
     owner: continuity
     note: "Optional opaque session override for one workstream successor; blank derives a finite launch identity."
+  LIMEN_CAMPAIGN_RELAY_ID:
+    default: null
+    env: LIMEN_CAMPAIGN_RELAY_ID
+    self_update: "derived from the committed predecessor receipt and admitted contract"
+    owner: continuity
+    note: "Internal lowercase SHA-256 identity for one finite campaign successor relay; exported only across the relay wrapper boundary."
+  LIMEN_CAMPAIGN_RELAY_BASE:
+    default: null
+    env: LIMEN_CAMPAIGN_RELAY_BASE
+    self_update: "frozen from the exact remote default commit selected by relay reservation"
+    owner: continuity
+    note: "Internal exact Git base for the successor capsule; never a mutable branch selector."
+  LIMEN_CAMPAIGN_RELAY_ELIGIBLE_LANES:
+    default: null
+    env: LIMEN_CAMPAIGN_RELAY_ELIGIBLE_LANES
+    self_update: "derived once from the live capacity census immediately before attempt claim"
+    owner: continuity
+    note: "Internal comma-separated eligible native lane set for one provider-neutral relay launch; scrubbed before provider exec."
+  LIMEN_CAMPAIGN_RELAY_ACK_FD:
+    default: null
+    env: LIMEN_CAMPAIGN_RELAY_ACK_FD
+    self_update: "assigned as a private inherited descriptor by the finite relay controller"
+    owner: continuity
+    note: "Internal controller-to-wrapper acknowledgement descriptor for dormant registration and final launch authorization; never persisted."
+  LIMEN_CAMPAIGN_RELAY_CONTROL_FD:
+    default: null
+    env: LIMEN_CAMPAIGN_RELAY_CONTROL_FD
+    self_update: "assigned as a private inherited descriptor by the finite relay controller"
+    owner: continuity
+    note: "Internal wrapper-to-controller proof descriptor for selected-lane, publication, and exec-boundary events; scrubbed before provider exec."
+  LIMEN_CAMPAIGN_RELAY_EXEC_FD:
+    default: null
+    env: LIMEN_CAMPAIGN_RELAY_EXEC_FD
+    self_update: "assigned as a private inherited descriptor by the finite relay controller"
+    owner: continuity
+    note: "Internal close-on-exec error descriptor; EOF proves exec continuity while an explicit frame reports execve failure."
+  LIMEN_CAMPAIGN_RELAY_FINAL_EXEC:
+    default: null
+    env: LIMEN_CAMPAIGN_RELAY_FINAL_EXEC
+    self_update: "set only by the relay wrapper for its final provider-exec re-entry"
+    owner: continuity
+    note: "Internal one-hop wrapper sentinel; removed before the selected provider process begins."
+  LIMEN_CAMPAIGN_RELAY_REAL_BINARY:
+    default: null
+    env: LIMEN_CAMPAIGN_RELAY_REAL_BINARY
+    self_update: "resolved from the dynamically selected live native lane"
+    owner: continuity
+    note: "Internal exact provider executable selected by the relay wrapper; never a provider catalog pin and scrubbed before exec."
 
   LIMEN_CONTINUATION:
     default: "1"
@@ -2438,7 +2536,7 @@ parameters:
     env: LIMEN_CAMPAIGN_WAKE_TIMEOUT
     self_update: none
     owner: limen-daemon
-    note: "Seconds allowed for one canonical campaign-supervisor evaluation from the heartbeat. The legacy loop adds a fixed 30-second outer ceiling for capsule discovery and remote-default preflight, fails closed without timeout(1), and never falls back to direct provider launch."
+    note: "Seconds allowed for one canonical campaign-supervisor evaluation from the heartbeat. Public configuration is bounded to 300..7200 so the relay always retains its fixed terminal-receipt margin. The legacy loop adds a fixed 30-second outer ceiling for capsule discovery and remote-default preflight, fails closed without timeout(1), and never falls back to direct provider launch."
   LIMEN_RELEASE_BRANCH:
     default: "main"
     env: LIMEN_RELEASE_BRANCH
@@ -2725,6 +2823,12 @@ parameters:
     self_update: none
     owner: limen-daemon
     note: "Whether --sweep-all includes 1Password LOGIN-category items. OFF by default: those are personal web logins and a plaintext ~/.limen.env is the wrong home for them; the sweep targets API-credential/password/secret items. Set =1 only to deliberately include logins."
+  CREDS_BATCH:
+    default: "1"               # ON — all op:// lanes read in ONE `op inject` pass (one biometric touch)
+    env: LIMEN_CREDS_BATCH
+    self_update: none
+    owner: limen-daemon
+    note: "Whether creds-hydrate --apply reads its op:// lanes through a single `op inject` batch (op_read_batch) — one 1Password authorization total instead of one Touch-ID prompt per lane (BiometricsOnly/never-cache re-prompts on every op process). =0 restores the sequential per-entry `op read` path (the escape hatch if a template render ever misbehaves). Batch failure already degrades to sequential automatically — per-entry fail-open is preserved either way. See macos-tcc-gatekeeper-dialogs-solved."
 
   # --- credential Wall (scripts/credential-wall.py): the pinned secret/credential index ---
   LIMEN_CRED_WALL_ISSUE:
@@ -3301,6 +3405,24 @@ parameters:
     self_update: none
     owner: gitvs
     note: "Cadence (every N beats) of the github-actions-usage sensor. Spend moves daily, not per-beat — a slow cadence is honest; the omega rung re-runs it live on demand."
+  LIMEN_HOTCACHE_CHECK:
+    default: "1"
+    env: LIMEN_HOTCACHE_CHECK
+    self_update: none
+    owner: continuity
+    note: "Gate for the hot-cache beat sensor (scripts/verify-hot-cache.sh): exit 0 ⟺ this machine is disposable — spine connected, config captured, creds valid, toolchain summonable (mise.toml), every clone pushed. The Meeseeks law's court (plan 2026-07-30). Advisory, fail-open. 0 disables the pass."
+  LIMEN_BEAT_HOTCACHE:
+    default: 24
+    env: LIMEN_BEAT_HOTCACHE
+    self_update: none
+    owner: continuity
+    note: "Cadence (every N beats) of the hot-cache disposability sensor. Disposability moves at human speed — repos accumulate un-pushed state over hours, not seconds — so daily is honest; run bash scripts/verify-hot-cache.sh directly for a live answer."
+  LIMEN_HOTCACHE_TIMEOUT:
+    default: 300
+    env: LIMEN_HOTCACHE_TIMEOUT
+    self_update: none
+    owner: continuity
+    note: "Timeout (seconds) for the hot-cache sensor's predicate run: creds --verify does network probes and R5 walks every clone under $LIMEN_WORKDIR, so it needs headroom a cheap sensor doesn't."
   LIMEN_GH_USAGE_TIMEOUT:
     default: 120
     env: LIMEN_GH_USAGE_TIMEOUT
