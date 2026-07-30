@@ -40,6 +40,7 @@ diff-hygiene' docs/some-note.md
 expect cli-change 'syntax-changed
 diff-hygiene
 tasks-parse
+task-writer-audit
 check-params
 ruff-lint
 ruff-format
@@ -55,6 +56,7 @@ pytest-api' web/api/main.py
 
 expect mcp-change 'syntax-changed
 diff-hygiene
+task-writer-audit
 ruff-lint
 ruff-format' mcp/src/limen_mcp/server.py
 
@@ -62,12 +64,14 @@ expect merge-policy-change 'syntax-changed
 diff-hygiene
 merge-policy-test
 await-pr-test
+task-writer-audit
 check-params
 check-gates' scripts/merge-policy.sh
 
 expect enactment-change 'syntax-changed
 diff-hygiene
 enactment-test
+task-writer-audit
 check-params' scripts/enactment-audit.py
 
 expect board-change 'syntax-changed
@@ -127,12 +131,14 @@ expect resolver-change 'syntax-changed
 diff-hygiene
 verify-resolver-test
 verify-ci-hardening-test
+task-writer-audit
 check-params
 check-gates' scripts/verify.py
 
 expect mixed-change 'syntax-changed
 diff-hygiene
 tasks-parse
+task-writer-audit
 check-params
 ruff-lint
 ruff-format
