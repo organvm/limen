@@ -1262,6 +1262,18 @@ parameters:
     self_update: "credential wall rotation only"
     owner: dispatch
     note: "Credential-wall-owned bearer for exactly one authenticated conduct principal. The Worker derives principal, native lane, surface, and roles from LIMEN_CONDUCT_PRINCIPAL_REGISTRY; this client-side value is consumed by the adapter and removed before launching a model process."
+  LIMEN_CONDUCT_CANARY_CREDENTIAL_REFS:
+    default: "{}"
+    env: LIMEN_CONDUCT_CANARY_CREDENTIAL_REFS
+    self_update: "credential wall rotation only"
+    owner: dispatch
+    note: "JSON manifest of environment-variable reference names for the authenticated conductor and executor principals used by the production full-mesh canary. It never contains bearer values; missing, duplicate, or role-incompatible references fail closed."
+  LIMEN_CONDUCT_CANARY_RUNTIME_IDENTITY:
+    default: "{}"
+    env: LIMEN_CONDUCT_CANARY_RUNTIME_IDENTITY
+    self_update: "exact runtime installation only"
+    owner: dispatch
+    note: "Exact merged Git SHA and deployment identity asserted by the installed conduct runtime for a full-mesh canary receipt. The canary hashes deployment identity in its redacted receipt and rejects missing or mismatched runtime evidence."
   LIMEN_CONDUCT_KEEPALIVE_SECONDS:
     default: 180
     env: LIMEN_CONDUCT_KEEPALIVE_SECONDS
