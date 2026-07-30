@@ -109,14 +109,36 @@ def _fanout_campaign_evidence(
         return None
     child_campaigns: list[dict[str, Any]] = []
     spend: dict[str, int | float] = {}
+    campaign_identity = (campaign["campaign_id"], campaign["value_unit"])
     for child in children:
-        for receipt in child.get("receipts", []):
-            receipt_campaign = receipt.get("campaign")
-            if isinstance(receipt_campaign, dict):
-                child_campaigns.append(receipt_campaign)
-            for unit, value in (receipt.get("spend") or {}).items():
-                if isinstance(value, (int, float)) and not isinstance(value, bool):
-                    spend[unit] = spend.get(unit, 0) + value
+        child_packet_campaign = (child.get("packet") or {}).get("campaign")
+        if (
+            not isinstance(child_packet_campaign, dict)
+            or (
+                child_packet_campaign.get("campaign_id"),
+                child_packet_campaign.get("value_unit"),
+            )
+            != campaign_identity
+        ):
+            raise ConductConflict("fanout child campaign identity does not match the root campaign")
+        authorized = [receipt for receipt in child.get("receipts", []) if receipt.get("mutation_authorized") is True]
+        if len(authorized) != 1:
+            raise ConductConflict("fanout campaign children require exactly one mutation-authorized receipt")
+        receipt = authorized[0]
+        receipt_campaign = receipt.get("campaign")
+        if (
+            not isinstance(receipt_campaign, dict)
+            or (
+                receipt_campaign.get("campaign_id"),
+                receipt_campaign.get("value_unit"),
+            )
+            != campaign_identity
+        ):
+            raise ConductConflict("fanout child receipt campaign identity does not match the root campaign")
+        child_campaigns.append(receipt_campaign)
+        for unit, value in (receipt.get("spend") or {}).items():
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                spend[unit] = spend.get(unit, 0) + value
     outputs = [item["output"] for item in child_campaigns]
     ceiling = int(campaign["output_ceiling_bytes"])
     output_summary = "".join(str(item["sha256"]) for item in outputs).encode()
@@ -124,7 +146,7 @@ def _fanout_campaign_evidence(
     typed = CampaignReceiptV1(
         campaign_id=campaign["campaign_id"],
         actual_value=sum(float(item.get("actual_value", 0)) for item in child_campaigns),
-        value_unit="predicate_passes",
+        value_unit=campaign["value_unit"],
         output=CampaignOutputEvidenceV1(
             output_ceiling_bytes=ceiling,
             bytes_emitted=len(emitted_summary),
@@ -141,7 +163,7 @@ def _fanout_campaign_evidence(
             if outcome != "succeeded"
             else None
         ),
-        successor_capsule=str(packet["receipt_target"]) if outcome != "succeeded" else None,
+        successor_capsule=str(campaign["successor_capsule"]) if outcome != "succeeded" else None,
         boundary="settled" if outcome == "succeeded" else "wait_relay",
     )
     return {"campaign": _dump(typed), "spend": spend}
@@ -1029,7 +1051,12 @@ class ConductBroker:
                 packet.campaign is not None
                 and receipt.campaign is not None
                 and receipt.campaign.campaign_id == packet.campaign.campaign_id
+                and receipt.campaign.value_unit == packet.campaign.value_unit
                 and receipt.campaign.output.output_ceiling_bytes == packet.campaign.output_ceiling_bytes
+                and (
+                    receipt.campaign.boundary not in {"switch", "wait_relay"}
+                    or receipt.campaign.successor_capsule == packet.campaign.successor_capsule
+                )
             )
             mutation_authorized = (
                 lease.state in {"reserved", "active"}
@@ -1339,6 +1366,19 @@ class ConductBroker:
             raise ConductConflict("only the owning conductor principal may submit a child")
         if packet.initiator != parent_packet.initiator:
             raise ConductConflict("child initiator must preserve the root initiator identity")
+        if (packet.campaign is None) != (parent_packet.campaign is None) or (
+            packet.campaign is not None
+            and parent_packet.campaign is not None
+            and (
+                packet.campaign.campaign_id,
+                packet.campaign.value_unit,
+            )
+            != (
+                parent_packet.campaign.campaign_id,
+                parent_packet.campaign.value_unit,
+            )
+        ):
+            raise ConductConflict("child campaign identity must match the parent campaign")
         if not parent_packet.authority.may_delegate:
             raise ConductConflict("parent authority does not permit delegation")
         if packet.depth != parent_packet.depth + 1 or packet.depth > parent_packet.fanout.max_depth:

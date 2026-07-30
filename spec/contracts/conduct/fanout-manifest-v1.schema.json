@@ -85,13 +85,23 @@
           "default": "limen.campaign_packet.v1",
           "title": "Schema Version",
           "type": "string"
+        },
+        "successor_capsule": {
+          "title": "Successor Capsule",
+          "type": "string"
+        },
+        "value_unit": {
+          "title": "Value Unit",
+          "type": "string"
         }
       },
       "required": [
         "campaign_id",
+        "value_unit",
         "failed_predicate",
         "owner",
         "next_action",
+        "successor_capsule",
         "output_ceiling_bytes"
       ],
       "title": "CampaignPacketV1",

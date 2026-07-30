@@ -132,9 +132,11 @@ function campaignPacket(campaignId = "github:organvm/limen:issue:1571") {
   return {
     schema_version: "limen.campaign_packet.v1",
     campaign_id: campaignId,
+    value_unit: "predicate_passes",
     failed_predicate: "python3 scripts/omega.sh --strict",
     owner: "github:organvm/limen:issue:1571",
     next_action: "Repair the typed failing rung and rerun its exact predicate",
+    successor_capsule: "git:organvm/limen:docs/continuations/campaign/README.md",
     output_ceiling_bytes: 4096,
   };
 }
@@ -742,13 +744,14 @@ test("atomic graph submission rolls back partial reservations and is idempotent"
 test("fanout graph serializes dependency claims and settles its keeper root", async () => {
   const codex = session("codex", { concurrency: 3 });
   const { service, store } = await serviceWith([codex]);
+  const campaign = { ...campaignPacket(), value_unit: "issues_closed" };
   const rootTemplate = await packet({
     workId: "fanout-root",
     conductor: codex.identity,
     resource: "task/fanout-root",
     effect: "read",
     spendLimit: 2,
-    campaign: campaignPacket(),
+    campaign,
   });
   const root = await validateWorkPacket({
     ...rootTemplate,
@@ -770,7 +773,7 @@ test("fanout graph serializes dependency claims and settles its keeper root", as
     rootRunId,
     depth: 1,
     spendLimit: 1,
-    campaign: campaignPacket(),
+    campaign,
   });
   const secondTemplate = await packet({
     workId: "fanout-second",
@@ -780,7 +783,7 @@ test("fanout graph serializes dependency claims and settles its keeper root", as
     rootRunId,
     depth: 1,
     spendLimit: 1,
-    campaign: campaignPacket(),
+    campaign,
   });
   const second = await validateWorkPacket({
     ...secondTemplate,
@@ -790,6 +793,26 @@ test("fanout graph serializes dependency claims and settles its keeper root", as
     },
     execution_hash: "",
   });
+  const mismatchedCampaigns = [
+    campaignPacket("github:organvm/limen:issue:other"),
+    { ...campaign, value_unit: "predicate_passes" },
+  ];
+  for (const [index, mismatchedCampaign] of mismatchedCampaigns.entries()) {
+    const foreign = await packet({
+      workId: `fanout-foreign-${index}`,
+      conductor: codex.identity,
+      resource: `task/fanout-foreign-${index}`,
+      parentRunId: rootRunId,
+      rootRunId,
+      depth: 1,
+      spendLimit: 1,
+      campaign: mismatchedCampaign,
+    });
+    await assert.rejects(
+      service.call("submit_graph", { packets: [root, foreign] }),
+      /campaign identity/,
+    );
+  }
   const submitted = await service.call("submit_graph", { packets: [root, first, second] });
   assert.deepEqual(submitted.runs.map((run) => run.status), ["reserved", "reserved", "waiting"]);
   const repeat = await service.call("submit_graph", { packets: [root, first, second] });
@@ -800,23 +823,35 @@ test("fanout graph serializes dependency claims and settles its keeper root", as
     const node = graph.nodes.find((candidate) => candidate.packet.work_id === workId);
     const lease = store.snapshot().leases[node.lease_id];
     const token = await leaseCapability(service, { lease });
-    return service.call("report", {
+    const receipt = {
+      run_id: node.run_id,
+      lease_id: lease.lease_id,
+      lease_generation: lease.generation,
+      executor: codex.identity,
+      observed_heads_before: { pr: "abc123" },
+      predicate: { command: "pytest -q", exit_code: 0 },
+      spend: { runs: 1 },
+      child_runs: [],
+      campaign: { ...campaignReceipt(), value_unit: "issues_closed" },
+      outcome: "succeeded",
+    };
+    const rejected = await service.call("report", {
       lease_id: lease.lease_id,
       capability_token: token,
       generation: lease.generation,
       receipt: validateReceipt({
-        receipt_id: `receipt-${workId}`,
-        run_id: node.run_id,
-        lease_id: lease.lease_id,
-        lease_generation: lease.generation,
-        executor: codex.identity,
-        observed_heads_before: { pr: "abc123" },
-        predicate: { command: "pytest -q", exit_code: 0 },
-        spend: { runs: 1 },
-        child_runs: [],
-        campaign: campaignReceipt(),
-        outcome: "succeeded",
+        ...receipt,
+        receipt_id: `receipt-${workId}-rejected`,
+        spend: { runs: 99 },
+        campaign: { ...receipt.campaign, actual_value: 50 },
       }, NOW),
+    });
+    assert.equal(rejected.mutation_authorized, false);
+    return service.call("report", {
+      lease_id: lease.lease_id,
+      capability_token: token,
+      generation: lease.generation,
+      receipt: validateReceipt({ ...receipt, receipt_id: `receipt-${workId}` }, NOW),
     });
   };
   await reportLeaf("fanout-first");
@@ -829,12 +864,13 @@ test("fanout graph serializes dependency claims and settles its keeper root", as
   const terminal = await service.call("harvest", { run_id: rootRunId });
   assert.deepEqual(terminal.by_status, { succeeded: 3 });
   assert.deepEqual(terminal.unharvested, []);
-  assert.equal(terminal.receipt_count, 3);
+  assert.equal(terminal.receipt_count, 5);
   const terminalGraph = await service.call("graph", { run_id: rootRunId });
   const rootReceipt = terminalGraph.nodes
     .find((node) => node.packet.work_id === "fanout-root").receipts[0];
   assert.deepEqual(rootReceipt.spend, { runs: 2 });
   assert.equal(rootReceipt.campaign.actual_value, 2);
+  assert.equal(rootReceipt.campaign.value_unit, "issues_closed");
   assert.equal(rootReceipt.campaign.boundary, "settled");
   assert.equal(rootReceipt.campaign.blocker, null);
   assert.equal(rootReceipt.campaign.successor_capsule, null);
@@ -1485,13 +1521,13 @@ test("campaign contract validation is bounded and backward compatible", async ()
   const codex = session("codex");
   const legacy = await packet({ workId: "legacy-campaignless", conductor: codex.identity });
   assert.equal(legacy.campaign, null);
-  const normalized = await validateWorkPacket({
+  const preserved = await validateWorkPacket({
     ...legacy,
     predicate: "  pytest -q  ",
     receipt_target: "  github:organvm/limen:pull-request:legacy-campaignless  ",
   });
-  assert.equal(normalized.predicate, "pytest -q");
-  assert.equal(normalized.receipt_target, "github:organvm/limen:pull-request:legacy-campaignless");
+  assert.equal(preserved.predicate, "  pytest -q  ");
+  assert.equal(preserved.receipt_target, "  github:organvm/limen:pull-request:legacy-campaignless  ");
 
   await assert.rejects(
     packet({
@@ -1741,6 +1777,10 @@ test("campaign receipts must match the packet identity and output ceiling", asyn
   assert.equal((await report(
     "receipt-campaign-wrong-ceiling",
     campaignReceipt("github:organvm/limen:issue:1571", 2048),
+  )).mutation_authorized, false);
+  assert.equal((await report(
+    "receipt-campaign-wrong-value-unit",
+    { ...campaignReceipt(), value_unit: "issues_closed" },
   )).mutation_authorized, false);
   assert.equal((await report("receipt-campaign-missing", null)).mutation_authorized, false);
   assert.equal((await report("receipt-campaign-valid", campaignReceipt())).mutation_authorized, true);

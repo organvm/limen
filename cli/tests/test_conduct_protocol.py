@@ -240,12 +240,18 @@ def test_run_receipt_schema_exposes_optional_campaign_compatibly() -> None:
     assert "campaign" not in schema["required"]
 
 
-def campaign_packet(campaign_id: str = "github:organvm/limen:issue:1571") -> CampaignPacketV1:
+def campaign_packet(
+    campaign_id: str = "github:organvm/limen:issue:1571",
+    *,
+    value_unit: str = "predicate_passes",
+) -> CampaignPacketV1:
     return CampaignPacketV1(
         campaign_id=campaign_id,
+        value_unit=value_unit,
         failed_predicate="python3 scripts/omega.sh --strict",
         owner="github:organvm/limen:issue:1571",
         next_action="Repair the typed failing rung and rerun its exact predicate",
+        successor_capsule="git:organvm/limen:docs/continuations/campaign/README.md",
         output_ceiling_bytes=4096,
     )
 
@@ -254,12 +260,13 @@ def campaign_receipt(
     campaign_id: str = "github:organvm/limen:issue:1571",
     *,
     output_ceiling_bytes: int = 4096,
+    value_unit: str = "predicate_passes",
     blocker: CampaignBlockerV1 | None = None,
 ) -> CampaignReceiptV1:
     return CampaignReceiptV1(
         campaign_id=campaign_id,
         actual_value=1,
-        value_unit="predicate_passes",
+        value_unit=value_unit,
         output=CampaignOutputEvidenceV1(
             output_ceiling_bytes=output_ceiling_bytes,
             bytes_emitted=2,
@@ -275,15 +282,15 @@ def test_campaign_contracts_are_bounded_and_legacy_packets_remain_readable() -> 
     conductor = identity("codex")
     legacy = packet(work_id="legacy-campaignless", conductor=conductor)
     assert legacy.campaign is None
-    normalized = WorkPacketV1.model_validate(
+    preserved = WorkPacketV1.model_validate(
         legacy.model_dump(mode="json")
         | {
             "predicate": "  pytest -q  ",
             "receipt_target": "  github:organvm/limen:pull-request:legacy-campaignless  ",
         }
     )
-    assert normalized.predicate == "pytest -q"
-    assert normalized.receipt_target == "github:organvm/limen:pull-request:legacy-campaignless"
+    assert preserved.predicate == "  pytest -q  "
+    assert preserved.receipt_target == "  github:organvm/limen:pull-request:legacy-campaignless  "
 
     with pytest.raises(ValueError, match="value/cost work loan"):
         packet(
@@ -867,6 +874,13 @@ def test_campaign_receipt_must_match_packet_identity_and_output_ceiling() -> Non
         )["mutation_authorized"]
         is False
     )
+    assert (
+        report(
+            "receipt-campaign-wrong-value-unit",
+            campaign_receipt(value_unit="issues_closed"),
+        )["mutation_authorized"]
+        is False
+    )
     assert report("receipt-campaign-missing", None)["mutation_authorized"] is False
     assert report("receipt-campaign-valid", campaign_receipt())["mutation_authorized"] is True
 
@@ -929,6 +943,39 @@ def test_graph_submission_is_atomic_and_idempotent() -> None:
     busy = broker.submit_graph((conflicting_root, conflicting_child), now=NOW)
     assert busy["status"] == "busy"
     assert broker.store.snapshot() == before
+
+
+def test_child_campaign_identity_must_match_parent() -> None:
+    codex = session("codex", concurrency=8)
+    broker = broker_with(codex)
+    root_packet = packet(
+        work_id="campaign-lineage-root",
+        conductor=codex.identity,
+        resource="task/campaign-lineage-root",
+        campaign=campaign_packet(),
+        effect="read",
+    )
+    root = broker.submit(root_packet, now=NOW)
+
+    mismatches = (
+        None,
+        campaign_packet("github:organvm/limen:issue:other"),
+        campaign_packet(value_unit="issues_closed"),
+    )
+    for index, child_campaign in enumerate(mismatches):
+        child = packet(
+            work_id=f"campaign-lineage-child-{index}",
+            conductor=codex.identity,
+            resource=f"task/campaign-lineage-child-{index}",
+            parent_run_id=root["run_id"],
+            root_run_id=root["run_id"],
+            depth=1,
+            spend_limit=1,
+            campaign=child_campaign,
+            effect="read",
+        )
+        with pytest.raises(ConductConflict, match="campaign identity"):
+            broker.submit(child, now=NOW)
 
 
 def test_unregistered_conductor_and_unknown_write_scope_fail_closed() -> None:

@@ -138,7 +138,7 @@ def _campaign_receipt(
         CampaignReceiptV1(
             campaign_id=campaign["campaign_id"],
             actual_value=actual_value,
-            value_unit="predicate_passes",
+            value_unit=campaign["value_unit"],
             output=CampaignOutputEvidenceV1(
                 output_ceiling_bytes=ceiling,
                 bytes_emitted=len(emitted),
@@ -1424,13 +1424,18 @@ def settle_exhausted_attempts(
             else "campaign deadline reached without an exact provider receipt"
         )
         deadline_boundary = deadline_imminent and not exhausted
+        campaign_packet = packet.get("campaign")
         summary, campaign = _campaign_receipt(
             packet,
             summary,
             actual_value=0,
             blocked=True,
             boundary="wait_relay" if deadline_boundary else "continue",
-            successor_capsule=str(packet["receipt_target"]) if deadline_boundary else None,
+            successor_capsule=(
+                str(campaign_packet["successor_capsule"])
+                if deadline_boundary and isinstance(campaign_packet, dict)
+                else None
+            ),
         )
         receipt = RunReceiptV1(
             receipt_id=f"receipt-exhausted-{node['run_id'].removeprefix('run-')[:24]}",

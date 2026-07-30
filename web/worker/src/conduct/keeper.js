@@ -90,14 +90,30 @@ async function fanoutCampaignEvidence(root, children, outcome) {
   const childCampaigns = [];
   const spend = {};
   for (const child of children) {
-    for (const receipt of child.receipts || []) {
-      if (receipt.campaign && typeof receipt.campaign === "object") {
-        childCampaigns.push(receipt.campaign);
-      }
-      for (const [unit, value] of Object.entries(receipt.spend || {})) {
-        if (typeof value === "number" && Number.isFinite(value)) {
-          spend[unit] = (spend[unit] || 0) + value;
-        }
+    const childPacketCampaign = child.packet?.campaign;
+    if (childPacketCampaign === null
+      || typeof childPacketCampaign !== "object"
+      || childPacketCampaign.campaign_id !== campaign.campaign_id
+      || childPacketCampaign.value_unit !== campaign.value_unit) {
+      throw new ConductError("fanout child campaign identity does not match the root campaign");
+    }
+    const authorized = (child.receipts || [])
+      .filter((receipt) => receipt.mutation_authorized === true);
+    if (authorized.length !== 1) {
+      throw new ConductError("fanout campaign children require exactly one mutation-authorized receipt");
+    }
+    const receipt = authorized[0];
+    const receiptCampaign = receipt.campaign;
+    if (receiptCampaign === null
+      || typeof receiptCampaign !== "object"
+      || receiptCampaign.campaign_id !== campaign.campaign_id
+      || receiptCampaign.value_unit !== campaign.value_unit) {
+      throw new ConductError("fanout child receipt campaign identity does not match the root campaign");
+    }
+    childCampaigns.push(receiptCampaign);
+    for (const [unit, value] of Object.entries(receipt.spend || {})) {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        spend[unit] = (spend[unit] || 0) + value;
       }
     }
   }
@@ -111,7 +127,7 @@ async function fanoutCampaignEvidence(root, children, outcome) {
       schema_version: "limen.campaign_receipt.v1",
       campaign_id: campaign.campaign_id,
       actual_value: childCampaigns.reduce((total, item) => total + Number(item.actual_value || 0), 0),
-      value_unit: "predicate_passes",
+      value_unit: campaign.value_unit,
       output: {
         schema_version: "limen.campaign_output_evidence.v1",
         output_ceiling_bytes: ceiling,
@@ -126,7 +142,7 @@ async function fanoutCampaignEvidence(root, children, outcome) {
         failed_predicate: campaign.failed_predicate,
         next_action: campaign.next_action,
       },
-      successor_capsule: outcome === "succeeded" ? null : packet.receipt_target,
+      successor_capsule: outcome === "succeeded" ? null : campaign.successor_capsule,
       boundary: outcome === "succeeded" ? "settled" : "wait_relay",
     },
   };
@@ -1125,8 +1141,11 @@ export class ConductKernel {
       || (packetCampaign !== null
         && receiptCampaign !== null
         && packetCampaign.campaign_id === receiptCampaign.campaign_id
+        && packetCampaign.value_unit === receiptCampaign.value_unit
         && packetCampaign.output_ceiling_bytes
-          === receiptCampaign.output.output_ceiling_bytes);
+          === receiptCampaign.output.output_ceiling_bytes
+        && (!["switch", "wait_relay"].includes(receiptCampaign.boundary)
+          || packetCampaign.successor_capsule === receiptCampaign.successor_capsule));
     const predicateAuthorized = receipt.predicate.command === packet.predicate
       && (receipt.outcome !== "succeeded" || receipt.predicate.exit_code === 0);
     const mutationAuthorized = ACTIVE_LEASE_STATES.has(lease.state)
@@ -1419,6 +1438,15 @@ export class ConductKernel {
     }
     if (!identitiesEqual(packet.initiator, parentPacket.initiator)) {
       throw new ConductError("child initiator must preserve the root initiator identity");
+    }
+    const childCampaign = packet.campaign ?? null;
+    const parentCampaign = parentPacket.campaign ?? null;
+    if ((childCampaign === null) !== (parentCampaign === null)
+      || (childCampaign !== null
+        && parentCampaign !== null
+        && (childCampaign.campaign_id !== parentCampaign.campaign_id
+          || childCampaign.value_unit !== parentCampaign.value_unit))) {
+      throw new ConductError("child campaign identity must match the parent campaign");
     }
     if (!parentPacket.authority.may_delegate) throw new ConductError("parent authority does not permit delegation");
     if (packet.depth !== parentPacket.depth + 1 || packet.depth > parentPacket.fanout.max_depth) {

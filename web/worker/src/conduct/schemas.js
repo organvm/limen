@@ -196,8 +196,8 @@ export async function validateWorkPacket(payload) {
   if (packet.authority.path_prefixes.some((path) => typeof path !== "string" || path.length > 4096 || path.includes("\0"))) {
     fail("authority.path_prefixes must be bounded strings without NUL");
   }
-  packet.predicate = assertBoundedText(packet.predicate, "predicate");
-  packet.receipt_target = assertBoundedText(packet.receipt_target, "receipt_target");
+  assertBoundedText(packet.predicate, "predicate");
+  assertBoundedText(packet.receipt_target, "receipt_target");
   assertDate(packet.deadline, "deadline");
   if (packet.spend.reserve > packet.spend.limit) fail("spend reserve cannot exceed limit");
   if (packet.parent_run_id === null && packet.depth !== 0) fail("root work packet depth must be zero");
@@ -209,7 +209,8 @@ export async function validateWorkPacket(payload) {
     if (packet.work_loan === null) fail("campaign work packets require a value/cost work loan");
     if (!packet.authority.actions.length) fail("campaign work packets require an explicit authority scope");
     assertIdentifier(packet.campaign.campaign_id, "campaign.campaign_id");
-    for (const field of ["failed_predicate", "owner", "next_action"]) {
+    assertIdentifier(packet.campaign.value_unit, "campaign.value_unit");
+    for (const field of ["failed_predicate", "owner", "next_action", "successor_capsule"]) {
       packet.campaign[field] = assertBoundedText(packet.campaign[field], `campaign.${field}`);
     }
   }

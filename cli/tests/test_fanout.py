@@ -114,13 +114,16 @@ def campaign_context(
     *,
     failed_predicate: str = "python3 scripts/omega.sh --strict",
     owner: str = "github:organvm/limen:issue:1571",
+    value_unit: str = "predicate_passes",
 ) -> dict:
     return {
         "schema_version": "limen.campaign_packet.v1",
         "campaign_id": "github:organvm/limen:issue:1571",
+        "value_unit": value_unit,
         "failed_predicate": failed_predicate,
         "owner": owner,
         "next_action": "Repair the typed failing rung and rerun its exact predicate",
+        "successor_capsule": "git:organvm/limen:docs/continuations/campaign/README.md",
         "output_ceiling_bytes": 4096,
     }
 
@@ -270,7 +273,8 @@ def test_campaign_deadline_emits_wait_relay_successor_boundary() -> None:
     assert client.reported is not None
     assert client.reported.campaign is not None
     assert client.reported.campaign.boundary == "wait_relay"
-    assert client.reported.campaign.successor_capsule == packet["receipt_target"]
+    assert client.reported.campaign.successor_capsule == packet["campaign"]["successor_capsule"]
+    assert client.reported.campaign.successor_capsule != packet["receipt_target"]
 
 
 def session(
@@ -599,8 +603,8 @@ def test_keeper_serializes_overlapping_dependencies_and_settles_campaign(
     monkeypatch,
 ) -> None:
     payload = manifest_payload()
-    payload["campaign"] = campaign_context()
-    payload["leaves"][0]["campaign"] = campaign_context()
+    payload["campaign"] = campaign_context(value_unit="issues_closed")
+    payload["leaves"][0]["campaign"] = campaign_context(value_unit="issues_closed")
     second = deepcopy(payload["leaves"][0])
     second.update(
         {
@@ -692,6 +696,23 @@ def test_keeper_serializes_overlapping_dependencies_and_settles_campaign(
             campaign=_campaign_receipt(node["packet"], work_id, actual_value=1)[1],
             outcome="succeeded",
         )
+        assert receipt.campaign is not None
+        rejected = receipt.model_copy(
+            update={
+                "receipt_id": f"receipt-{work_id}-rejected",
+                "spend": {"runs": 99},
+                "campaign": receipt.campaign.model_copy(update={"actual_value": 50}),
+            }
+        )
+        assert (
+            keeper.report(
+                lease["lease_id"],
+                claimed["capability_token"],
+                rejected,
+                generation=lease["generation"],
+            )["mutation_authorized"]
+            is False
+        )
         keeper.report(
             lease["lease_id"],
             claimed["capability_token"],
@@ -702,12 +723,13 @@ def test_keeper_serializes_overlapping_dependencies_and_settles_campaign(
     terminal = keeper.harvest(started["root_run_id"])
     assert terminal["unharvested"] == []
     assert terminal["by_status"] == {"succeeded": 3}
-    assert terminal["receipt_count"] == 3
+    assert terminal["receipt_count"] == 5
     terminal_graph = keeper.graph(started["root_run_id"])
     root = next(item for item in terminal_graph["nodes"] if item["packet"]["work_id"] == "campaign")
     root_receipt = root["receipts"][0]
     assert root_receipt["spend"] == {"runs": 2}
     assert CampaignReceiptV1.model_validate(root_receipt["campaign"]).actual_value == 2
+    assert root_receipt["campaign"]["value_unit"] == "issues_closed"
     assert root_receipt["campaign"]["boundary"] == "settled"
     assert root_receipt["campaign"]["blocker"] is None
     assert root_receipt["campaign"]["successor_capsule"] is None

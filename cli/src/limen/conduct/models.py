@@ -193,17 +193,19 @@ class CampaignPacketV1(ProtocolModel):
 
     schema_version: Literal["limen.campaign_packet.v1"] = "limen.campaign_packet.v1"
     campaign_id: str
+    value_unit: str
     failed_predicate: str
     owner: str
     next_action: str
+    successor_capsule: str
     output_ceiling_bytes: int = Field(gt=0, le=10_485_760)
 
-    @field_validator("campaign_id")
+    @field_validator("campaign_id", "value_unit")
     @classmethod
-    def validate_campaign_id(cls, value: str) -> str:
-        return _identifier(value, "campaign_id")
+    def validate_identifiers(cls, value: str, info) -> str:
+        return _identifier(value, info.field_name)
 
-    @field_validator("failed_predicate", "owner", "next_action")
+    @field_validator("failed_predicate", "owner", "next_action", "successor_capsule")
     @classmethod
     def validate_bounded_text(cls, value: str, info) -> str:
         return _bounded_text(value, info.field_name)
@@ -259,7 +261,10 @@ class WorkPacketV1(ProtocolModel):
     @field_validator("predicate", "receipt_target")
     @classmethod
     def validate_contract_text(cls, value: str, info) -> str:
-        return _bounded_text(value, info.field_name)
+        if len(value) > 8192:
+            raise ValueError(f"{info.field_name} must be a non-empty bounded string")
+        _bounded_text(value, info.field_name)
+        return value
 
     @model_validator(mode="after")
     def validate_hashes_and_shape(self) -> "WorkPacketV1":
