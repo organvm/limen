@@ -10,7 +10,7 @@
       "target": "library/engine/organvm/limen"
     },
     {
-      "active_cwd_count": 1,
+      "active_cwd_count": 0,
       "ambiguous_cwd_count": 0,
       "correct": false,
       "expired": false,
@@ -34,7 +34,7 @@
     "private_roots": 4,
     "repositories": 1,
     "unmeasured": 0,
-    "violations": 78
+    "violations": 77
   },
   "ephemeral_roots": [
     {
@@ -107,7 +107,7 @@
     },
     {
       "code": "residue_cap_breached",
-      "message": "violations=76 exceeds max_violations=0",
+      "message": "violations=75 exceeds max_violations=0",
       "path": "."
     },
     {
@@ -304,11 +304,6 @@
       "code": "undeclared_entry",
       "message": "entry has no Workspace manifest row",
       "path": "composition-projects"
-    },
-    {
-      "code": "active_legacy_path",
-      "message": "1 active process cwd(s) still depend on this compatibility path",
-      "path": "domus-genoma"
     },
     {
       "code": "compatibility_link_mismatch",
