@@ -1,0 +1,37 @@
+{
+  "schema": "limen.omega_substrate_producer_closeout.v1",
+  "owners": [
+    {
+      "name": "limen",
+      "repository": "organvm/limen",
+      "pull_request": 1705,
+      "head": "f77931aa67af8febb98e8a0a43030d3a9836f0a2"
+    },
+    {
+      "name": "portvs",
+      "repository": "organvm/portvs",
+      "pull_request": 6,
+      "head": "bffd599f0ab114917bade162f609772a345f696e"
+    },
+    {
+      "name": "domus",
+      "repository": "organvm/domus-genoma",
+      "pull_request": 361,
+      "head": "c31d1e97e5053ee5330715f78484c1498ff6ed33"
+    }
+  ],
+  "successor": {
+    "branch": "work/omega-substrate-convergence-next",
+    "receipt": "docs/continuations/omega-substrate-convergence-next/workstream.json",
+    "private_capsule": ".limen-workstream"
+  },
+  "protected_session_receipt": {
+    "scope": "machine-private",
+    "expected_sessions": 2,
+    "required_mode": "0600"
+  },
+  "live_migration_owner": {
+    "registry": "docs/continuations/omega-substrate-literal/migration-blockers.json",
+    "terminal_predicate": "docs/continuations/omega-substrate-convergence-next/completion-predicate.sh"
+  }
+}
