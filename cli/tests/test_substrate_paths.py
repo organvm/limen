@@ -69,4 +69,9 @@ def test_continuation_launcher_derives_canonical_limen_root() -> None:
 
     assert "$HOME/Workspace/limen/.worktrees" not in readme
     assert 'workspace_root="${WORKSPACE_ROOT:-$HOME/Workspace}"' in readme
-    assert 'limen_root="${LIMEN_ROOT:-$workspace_root/library/engine/organvm/limen}"' in readme
+    assert 'canonical_limen_root="${LIMEN_ROOT:-$workspace_root/library/engine/organvm/limen}"' in readme
+    assert 'canonical_capsule="$canonical_limen_root/.worktrees/omega-substrate-literal"' in readme
+    assert 'legacy_capsule="$workspace_root/limen/.worktrees/omega-substrate-literal"' in readme
+    assert readme.index('if [[ -x "$canonical_capsule/.limen-workstream/kickstart.sh" ]]') < readme.index(
+        'elif [[ -x "$legacy_capsule/.limen-workstream/kickstart.sh" ]]'
+    )
