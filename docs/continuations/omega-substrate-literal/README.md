@@ -92,5 +92,7 @@ the current receipt set; do not rerun unchanged successful shards.
 ## Launch
 
 ```bash
-cd "$HOME/Workspace/limen/.worktrees/omega-substrate-literal" && bash .limen-workstream/kickstart.sh
+workspace_root="${WORKSPACE_ROOT:-$HOME/Workspace}"
+limen_root="${LIMEN_ROOT:-$workspace_root/library/engine/organvm/limen}"
+cd "$limen_root/.worktrees/omega-substrate-literal" && bash .limen-workstream/kickstart.sh
 ```

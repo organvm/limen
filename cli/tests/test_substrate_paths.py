@@ -61,3 +61,12 @@ def test_historical_docs_and_tests_are_not_executable_consumers(tmp_path: Path) 
         path.mkdir(parents=True)
         (path / "history.md").write_text("~/Workspace/limen\n", encoding="utf-8")
     assert find_legacy_references(tmp_path) == []
+
+
+def test_continuation_launcher_derives_canonical_limen_root() -> None:
+    root = Path(__file__).resolve().parents[2]
+    readme = (root / "docs" / "continuations" / "omega-substrate-literal" / "README.md").read_text(encoding="utf-8")
+
+    assert "$HOME/Workspace/limen/.worktrees" not in readme
+    assert 'workspace_root="${WORKSPACE_ROOT:-$HOME/Workspace}"' in readme
+    assert 'limen_root="${LIMEN_ROOT:-$workspace_root/library/engine/organvm/limen}"' in readme

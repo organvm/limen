@@ -73,6 +73,10 @@ LIMEN_ROOT = Path(
     os.environ.get("LIMEN_ROOT", str(WORKSPACE_ROOT / "library" / "engine" / "organvm" / "limen"))
 ).resolve()
 sys.path.insert(0, str(LIMEN_ROOT / "cli" / "src"))
+from limen.repository_ignored import (  # noqa: E402
+    ignored_entries_from_porcelain,
+    ignored_entry_is_regenerable,
+)
 from limen.resource_envelope import current_required_free_gib  # noqa: E402
 
 LOG = LIMEN_ROOT / "logs" / "reap-clones.jsonl"
@@ -91,13 +95,6 @@ EXCLUDE_MARKERS = (".claude/worktrees", ".limen-worktrees", ".home-cartridge", "
 # dir) that lives on NO remote. `git status --porcelain` hides all ignored files, so we enumerate them
 # with --ignored and reap only when EVERY ignored entry's top path component is a known-regenerable dir
 # (or a regenerable-suffixed top-level file). Anything else → KEEP (the ignored-file data-loss class).
-REGENERABLE_DIRS = set(
-    "node_modules .venv venv .venv-demucs __pycache__ .pytest_cache .mypy_cache .ruff_cache "
-    ".tox dist build .next .nuxt .svelte-kit .astro .turbo .parcel-cache .vercel .wrangler "
-    ".gradle coverage .nyc_output .eggs .ipynb_checkpoints".split()
-)
-REGENERABLE_SUFFIXES = (".pyc", ".pyo")
-REGENERABLE_FILES = {".DS_Store"}
 _ACTIVE_PROCESS_CWDS: dict[Path, int] = {}
 
 # Non-interactive git: fail (→ fail-safe KEEP) rather than block on a credential/GUI prompt.
@@ -239,21 +236,8 @@ def _ignored_is_all_regenerable(repo: Path) -> bool:
     `local.db`, `data/`) is treated as irreplaceable → not-all-regenerable → the caller KEEPS the clone.
     A quoted/exotic path never matches the allowlist, so it also fails safe (KEEP).
     """
-    out = _run(["git", "-C", str(repo), "status", "--porcelain", "--ignored"])
-    for line in out.splitlines():
-        if not line.startswith("!! "):
-            continue
-        path = line[3:].strip().strip('"').rstrip("/")
-        if not path:
-            return False
-        top = path.split("/", 1)[0]
-        base = path.rsplit("/", 1)[-1]
-        if top in REGENERABLE_DIRS:
-            continue
-        if "/" not in path and (base in REGENERABLE_FILES or base.endswith(REGENERABLE_SUFFIXES)):
-            continue
-        return False  # an ignored entry we cannot prove regenerable → not loss-free
-    return True
+    out = _run(["git", "-C", str(repo), "status", "--porcelain=v1", "-z", "--ignored=matching"])
+    return all(ignored_entry_is_regenerable(path) for path in ignored_entries_from_porcelain(out))
 
 
 def _nested_context_reason(repo: Path) -> str | None:
@@ -528,8 +512,10 @@ def main() -> int:
     free_gib = disk_free_gib(WORKSPACE)
     # Pressure waives only the idle age, never a preservation predicate. Percent
     # remains display-only; the live envelope is the sole storage authority.
-    pressure = args.pressure if args.pressure is not None else (
-        required_free is None or free_gib is None or free_gib < required_free
+    pressure = (
+        args.pressure
+        if args.pressure is not None
+        else (required_free is None or free_gib is None or free_gib < required_free)
     )
     active = active_task_slugs(LIMEN_ROOT / "tasks.yaml")
     now = time.time()

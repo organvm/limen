@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 from datetime import UTC, datetime
+import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -21,14 +23,34 @@ from limen.substrate_convergence import (  # noqa: E402
 
 
 def default_manifest() -> Path:
-    import os
-
     if value := os.environ.get("PORTVS_WORKSPACE_MANIFEST"):
         return Path(value).expanduser()
     if value := os.environ.get("PORTVS_ROOT"):
         return Path(value).expanduser() / "governance" / "workspace-manifest.yaml"
     workspace_root = Path(os.environ.get("WORKSPACE_ROOT", str(Path.home() / "Workspace"))).expanduser()
     return workspace_root / "library" / "engine" / "organvm" / "portvs" / "governance" / "workspace-manifest.yaml"
+
+
+def canonical_live_workspace_root() -> Path:
+    configured = os.environ.get("WORKSPACE_ROOT", str(Path.home() / "Workspace"))
+    return Path(os.path.abspath(os.path.expandvars(configured))).expanduser()
+
+
+def prepare_receipt_report(report: dict[str, object]) -> dict[str, object]:
+    """Redact only the canonical live root while preserving its audited identity."""
+
+    result = dict(report)
+    audited_root = Path(str(report["workspace_root"]))
+    identity = report.get("workspace_root_identity")
+    expected_hash = hashlib.sha256(str(audited_root).encode("utf-8")).hexdigest()
+    if not isinstance(identity, dict) or identity.get("lexical_sha256") != expected_hash:
+        raise ManifestError("workspace root identity does not match the audited root")
+    canonical_root = canonical_live_workspace_root()
+    is_canonical_live = audited_root == canonical_root
+    result["workspace_root_is_canonical_live"] = is_canonical_live
+    if is_canonical_live:
+        result["workspace_root"] = "$WORKSPACE_ROOT"
+    return result
 
 
 def main() -> int:
@@ -59,8 +81,7 @@ def main() -> int:
 
     if args.receipt:
         args.receipt.parent.mkdir(parents=True, exist_ok=True)
-        receipt_report = dict(report)
-        receipt_report["workspace_root"] = "$WORKSPACE_ROOT"
+        receipt_report = prepare_receipt_report(report)
         rendered = json.dumps(receipt_report, indent=2, sort_keys=True) + "\n"
         if not args.receipt.exists() or args.receipt.read_text(encoding="utf-8") != rendered:
             args.receipt.write_text(rendered, encoding="utf-8")

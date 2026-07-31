@@ -486,5 +486,11 @@
       "path": "vision-board-restore"
     }
   ],
-  "workspace_root": "$WORKSPACE_ROOT"
+  "workspace_root": "$WORKSPACE_ROOT",
+  "workspace_root_identity": {
+    "device": 16777230,
+    "inode": 328407439,
+    "lexical_sha256": "6a038fbe7c51d2d92294fcfe9cb4a99f81bc72223cde93d80dd596f46a3aa97f"
+  },
+  "workspace_root_is_canonical_live": true
 }
