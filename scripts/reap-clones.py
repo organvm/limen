@@ -58,6 +58,14 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
+CHECKOUT_ROOT = SCRIPT_DIR.parent
+CHECKOUT_CLI_SRC = CHECKOUT_ROOT / "cli" / "src"
+if str(CHECKOUT_CLI_SRC) not in sys.path:
+    # Import the implementation paired with this executable.  LIMEN_ROOT owns
+    # live state, but its canonical destination may intentionally be empty
+    # during the additive cutover while this checkout remains the executable
+    # compatibility source.
+    sys.path.insert(0, str(CHECKOUT_CLI_SRC))
 
 from reap_acceptance import (  # noqa: E402
     REQUIRED_ACCEPTANCE_PROOF_FIELDS as SHARED_REQUIRED_ACCEPTANCE_PROOF_FIELDS,
@@ -72,7 +80,6 @@ WORKSPACE = Path(os.environ.get("LIMEN_WORKSPACE", str(WORKSPACE_ROOT)))
 LIMEN_ROOT = Path(
     os.environ.get("LIMEN_ROOT", str(WORKSPACE_ROOT / "library" / "engine" / "organvm" / "limen"))
 ).resolve()
-sys.path.insert(0, str(LIMEN_ROOT / "cli" / "src"))
 from limen.repository_ignored import (  # noqa: E402
     ignored_entries_from_porcelain,
     ignored_entry_is_regenerable,

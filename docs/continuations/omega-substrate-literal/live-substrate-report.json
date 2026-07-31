@@ -1,7 +1,7 @@
 {
   "compatibility_links": [
     {
-      "active_cwd_count": 15,
+      "active_cwd_count": 14,
       "ambiguous_cwd_count": 0,
       "correct": false,
       "expired": false,
@@ -10,7 +10,7 @@
       "target": "library/engine/organvm/limen"
     },
     {
-      "active_cwd_count": 0,
+      "active_cwd_count": 1,
       "ambiguous_cwd_count": 0,
       "correct": false,
       "expired": false,
@@ -34,7 +34,7 @@
     "private_roots": 4,
     "repositories": 1,
     "unmeasured": 0,
-    "violations": 77
+    "violations": 78
   },
   "ephemeral_roots": [
     {
@@ -107,7 +107,7 @@
     },
     {
       "code": "residue_cap_breached",
-      "message": "violations=75 exceeds max_violations=0",
+      "message": "violations=76 exceeds max_violations=0",
       "path": "."
     },
     {
@@ -306,6 +306,11 @@
       "path": "composition-projects"
     },
     {
+      "code": "active_legacy_path",
+      "message": "1 active process cwd(s) still depend on this compatibility path",
+      "path": "domus-genoma"
+    },
+    {
       "code": "compatibility_link_mismatch",
       "message": "link must resolve to library/engine/organvm/domus-genoma",
       "path": "domus-genoma"
@@ -367,7 +372,7 @@
     },
     {
       "code": "active_legacy_path",
-      "message": "15 active process cwd(s) still depend on this compatibility path",
+      "message": "14 active process cwd(s) still depend on this compatibility path",
       "path": "limen"
     },
     {
