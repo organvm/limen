@@ -44,7 +44,7 @@ from pathlib import Path
 
 import yaml
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
 
 # --- reuse the GitHub state probe from verify-dispatch (single source) ---------------------------
 # verify-dispatch.py has a hyphen (not import-able by name); load it by path and lift gh_pr_state +

@@ -4,8 +4,8 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/organvm/limen/main/install.sh | bash
 #
-# Clones the limen repo, creates ~/limen symlink, installs Python CLI,
-# and optionally installs legacy host PATH/wrapper conveniences.
+# Clones the limen repo into its manifest-owned engine container, installs the
+# Python CLI, and optionally installs legacy host PATH/wrapper conveniences.
 set -euo pipefail
 
 HOST_MUTATION="${LIMEN_INSTALL_HOST_MUTATION:-0}"
@@ -41,8 +41,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 LIMEN_SOURCE="${LIMEN_SOURCE:-https://github.com/organvm/limen.git}"
-LIMEN_TARGET="${LIMEN_TARGET:-$HOME/Workspace/limen}"
-LIMEN_LINK="${LIMEN_LINK:-$HOME/limen}"
+LIMEN_TARGET="${LIMEN_TARGET:-${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen}"
 LIMEN_CLI="${LIMEN_TARGET}/cli"
 
 echo "==> limen installer"
@@ -57,17 +56,7 @@ else
   git clone "$LIMEN_SOURCE" "$LIMEN_TARGET"
 fi
 
-# 2. Create symlink
-if [[ -L "$LIMEN_LINK" ]]; then
-  echo "  symlink $LIMEN_LINK already exists"
-elif [[ -e "$LIMEN_LINK" ]]; then
-  echo "  WARNING: $LIMEN_LINK exists and is not a symlink — skipping"
-else
-  ln -s "$LIMEN_TARGET" "$LIMEN_LINK"
-  echo "  symlink $LIMEN_LINK -> $LIMEN_TARGET"
-fi
-
-# 3. Install Python CLI
+# 2. Install Python CLI
 if command -v python3 &>/dev/null; then
   echo "  installing Python CLI"
   python3 -m venv "${LIMEN_CLI}/.venv"
@@ -77,15 +66,17 @@ else
   echo "  WARNING: python3 not found — skipping CLI install"
 fi
 
-# 4. Optional legacy host mutation
+# 3. Optional legacy host mutation
 LIMEN_BIN="${LIMEN_CLI}/.venv/bin"
 USER_BIN="${HOME}/.local/bin"
-LIMEN_ENV_LINE='export LIMEN_ROOT="$HOME/limen"'
+LIMEN_ENV_LINE='export WORKSPACE_ROOT="$HOME/Workspace"
+export LIMEN_ROOT="$WORKSPACE_ROOT/library/engine/organvm/limen"'
+LIMEN_LEGACY_ENV_LINE='export LIMEN_ROOT="$HOME/limen"'
 LIMEN_PATH_LINE="export PATH=\"${USER_BIN}:${LIMEN_BIN}:\$PATH\""
 ZSHRC="${ZDOTDIR:-$HOME}/.zshenv"
 
 if [[ "$HOST_MUTATION" == "1" || "$HOST_MUTATION" == "true" ]]; then
-  mkdir -p "$USER_BIN"
+  mkdir -p "$USER_BIN" "$(dirname "$ZSHRC")"
   cat >"${USER_BIN}/limen" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
@@ -98,10 +89,25 @@ exec "${LIMEN_BIN}/limen" workstream "\$@"
 EOF
   chmod +x "${USER_BIN}/limen" "${USER_BIN}/workstream"
   echo "  installed wrappers at ${USER_BIN}/limen and ${USER_BIN}/workstream"
-  if grep -q 'LIMEN_ROOT' "$ZSHRC" 2>/dev/null; then
+  if grep -qxF "$LIMEN_LEGACY_ENV_LINE" "$ZSHRC" 2>/dev/null; then
+    limen_env_tmp="$(mktemp "${ZSHRC}.limen.XXXXXX")"
+    cp -p "$ZSHRC" "$limen_env_tmp"
+    : >"$limen_env_tmp"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ "$line" == "$LIMEN_LEGACY_ENV_LINE" ]] || printf '%s\n' "$line" >>"$limen_env_tmp"
+    done <"$ZSHRC"
+    if ! grep -Eq '^[[:space:]]*(export[[:space:]]+)?LIMEN_ROOT=' "$limen_env_tmp"; then
+      if ! grep -Eq '^[[:space:]]*(export[[:space:]]+)?WORKSPACE_ROOT=' "$limen_env_tmp"; then
+        printf '%s\n' 'export WORKSPACE_ROOT="$HOME/Workspace"' >>"$limen_env_tmp"
+      fi
+      printf '%s\n' 'export LIMEN_ROOT="$WORKSPACE_ROOT/library/engine/organvm/limen"' >>"$limen_env_tmp"
+    fi
+    mv "$limen_env_tmp" "$ZSHRC"
+    echo "  migrated installer-owned legacy LIMEN_ROOT in $ZSHRC"
+  elif grep -Eq '^[[:space:]]*(export[[:space:]]+)?LIMEN_ROOT=' "$ZSHRC" 2>/dev/null; then
     echo "  LIMEN_ROOT already set in $ZSHRC"
   else
-    echo "$LIMEN_ENV_LINE" >>"$ZSHRC"
+    printf '%s\n' "$LIMEN_ENV_LINE" >>"$ZSHRC"
     echo "  added LIMEN_ROOT to $ZSHRC"
   fi
   if grep -qF "$LIMEN_BIN" "$ZSHRC" 2>/dev/null; then

@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+from limen.worktree_layout import canonical_workspace_root
+
 
 @dataclass(frozen=True)
 class WorktreeTarget:
@@ -36,6 +38,7 @@ SKIP_DIR_NAMES = {
     "site-packages",
     "vendor",
 }
+CANONICAL_RUNTIME_MIN_AGE_H = 168.0
 
 
 def _flag(name: str, default: bool) -> bool:
@@ -87,6 +90,23 @@ def effective_worktree_root() -> Path:
     if explicit:
         return Path(explicit).expanduser()
     return default_worktrees_root()
+
+
+def canonical_runtime_worktree_root() -> Path:
+    """Physical two-level lifecycle root declared by the Workspace manifest."""
+
+    return canonical_workspace_root() / "runtime" / "worktrees"
+
+
+def is_canonical_runtime_unit(path: Path) -> bool:
+    """Return whether ``path`` is one physical ``<repo-key>/<slug>`` unit."""
+
+    try:
+        resolved = path.expanduser().resolve(strict=False)
+        root = canonical_runtime_worktree_root().resolve(strict=False)
+    except OSError:
+        return False
+    return resolved.parent.parent == root
 
 
 def _existing_ancestor(path: Path) -> Path | None:
@@ -174,6 +194,106 @@ def _children(root: Path, min_age_h: float, source: str, *, strict: bool = False
         for path in children
         if _inventory_is_dir(path, strict=strict, source=f"child of {source}")
     ]
+
+
+def _physical_inventory_dir(path: Path, *, strict: bool, source: str) -> bool:
+    """Reject symlink traversal while inventorying the canonical runtime tree."""
+
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        if strict:
+            raise WorktreeInventoryError(f"cannot stat {source} {path}: {exc}") from exc
+        return False
+    if stat.S_ISLNK(info.st_mode):
+        if strict:
+            raise WorktreeInventoryError(f"{source} must be a physical directory: {path}")
+        return False
+    if not stat.S_ISDIR(info.st_mode):
+        if strict:
+            raise WorktreeInventoryError(f"{source} must be a directory: {path}")
+        return False
+    return True
+
+
+def _canonical_runtime_units(
+    root: Path,
+    min_age_h: float,
+    *,
+    strict: bool = False,
+) -> list[WorktreeTarget]:
+    """Enumerate ``<repo-key>/<slug>`` units without treating namespaces as targets."""
+
+    workspace = root.parent.parent
+    chain = (
+        (workspace, "canonical Workspace root"),
+        (workspace / "runtime", "canonical runtime root"),
+        (root, "canonical runtime worktree root"),
+    )
+    for candidate, source in chain:
+        if not _physical_inventory_dir(candidate, strict=strict, source=source):
+            return []
+    try:
+        namespaces = sorted(root.iterdir())
+    except OSError as exc:
+        if strict:
+            raise WorktreeInventoryError(f"cannot enumerate canonical runtime worktree root {root}: {exc}") from exc
+        return []
+
+    targets: list[WorktreeTarget] = []
+    for namespace in namespaces:
+        if not _physical_inventory_dir(
+            namespace,
+            strict=strict,
+            source="canonical runtime repository namespace",
+        ):
+            continue
+        try:
+            units = sorted(namespace.iterdir())
+        except OSError as exc:
+            if strict:
+                raise WorktreeInventoryError(
+                    f"cannot enumerate canonical runtime repository namespace {namespace}: {exc}"
+                ) from exc
+            continue
+        targets.extend(
+            WorktreeTarget(
+                path=unit,
+                min_age_h=min_age_h,
+                source=f"canonical-runtime-worktree:{namespace.name}",
+            )
+            for unit in units
+            if _physical_inventory_dir(
+                unit,
+                strict=strict,
+                source="canonical runtime worktree unit",
+            )
+        )
+    return targets
+
+
+def _same_inventory_root(left: Path, right: Path) -> bool:
+    try:
+        return left.resolve(strict=False) == right.resolve(strict=False)
+    except OSError:
+        return Path(os.path.abspath(left.expanduser())) == Path(os.path.abspath(right.expanduser()))
+
+
+def _flat_children(
+    root: Path,
+    min_age_h: float,
+    source: str,
+    *,
+    canonical_root: Path,
+    strict: bool,
+) -> list[WorktreeTarget]:
+    """Keep the canonical two-level root out of every flat legacy inventory rail."""
+
+    if _same_inventory_root(root, canonical_root):
+        return []
+    return _children(root, min_age_h, source, strict=strict)
 
 
 def _discover_repo_local_roots(limen_root: Path, *, strict: bool = False) -> list[Path]:
@@ -345,25 +465,38 @@ def iter_worktree_targets(limen_root: Path | None = None, *, strict: bool = Fals
     unreadable configured scope or failed registered-repo query means inventory is incomplete and
     must block new local creation or a false zero-debt verdict.
     """
-    root = limen_root or Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+    root = limen_root or Path(
+        os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen")
+    )
 
     targets: list[WorktreeTarget] = []
     dispatch_root = effective_worktree_root()
+    min_age_h = _float_env("LIMEN_RECLAIM_MIN_AGE_H", 6)
+    canonical_root = canonical_runtime_worktree_root()
     targets.extend(
-        _children(
+        _canonical_runtime_units(
+            canonical_root,
+            _float_env("LIMEN_RECLAIM_CANONICAL_AGE_H", CANONICAL_RUNTIME_MIN_AGE_H),
+            strict=strict,
+        )
+    )
+    targets.extend(
+        _flat_children(
             dispatch_root,
-            _float_env("LIMEN_RECLAIM_MIN_AGE_H", 6),
+            min_age_h,
             "dispatch-root",
+            canonical_root=canonical_root,
             strict=strict,
         )
     )
     clone_cache = dispatch_clone_cache_root()
     if clone_cache is not None:
         targets.extend(
-            _children(
+            _flat_children(
                 clone_cache,
-                _float_env("LIMEN_RECLAIM_MIN_AGE_H", 6),
+                min_age_h,
                 "dispatch-clone-cache",
+                canonical_root=canonical_root,
                 strict=strict,
             )
         )
@@ -373,20 +506,22 @@ def iter_worktree_targets(limen_root: Path | None = None, *, strict: bool = Fals
         legacy_age = _float_env("LIMEN_RECLAIM_LEGACY_DISPATCH_AGE_H", _float_env("LIMEN_RECLAIM_MIN_AGE_H", 6))
         for legacy_root in _legacy_dispatch_roots(dispatch_root, strict=strict):
             targets.extend(
-                _children(
+                _flat_children(
                     legacy_root,
                     legacy_age,
                     f"legacy-dispatch-root:{legacy_root}",
+                    canonical_root=canonical_root,
                     strict=strict,
                 )
             )
 
     if _flag("LIMEN_RECLAIM_CLAUDE_WT", True):
         targets.extend(
-            _children(
+            _flat_children(
                 root / ".claude" / "worktrees",
                 _float_env("LIMEN_RECLAIM_CLAUDE_AGE_H", 24),
                 "claude-worktrees",
+                canonical_root=canonical_root,
                 strict=strict,
             )
         )
@@ -396,10 +531,11 @@ def iter_worktree_targets(limen_root: Path | None = None, *, strict: bool = Fals
             os.environ.get("LIMEN_AGY_SCRATCH_ROOT", Path.home() / ".gemini" / "antigravity-cli" / "scratch")
         )
         targets.extend(
-            _children(
+            _flat_children(
                 agy_scratch,
                 _float_env("LIMEN_AGY_SCRATCH_MIN_IDLE_H", 24),
                 "agy-scratch",
+                canonical_root=canonical_root,
                 strict=strict,
             )
         )
@@ -407,7 +543,15 @@ def iter_worktree_targets(limen_root: Path | None = None, *, strict: bool = Fals
     if _flag("LIMEN_RECLAIM_REPO_LOCAL_WT", broad_default):
         repo_age = _float_env("LIMEN_RECLAIM_REPO_LOCAL_AGE_H", 24)
         for repo_root in _discover_repo_local_roots(root, strict=strict):
-            targets.extend(_children(repo_root, repo_age, f"repo-local:{repo_root}", strict=strict))
+            targets.extend(
+                _flat_children(
+                    repo_root,
+                    repo_age,
+                    f"repo-local:{repo_root}",
+                    canonical_root=canonical_root,
+                    strict=strict,
+                )
+            )
 
     if _flag("LIMEN_RECLAIM_REGISTERED_WT", broad_default):
         registered_age = _float_env("LIMEN_RECLAIM_REGISTERED_AGE_H", 24)

@@ -703,7 +703,9 @@ class WorkLoanJournalStore:
 
 
 def default_store(root: Path | None = None) -> WorkLoanJournalStore:
-    owner = root or Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+    owner = root or Path(
+        os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen")
+    )
     return WorkLoanJournalStore(owner / "logs" / "work-loan-journal.jsonl")
 
 

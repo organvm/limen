@@ -16,6 +16,7 @@ from limen.conduct.campaign_relay import (
     campaign_relay_lock,
     reserve_relay,
 )
+from limen.worktree_layout import runtime_worktree_path
 from limen.conduct.models import CampaignRelayReceiptV1
 from limen.workstream_contract import RECEIPT_MODULES, new_contract, new_contract_v2
 
@@ -138,16 +139,36 @@ def test_unconsumed_reservation_tracks_current_main_when_main_moves(relay_repo) 
 
 def test_primary_checkout_and_successor_worktree_derive_from_shared_common_dir(
     relay_repo,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     root, _predecessor = relay_repo
-    successor = root / ".worktrees" / "successor"
+    monkeypatch.setenv("WORKSPACE_ROOT", str(tmp_path / "Workspace"))
+    successor = runtime_worktree_path(root, "successor")
     observer = root.parent / "observer"
-    successor.parent.mkdir()
-    _git(root, "worktree", "add", "--detach", str(successor), "HEAD")
+    successor.parent.mkdir(parents=True)
+    _git(root, "worktree", "add", "-b", "work/successor", str(successor), "HEAD")
     _git(root, "worktree", "add", "--detach", str(observer), "HEAD")
 
     assert _primary_checkout(observer) == root.resolve()
     assert _relay_worktree(observer, "successor") == successor.resolve()
+
+
+def test_relay_rejects_same_branch_worktree_in_wrong_runtime_namespace(
+    relay_repo,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root, _predecessor = relay_repo
+    monkeypatch.setenv("WORKSPACE_ROOT", str(tmp_path / "Workspace"))
+    successor = tmp_path / "Workspace" / "runtime" / "worktrees" / "wrong-repository-key" / "successor"
+    successor.parent.mkdir(parents=True)
+    _git(root, "worktree", "add", "-b", "work/successor", str(successor), "HEAD")
+
+    with pytest.raises(CampaignRelayError) as raised:
+        _relay_worktree(root, "successor")
+
+    assert raised.value.code == "relay_worktree_invalid"
 
 
 @pytest.mark.parametrize("length", [40, 64])

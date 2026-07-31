@@ -39,8 +39,8 @@ LOGS = ROOT / "logs"
 OUT_DIRS = [ROOT / "web" / "app" / "out", ROOT / "web" / "app" / "public"]
 CANON_MD = ROOT / "docs" / "CANON.md"
 
-# derive the workspace + its memory-dir scope (never pin): /Users/x/Workspace/limen → -Users-x-Workspace-limen
-_WS = Path(os.environ.get("LIMEN_WORKDIR", Path.home() / "Workspace" / "limen")).expanduser()
+# Derive the workspace and its memory-directory scope from the root contract.
+_WS = Path(os.environ.get("LIMEN_WORKDIR", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen")).expanduser()
 _MEM_DEFAULT = Path.home() / ".claude" / "projects" / str(_WS).replace("/", "-") / "memory"
 MEMDIR = Path(os.environ.get("LIMEN_MEMORY_DIR", _MEM_DEFAULT))
 KCORPUS = Path(os.environ.get("LIMEN_KNOWLEDGE_CORPUS", Path.home() / "Workspace" / "knowledge-corpus"))

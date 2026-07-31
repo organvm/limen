@@ -20,6 +20,8 @@ from pathlib import Path
 
 import pytest
 
+from limen.worktree_receipts import live_worktree_receipt_fields
+
 ROOT = Path(__file__).resolve().parents[2]
 SYNC = ROOT / "scripts" / "sync-release.sh"
 RECLAIM = ROOT / "scripts" / "reclaim-worktrees.py"
@@ -313,7 +315,7 @@ def _age(path: Path, hours: float):
 
 def _write_reclaim_acceptance(
     limen_root: Path,
-    root: str,
+    target: Path,
     action: str = "remove-worktree",
     reason: str | None = None,
     archive_status: str = "not_required_clean_merged_remote",
@@ -321,9 +323,11 @@ def _write_reclaim_acceptance(
 ) -> None:
     path = limen_root / "docs" / "worktree-reclaim-acceptance.jsonl"
     path.parent.mkdir(exist_ok=True)
+    root = target.name
     event = {
         "accepted_at": "2026-07-06T05:30:00Z",
         "root": root,
+        "path": str(target.resolve()),
         "action": action,
         "accepted": True,
         "archive_status": archive_status,
@@ -364,7 +368,7 @@ def test_reclaim_removes_clean_pushed_idle_with_acceptance(tmp_path):
     dead = _add_wt(main, wtroot, "dead-task")  # clean, on origin/main, will be aged
     _age(dead, 5)
     (main / "logs").mkdir(exist_ok=True)
-    _write_reclaim_acceptance(main, "dead-task", reason="clean+merged+idle")
+    _write_reclaim_acceptance(main, dead, reason="clean+merged+idle")
     r = _run_reclaim(wtroot, main, apply=True)
     assert r.returncode == 0, r.stderr
     assert not dead.exists(), r.stdout
@@ -445,6 +449,8 @@ def test_reclaim_removes_clean_idle_remote_merged_receipt_under_standing_grant(t
     _git("checkout", "-q", "-b", "merged-pr", cwd=merged)
     _commit(merged, "squashed.txt", "merged elsewhere\n", "local pre-squash commit")
     _age(merged, 5)
+    identity = live_worktree_receipt_fields(merged)
+    assert identity is not None
 
     receipts.write_text(
         json.dumps(
@@ -452,6 +458,7 @@ def test_reclaim_removes_clean_idle_remote_merged_receipt_under_standing_grant(t
                 "receipts": [
                     {
                         "root": "receipt-merged",
+                        **identity,
                         "lane": "remote-merged",
                         "status": "merged_pr_preserved",
                         "pr_state": "MERGED",
@@ -520,7 +527,7 @@ def test_reclaim_removes_patch_equivalent_local_replay(tmp_path):
     _commit(replay, "same.txt", "same change\n", "local replay of same patch")
     _git("fetch", "-q", "origin", cwd=replay)
     _age(replay, 5)
-    _write_reclaim_acceptance(main, "patch-equivalent", reason="clean+merged+idle")
+    _write_reclaim_acceptance(main, replay, reason="clean+merged+idle")
 
     r = _run_reclaim(wtroot, main, apply=True)
 
@@ -567,7 +574,7 @@ def test_reclaim_removes_generated_log_shell(tmp_path):
     (shell / "logs" / "session-lifecycle-pressure.json").write_text("{}", encoding="utf-8")
     _write_reclaim_acceptance(
         limen_root,
-        "generated-log-shell",
+        shell,
         action="remove-residue",
         reason="generated-log-shell",
         archive_status="not_required_generated_residue",

@@ -415,9 +415,9 @@ def render_markdown(queue: dict[str, Any]) -> str:
             "",
             "## Commands",
             "",
-            "- Refresh full-stack source first: `env LIMEN_ROOT=/Users/4jp/Workspace/limen python3 scripts/agent-session-full-stack-review.py --write`",
-            "- Refresh this queue: `env LIMEN_ROOT=/Users/4jp/Workspace/limen python3 scripts/agent-code-review-queue.py --write`",
-            "- Check the executable depth stop predicate: `env LIMEN_ROOT=/Users/4jp/Workspace/limen python3 scripts/agent-code-review-queue.py --depth-stop-predicate --review-score-floor 100`",
+            "- Refresh full-stack source first: `env LIMEN_ROOT=/Users/4jp/Workspace/library/engine/organvm/limen python3 scripts/agent-session-full-stack-review.py --write`",
+            "- Refresh this queue: `env LIMEN_ROOT=/Users/4jp/Workspace/library/engine/organvm/limen python3 scripts/agent-code-review-queue.py --write`",
+            "- Check the executable depth stop predicate: `env LIMEN_ROOT=/Users/4jp/Workspace/library/engine/organvm/limen python3 scripts/agent-code-review-queue.py --depth-stop-predicate --review-score-floor 100`",
             f"- Private structured queue: `{private_corpus_relpath(PRIVATE_QUEUE)}`",
         ]
     )

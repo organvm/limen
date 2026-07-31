@@ -41,6 +41,11 @@ def repo(tmp_path: Path) -> Path:
     return r
 
 
+@pytest.fixture(autouse=True)
+def canonical_runtime_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("WORKSPACE_ROOT", str(tmp_path / "Workspace"))
+
+
 def _run(*args: str, path: str | None = None):
     env = {**os.environ}
     if path is not None:

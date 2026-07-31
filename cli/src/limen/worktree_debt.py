@@ -6,9 +6,11 @@ import os
 import shutil
 import subprocess
 import time
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, TypedDict
 
+from limen.worktree_receipts import matching_worktree_receipt
 from limen.worktree_roots import effective_worktree_root, iter_worktree_targets
 
 DEBT_REASONS = {
@@ -185,28 +187,25 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
-def _load_preservation_receipts(limen_root: Path) -> dict[str, dict[str, Any]]:
+def _load_preservation_receipts(limen_root: Path) -> list[dict[str, Any]]:
     path = limen_root / "docs" / "worktree-preservation-receipts.json"
     try:
         data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
     except (OSError, ValueError):
-        return {}
+        return []
     if not isinstance(data, dict):
-        return {}
-    receipts: dict[str, dict[str, object]] = {}
+        return []
+    receipts: list[dict[str, Any]] = []
     items = data.get("receipts")
     if isinstance(items, list):
         for receipt in items:
             if not isinstance(receipt, dict):
                 continue
-            root = receipt.get("root")
-            if isinstance(root, str) and root:
-                receipts[root] = receipt
+            receipts.append(receipt)
     return receipts
 
 
-def _is_documented_residue(path: Path, preservation_receipts: dict[str, dict[str, object]]) -> bool:
-    receipt = preservation_receipts.get(path.name)
+def _is_documented_residue(receipt: Mapping[str, object] | None) -> bool:
     if not receipt:
         return False
     lane = str(receipt.get("lane") or "")
@@ -219,8 +218,7 @@ def _is_documented_residue(path: Path, preservation_receipts: dict[str, dict[str
     )
 
 
-def _is_remote_superseded(path: Path, preservation_receipts: dict[str, dict[str, object]]) -> bool:
-    receipt = preservation_receipts.get(path.name)
+def _is_remote_superseded(receipt: Mapping[str, object] | None) -> bool:
     if not receipt:
         return False
     lane = str(receipt.get("lane") or "")
@@ -228,9 +226,8 @@ def _is_remote_superseded(path: Path, preservation_receipts: dict[str, dict[str,
     return lane in REMOTE_SUPERSEDED_LANES or status in REMOTE_SUPERSEDED_STATUSES
 
 
-def _is_remote_merged(path: Path, preservation_receipts: dict[str, dict[str, object]]) -> bool:
+def _is_remote_merged(receipt: Mapping[str, object] | None) -> bool:
     """Match the accepted reaper's loss-free merged-PR receipt predicate exactly."""
-    receipt = preservation_receipts.get(path.name)
     if not receipt:
         return False
     if receipt.get("private_receipt") or receipt.get("private_patch_sha256"):
@@ -247,8 +244,7 @@ def _is_remote_merged(path: Path, preservation_receipts: dict[str, dict[str, obj
     )
 
 
-def _is_remote_pr_open(path: Path, preservation_receipts: dict[str, dict[str, object]]) -> bool:
-    receipt = preservation_receipts.get(path.name)
+def _is_remote_pr_open(receipt: Mapping[str, object] | None) -> bool:
     if not receipt:
         return False
     lane = str(receipt.get("lane") or "")
@@ -256,8 +252,7 @@ def _is_remote_pr_open(path: Path, preservation_receipts: dict[str, dict[str, ob
     return lane in REMOTE_PR_OPEN_LANES or status in REMOTE_PR_OPEN_STATUSES
 
 
-def _is_owner_blocker(path: Path, preservation_receipts: dict[str, dict[str, object]]) -> bool:
-    receipt = preservation_receipts.get(path.name)
+def _is_owner_blocker(receipt: Mapping[str, object] | None) -> bool:
     if not receipt:
         return False
     lane = str(receipt.get("lane") or "")
@@ -295,7 +290,7 @@ def _classify(
     now: float,
     min_age_h: float,
     self_guard: set[Path],
-    preservation_receipts: dict[str, dict[str, object]],
+    preservation_receipts: object,
 ) -> str:
     try:
         resolved = path.resolve()
@@ -305,13 +300,14 @@ def _classify(
         return "self/live-checkout"
     if _inside_agy_scratch_root(path):
         return "antigravity-scratch-managed"
-    if _is_documented_residue(path, preservation_receipts):
+    receipt = matching_worktree_receipt(path, preservation_receipts)
+    if _is_documented_residue(receipt):
         return "documented-residue"
-    if _is_remote_superseded(path, preservation_receipts):
+    if _is_remote_superseded(receipt):
         return "remote-superseded"
-    if _is_remote_pr_open(path, preservation_receipts):
+    if _is_remote_pr_open(receipt):
         return "remote-pr-open"
-    if _is_owner_blocker(path, preservation_receipts):
+    if _is_owner_blocker(receipt):
         return "owner-blocker"
     top = _git_toplevel(path)
     if top is None:
@@ -327,7 +323,7 @@ def _classify(
         return "dirty"
     if not (path / ".git").is_file() and not _all_local_refs_remote(path):
         return "unpreserved-local-refs"
-    if _is_remote_merged(path, preservation_receipts):
+    if _is_remote_merged(receipt):
         return "receipt-remote-merged+clean+idle"
     head = _git(["rev-parse", "HEAD"], path).stdout.strip()
     patch_equivalent = _patch_equivalent_to_default(path)
@@ -348,7 +344,18 @@ def worktree_debt_report(limen_root: Path | None = None, *, strict: bool = False
     that cannot be read or registered repositories whose Git inventory fails then raise instead of
     disappearing from an apparently empty report.
     """
-    root = limen_root or Path(os.environ.get("LIMEN_ROOT", f"{os.environ.get('HOME', '/Users/4jp')}/Workspace/limen"))
+    workspace = Path(
+        os.environ.get(
+            "WORKSPACE_ROOT",
+            str(Path(os.environ.get("HOME", str(Path.home()))) / "Workspace"),
+        )
+    )
+    root = limen_root or Path(
+        os.environ.get(
+            "LIMEN_ROOT",
+            str(workspace / "library" / "engine" / "organvm" / "limen"),
+        )
+    )
     self_guard: set[Path] = set()
     for candidate in (root, Path.cwd()):
         try:

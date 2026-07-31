@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import os
 import json
+import math
+import os
 import re
 import shlex
 import shutil
@@ -392,8 +393,11 @@ def _usage_int(value: object) -> int | None:
     if isinstance(value, bool):
         return None
     try:
-        return int(float(str(value)))
-    except (TypeError, ValueError):
+        parsed = float(str(value))
+        if not math.isfinite(parsed) or parsed < 0:
+            return None
+        return int(parsed)
+    except (OverflowError, TypeError, ValueError):
         return None
 
 
@@ -420,11 +424,16 @@ def _live_usage_capacity(
         return None
     cap = _usage_int(info.get("possible"))
     remaining = _usage_int(info.get("remaining"))
-    if cap is None or cap <= 0 or remaining is None:
+    if cap is None or cap <= 0 or remaining is None or remaining < 0 or remaining > cap:
         return None
-    consumed = _usage_int(info.get("consumed"))
+    raw_consumed = info.get("consumed")
+    consumed = _usage_int(raw_consumed)
+    if raw_consumed not in (None, "") and consumed is None:
+        return None
+    if consumed is not None and (consumed > cap or consumed + remaining > cap):
+        return None
     spent = consumed if consumed is not None else max(0, cap - remaining)
-    return cap, max(0, spent), max(0, remaining)
+    return cap, spent, remaining
 
 
 def capacity_census(board: object = None, budget_limit: int | None = None) -> list[CapacityRow]:
@@ -522,7 +531,11 @@ def format_capacity_census(rows: list[CapacityRow]) -> str:
 
 
 def _root() -> Path:
-    return Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
+    configured = os.environ.get("LIMEN_ROOT")
+    if configured:
+        return Path(configured).expanduser()
+    workspace = Path(os.environ.get("WORKSPACE_ROOT", str(Path.home() / "Workspace"))).expanduser()
+    return workspace / "library" / "engine" / "organvm" / "limen"
 
 
 def _load_usage(root: Path | None = None) -> dict[str, object]:

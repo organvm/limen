@@ -568,6 +568,154 @@ def test_capacity_census_uses_current_live_meter_over_stale_board_spend(
     assert "opencode" in auto
 
 
+@pytest.mark.parametrize(
+    "meter_update",
+    [
+        {"possible": "1e999"},
+        {"possible": "NaN"},
+        {"possible": "Infinity"},
+        {"possible": "-Infinity"},
+        {"possible": -1},
+        {"remaining": -1},
+        {"remaining": -0.5},
+        {"remaining": 101},
+        {"consumed": -1},
+        {"consumed": -0.5},
+        {"consumed": "NaN"},
+        {"consumed": 101},
+        {"consumed": 80, "remaining": 30},
+    ],
+    ids=[
+        "overflow",
+        "nan",
+        "positive-infinity",
+        "negative-infinity",
+        "negative-cap",
+        "negative-remaining",
+        "negative-fractional-remaining",
+        "remaining-over-cap",
+        "negative-consumed",
+        "negative-fractional-consumed",
+        "non-finite-consumed",
+        "consumed-over-cap",
+        "contradictory-accounting",
+    ],
+)
+def test_capacity_census_malformed_live_meter_falls_back_to_exhausted_board(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    meter_update: dict[str, object],
+) -> None:
+    meter: dict[str, object] = {
+        "signal": "vendor-meter",
+        "possible": 100,
+        "consumed": 50,
+        "remaining": 50,
+        "health": "ok",
+    }
+    meter.update(meter_update)
+    (tmp_path / "logs").mkdir()
+    (tmp_path / "logs" / "usage.json").write_text(
+        json.dumps(
+            {
+                "generated": "2026-07-10T07:24:23+00:00",
+                "vendors": {"jules": meter},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
+    monkeypatch.setattr(
+        "limen.capacity.agent_status",
+        lambda agent: {
+            "agent": agent,
+            "kind": "cloud-cli",
+            "reachable": True,
+            "detail": "test binary",
+            "command": ["test"],
+        },
+    )
+    board = {
+        "portal": {
+            "budget": {
+                "daily": 100,
+                "per_agent": {"jules": 5},
+                "track": {
+                    "date": "2026-07-10",
+                    "spent": 0,
+                    "per_agent": {"jules": 5},
+                },
+            }
+        }
+    }
+
+    jules = next(row for row in capacity_census(board) if row["agent"] == "jules")
+
+    assert jules["limit"] == 5
+    assert jules["spent"] == 5
+    assert jules["remaining"] == 0
+    assert jules["reachable"] is False
+    assert "live usage meter" not in jules["detail"]
+
+
+def test_capacity_census_derives_limen_root_from_workspace_root(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "Custom Workspace"
+    limen_root = workspace / "library" / "engine" / "organvm" / "limen"
+    (limen_root / "logs").mkdir(parents=True)
+    (limen_root / "logs" / "usage.json").write_text(
+        json.dumps(
+            {
+                "generated": "2026-07-10T07:24:23+00:00",
+                "vendors": {
+                    "jules": {
+                        "signal": "dispatch-count",
+                        "unit": "runs",
+                        "possible": 100,
+                        "consumed": 89,
+                        "remaining": 11,
+                        "health": "throttle",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("LIMEN_ROOT", raising=False)
+    monkeypatch.setenv("WORKSPACE_ROOT", str(workspace))
+    monkeypatch.setattr(
+        "limen.capacity.agent_status",
+        lambda agent: {
+            "agent": agent,
+            "kind": "cloud-cli",
+            "reachable": True,
+            "detail": "test binary",
+            "command": ["test"],
+        },
+    )
+    board = {
+        "portal": {
+            "budget": {
+                "daily": 600,
+                "per_agent": {"jules": 100},
+                "track": {
+                    "date": "2026-07-10",
+                    "spent": 244,
+                    "per_agent": {"jules": 122},
+                },
+            }
+        }
+    }
+
+    jules = next(row for row in capacity_census(board) if row["agent"] == "jules")
+
+    assert jules["spent"] == 89
+    assert jules["remaining"] == 11
+    assert "live usage meter" in jules["detail"]
+
+
 def test_capacity_census_dict_board_shape() -> None:
     board = {
         "portal": {

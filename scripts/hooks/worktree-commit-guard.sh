@@ -3,7 +3,7 @@
 #
 # WHY: the charter (CLAUDE.md § Merge & Branch Protocol) forbids direct commits to main —
 # every change rides a topic branch in an isolated worktree — but the rule was prose-only:
-# the user-level allow-trusted-cd-git.sh even auto-approves `cd ~/Workspace/limen && git
+# the user-level allow-trusted-cd-git.sh even auto-approves `cd ~/Workspace/library/engine/organvm/limen && git
 # commit …` (commit is not in its danger-tail regex). This closes that side door mechanically
 # (censor precedent PREC-2026-07-09-worktree-isolation-hook).
 #
@@ -99,7 +99,7 @@ else
   COMMON_GIT="$(git -C "$HOOK_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
   case "$COMMON_GIT" in
     */.git) LIVE="${COMMON_GIT%/.git}" ;;
-    *) LIVE="${LIMEN_ROOT:-$HOME/Workspace/limen}" ;;
+    *) LIVE="${LIMEN_ROOT:-${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen}" ;;
   esac
 fi
 LIVE="$(cd "$LIVE" 2>/dev/null && pwd -P)" || exit 0

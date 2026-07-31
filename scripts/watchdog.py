@@ -27,7 +27,7 @@ is gated behind --heal AND LIMEN_WATCHDOG_HEAL=1.
   (default)   assess + write alert/log, no restart
 
 Env-parameterized (DERIVE, never hardcode):
-  LIMEN_ROOT             conductor root (default ~/Workspace/limen)
+  LIMEN_ROOT             conductor root (default ~/Workspace/library/engine/organvm/limen)
   LIMEN_WATCHDOG_STALE_SEC  tick staleness ceiling (default = 3 × slowest beat)
   LIMEN_WATCHDOG_MAX_FAILS  consecutive all-failed beats → wedged (default 3)
   LIMEN_WATCHDOG_HEAL    "1" arms --heal restart
@@ -43,7 +43,7 @@ import sys
 from pathlib import Path
 
 # --- DERIVE all locations/thresholds from env; names are outputs ----------------
-ROOT = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
+ROOT = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen")))
 LOGS = ROOT / "logs"
 PIDFILE = LOGS / "heartbeat-loop.pid"
 BEATLOG = LOGS / "heartbeat.out.log"

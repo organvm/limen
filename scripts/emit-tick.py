@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 
-root = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+root = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
 d = yaml.safe_load((root / "tasks.yaml").read_text()) or {}
 tasks = d.get("tasks", [])
 budget = (d.get("portal") or {}).get("budget") or {}

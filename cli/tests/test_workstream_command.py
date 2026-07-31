@@ -11,11 +11,22 @@ import time
 from pathlib import Path
 
 from click.testing import CliRunner
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "cli" / "src"))
 
 from limen.cli import main  # noqa: E402
+from limen.worktree_layout import repository_storage_key, runtime_worktree_path  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _canonical_runtime_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("WORKSPACE_ROOT", str(tmp_path / "Workspace"))
+
+
+def _worktree(repo: Path, slug: str) -> Path:
+    return runtime_worktree_path(repo, slug)
 
 
 def _git(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -55,7 +66,7 @@ def test_workstream_command_writes_private_kickstart_packet(tmp_path: Path, monk
     )
 
     assert result.exit_code == 0, result.output
-    wt = repo / ".worktrees" / "demo-packet"
+    wt = _worktree(repo, "demo-packet")
     readme = wt / ".limen-workstream" / "README.md"
     intent = wt / ".limen-workstream" / "intent.md"
     kickstart = wt / ".limen-workstream" / "kickstart.sh"
@@ -99,6 +110,309 @@ def test_workstream_command_writes_private_kickstart_packet(tmp_path: Path, monk
     assert "workstream contract is missing" in partial.output
 
 
+def test_launcher_isolates_same_basename_repositories_under_runtime_root(
+    tmp_path: Path,
+) -> None:
+    repos = [tmp_path / owner / "shared-name" for owner in ("first", "second")]
+    worktrees: list[Path] = []
+    for index, repo in enumerate(repos):
+        repo.mkdir(parents=True)
+        _git("init", "-q", "-b", "main", cwd=repo)
+        _git("config", "user.email", "test@example.invalid", cwd=repo)
+        _git("config", "user.name", "Test User", cwd=repo)
+        _git("remote", "add", "origin", f"https://example.invalid/owner-{index}/shared-name.git", cwd=repo)
+        (repo / "README.md").write_text(f"fixture {index}\n", encoding="utf-8")
+        _git("add", "README.md", cwd=repo)
+        _git("commit", "-qm", "init", cwd=repo)
+
+        result = subprocess.run(
+            [
+                "bash",
+                str(ROOT / "scripts" / "start-worktree-session.sh"),
+                "--no-readme",
+                str(repo),
+                "same-slug",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        worktrees.append(_worktree(repo, "same-slug"))
+
+    runtime_root = tmp_path / "Workspace" / "runtime" / "worktrees"
+    assert all(worktree.is_relative_to(runtime_root) and worktree.is_dir() for worktree in worktrees)
+    assert worktrees[0].parent != worktrees[1].parent
+    assert all(worktree.name == "same-slug" for worktree in worktrees)
+    for repo in repos:
+        exclude = Path(
+            _git("rev-parse", "--path-format=absolute", "--git-path", "info/exclude", cwd=repo).stdout.strip()
+        )
+        assert ".worktrees/" not in exclude.read_text(encoding="utf-8").splitlines()
+
+
+def test_relative_local_origin_key_is_stable_across_cwd_and_linked_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    origin = tmp_path / "origin.git"
+    origin.mkdir()
+    _git("init", "--bare", "-q", cwd=origin)
+    repo = tmp_path / "primary"
+    repo.mkdir()
+    _git("init", "-q", "-b", "main", cwd=repo)
+    _git("config", "user.email", "test@example.invalid", cwd=repo)
+    _git("config", "user.name", "Test User", cwd=repo)
+    _git("remote", "add", "origin", "../origin.git", cwd=repo)
+    (repo / "README.md").write_text("fixture\n", encoding="utf-8")
+    _git("add", "README.md", cwd=repo)
+    _git("commit", "-qm", "init", cwd=repo)
+    linked = tmp_path / "linked"
+    _git("worktree", "add", "-q", "-b", "work/linked", str(linked), "HEAD", cwd=repo)
+
+    monkeypatch.chdir(tmp_path)
+    primary_key = repository_storage_key(repo)
+    primary_path = runtime_worktree_path(repo, "cwd-stable")
+    arbitrary_cwd = tmp_path / "arbitrary" / "deep"
+    arbitrary_cwd.mkdir(parents=True)
+    monkeypatch.chdir(arbitrary_cwd)
+
+    assert repository_storage_key(repo) == primary_key
+    assert repository_storage_key(linked) == primary_key
+    assert runtime_worktree_path(repo, "cwd-stable") == primary_path
+    assert runtime_worktree_path(linked, "cwd-stable") == primary_path
+
+
+def test_no_origin_key_is_stable_across_linked_worktree_and_ref_changes(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "primary"
+    repo.mkdir()
+    _git("init", "-q", "-b", "main", cwd=repo)
+    _git("config", "user.email", "test@example.invalid", cwd=repo)
+    _git("config", "user.name", "Test User", cwd=repo)
+    (repo / "README.md").write_text("fixture\n", encoding="utf-8")
+    _git("add", "README.md", cwd=repo)
+    _git("commit", "-qm", "init", cwd=repo)
+    linked = tmp_path / "differently-named-linked"
+    _git("worktree", "add", "-q", "-b", "work/linked", str(linked), "HEAD", cwd=repo)
+
+    initial = repository_storage_key(repo)
+    tree = _git("rev-parse", "HEAD^{tree}", cwd=repo).stdout.strip()
+    orphan = _git("commit-tree", tree, "-m", "orphan root", cwd=repo).stdout.strip()
+    _git("update-ref", "refs/heads/orphan-history", orphan, cwd=repo)
+
+    assert repository_storage_key(repo) == initial
+    assert repository_storage_key(linked) == initial
+
+
+def test_relative_file_uri_origins_are_cwd_stable_and_do_not_collide(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repos: list[Path] = []
+    for owner in ("first", "second"):
+        owner_root = tmp_path / owner
+        origin = owner_root / "origin.git"
+        repo = owner_root / "primary"
+        origin.mkdir(parents=True)
+        repo.mkdir()
+        _git("init", "--bare", "-q", cwd=origin)
+        _git("init", "-q", "-b", "main", cwd=repo)
+        _git("remote", "add", "origin", "file:../origin.git", cwd=repo)
+        repos.append(repo)
+
+    monkeypatch.chdir(tmp_path)
+    keys = [repository_storage_key(repo) for repo in repos]
+    arbitrary_cwd = tmp_path / "arbitrary" / "deep"
+    arbitrary_cwd.mkdir(parents=True)
+    monkeypatch.chdir(arbitrary_cwd)
+
+    assert repository_storage_key(repos[0]) == keys[0]
+    assert repository_storage_key(repos[1]) == keys[1]
+    assert keys[0] != keys[1]
+
+
+def test_network_transport_changes_preserve_repository_storage_key(tmp_path: Path) -> None:
+    repo = tmp_path / "primary"
+    repo.mkdir()
+    _git("init", "-q", "-b", "main", cwd=repo)
+    _git("remote", "add", "origin", "https://github.com/organvm/limen.git", cwd=repo)
+
+    https_key = repository_storage_key(repo)
+    _git("remote", "set-url", "origin", "git@github.com:organvm/limen.git", cwd=repo)
+
+    assert repository_storage_key(repo) == https_key
+
+
+@pytest.mark.parametrize("unsafe_slug", [".", "..", "../escape", "nested/escape"])
+def test_launcher_rejects_unsafe_slug_without_creating_outside_runtime(
+    tmp_path: Path,
+    unsafe_slug: str,
+) -> None:
+    repo = tmp_path / "slug-repo"
+    repo.mkdir()
+    _git("init", "-q", "-b", "main", cwd=repo)
+    _git("config", "user.email", "test@example.invalid", cwd=repo)
+    _git("config", "user.name", "Test User", cwd=repo)
+    (repo / "README.md").write_text("fixture\n", encoding="utf-8")
+    _git("add", "README.md", cwd=repo)
+    _git("commit", "-qm", "init", cwd=repo)
+
+    with pytest.raises(ValueError, match="safe lowercase path component"):
+        runtime_worktree_path(repo, unsafe_slug)
+    result = subprocess.run(
+        [
+            "bash",
+            str(ROOT / "scripts" / "start-worktree-session.sh"),
+            "--no-readme",
+            str(repo),
+            unsafe_slug,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert not (tmp_path / "escape").exists()
+    assert not (tmp_path / "Workspace" / "runtime" / "escape").exists()
+
+
+@pytest.mark.parametrize("symlink_level", ["runtime", "worktrees", "namespace"])
+def test_launcher_rejects_runtime_container_symlink_escape(
+    tmp_path: Path,
+    symlink_level: str,
+) -> None:
+    repo = tmp_path / "symlink-repo"
+    repo.mkdir()
+    _git("init", "-q", "-b", "main", cwd=repo)
+    _git("config", "user.email", "test@example.invalid", cwd=repo)
+    _git("config", "user.name", "Test User", cwd=repo)
+    (repo / "README.md").write_text("fixture\n", encoding="utf-8")
+    _git("add", "README.md", cwd=repo)
+    _git("commit", "-qm", "init", cwd=repo)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    workspace = tmp_path / "Workspace"
+    if symlink_level == "runtime":
+        workspace.mkdir()
+        (workspace / "runtime").symlink_to(outside, target_is_directory=True)
+    elif symlink_level == "worktrees":
+        (workspace / "runtime").mkdir(parents=True)
+        (workspace / "runtime" / "worktrees").symlink_to(outside, target_is_directory=True)
+    else:
+        namespace = _worktree(repo, "preflight").parent
+        namespace.parent.mkdir(parents=True, exist_ok=True)
+        namespace.symlink_to(outside, target_is_directory=True)
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(ROOT / "scripts" / "start-worktree-session.sh"),
+            "--no-readme",
+            str(repo),
+            "symlink-escape",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert list(outside.iterdir()) == []
+
+
+def test_launcher_rejects_final_worktree_symlink_to_matching_external_checkout(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "symlink-final-repo"
+    repo.mkdir()
+    _git("init", "-q", "-b", "main", cwd=repo)
+    _git("config", "user.email", "test@example.invalid", cwd=repo)
+    _git("config", "user.name", "Test User", cwd=repo)
+    (repo / "README.md").write_text("fixture\n", encoding="utf-8")
+    _git("add", "README.md", cwd=repo)
+    _git("commit", "-qm", "init", cwd=repo)
+
+    slug = "symlink-final"
+    canonical = _worktree(repo, slug)
+    outside = tmp_path / "outside-worktree"
+    _git("worktree", "add", "-q", "-b", f"work/{slug}", str(outside), "HEAD", cwd=repo)
+    outside_head = _git("rev-parse", "HEAD", cwd=outside).stdout
+    outside_status = _git("status", "--porcelain=v1", "--untracked-files=all", cwd=outside).stdout
+    canonical.parent.mkdir(parents=True)
+    canonical.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="target must be physical"):
+        runtime_worktree_path(repo, slug)
+    result = subprocess.run(
+        [
+            "bash",
+            str(ROOT / "scripts" / "start-worktree-session.sh"),
+            "--no-readme",
+            str(repo),
+            slug,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert _git("rev-parse", "HEAD", cwd=outside).stdout == outside_head
+    assert _git("status", "--porcelain=v1", "--untracked-files=all", cwd=outside).stdout == outside_status
+    assert not (outside / ".limen-workstream").exists()
+
+
+def test_launcher_rejects_physical_canonical_leaf_nested_under_matching_checkout(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "physical-nonroot-repo"
+    repo.mkdir()
+    _git("init", "-q", "-b", "main", cwd=repo)
+    _git("config", "user.email", "test@example.invalid", cwd=repo)
+    _git("config", "user.name", "Test User", cwd=repo)
+    (repo / "README.md").write_text("fixture\n", encoding="utf-8")
+    _git("add", "README.md", cwd=repo)
+    _git("commit", "-qm", "init", cwd=repo)
+
+    slug = "physical-nonroot"
+    canonical = _worktree(repo, slug)
+    canonical.parent.parent.mkdir(parents=True)
+    _git(
+        "worktree",
+        "add",
+        "-q",
+        "-b",
+        f"work/{slug}",
+        str(canonical.parent),
+        "HEAD",
+        cwd=repo,
+    )
+    canonical.mkdir()
+    sentinel = canonical / "sentinel.txt"
+    sentinel.write_text("do not reuse a nested directory\n", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(ROOT / "scripts" / "start-worktree-session.sh"),
+            "--no-readme",
+            str(repo),
+            slug,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "not the resolved Git top-level" in result.stderr
+    assert sentinel.read_text(encoding="utf-8") == "do not reuse a nested directory\n"
+    assert not (canonical / ".limen-workstream").exists()
+
+
 def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path, monkeypatch, capfd) -> None:
     repo = tmp_path / "demo-repo"
     repo.mkdir()
@@ -118,7 +432,7 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
             "#!/usr/bin/env bash\n"
             'printf "jules\\n" >> "$EVENTS_CAPTURE"\n'
             'printf "%s\\n" "$@" > "$SESSION_ARGS_CAPTURE"\n'
-            'if [[ "${JULES_SLEEP:-0}" == "1" ]]; then sleep 5; fi\n'
+            'if [[ "${JULES_SLEEP:-0}" == "1" ]]; then sleep "${JULES_SLEEP_SECONDS:-5}"; fi\n'
             'printf "Session is created.\\nID: 12345678901234567890\\nTask: test\\n\\n'
             'URL: https://jules.google.com/session/12345678901234567890\\n"\n'
             'if [[ "${JULES_FAIL_AFTER_OUTPUT:-0}" == "1" ]]; then exit 42; fi\n'
@@ -207,7 +521,7 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     assert args[5].startswith("Do NOT ask for feedback or approval.")
     assert "Ship the exact bounded packet." in args[5]
     assert "# Continuation capsule:" not in args[5]
-    wt = repo / ".worktrees" / "jules-cloud"
+    wt = _worktree(repo, "jules-cloud")
     receipt_path = wt / "docs" / "continuations" / "jules-cloud" / "workstream.json"
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     assert receipt["provider_run"] == {
@@ -323,6 +637,7 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
 
     timeout_events_before = events_capture.read_text(encoding="utf-8")
     monkeypatch.setenv("JULES_SLEEP", "1")
+    monkeypatch.setenv("JULES_SLEEP_SECONDS", "10")
     monkeypatch.setenv("LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS", "1")
     started = time.monotonic()
     timed_out = CliRunner().invoke(
@@ -339,11 +654,12 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
         ],
     )
     assert timed_out.exit_code != 0
-    assert time.monotonic() - started < 4
+    assert time.monotonic() - started < 8
     monkeypatch.delenv("JULES_SLEEP")
+    monkeypatch.delenv("JULES_SLEEP_SECONDS")
     monkeypatch.delenv("LIMEN_WORKSTREAM_PREFLIGHT_TIMEOUT_SECONDS")
 
-    timeout_wt = repo / ".worktrees" / "jules-timeout"
+    timeout_wt = _worktree(repo, "jules-timeout")
     args_capture.unlink(missing_ok=True)
     retried = subprocess.run(
         ["bash", str(timeout_wt / ".limen-workstream" / "kickstart.sh")],
@@ -383,7 +699,7 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     assert failed_after_output.exit_code != 0
     assert "durable session receipt" in capfd.readouterr().err
     monkeypatch.delenv("JULES_FAIL_AFTER_OUTPUT")
-    nonzero_wt = repo / ".worktrees" / "jules-nonzero-receipt"
+    nonzero_wt = _worktree(repo, "jules-nonzero-receipt")
     nonzero_receipt = json.loads(
         (nonzero_wt / "docs/continuations/jules-nonzero-receipt/workstream.json").read_text(encoding="utf-8")
     )
@@ -412,7 +728,7 @@ def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path,
     assert "could not publish its receipt" in capfd.readouterr().err
     monkeypatch.delenv("FAIL_RECEIPT_COMMIT")
 
-    commit_wt = repo / ".worktrees" / "jules-commit-failure"
+    commit_wt = _worktree(repo, "jules-commit-failure")
     commit_receipt = commit_wt / "docs" / "continuations" / "jules-commit-failure" / "workstream.json"
     recovered_receipt = json.loads(commit_receipt.read_text(encoding="utf-8"))
     assert recovered_receipt["provider_run"]["id"] == "12345678901234567890"
@@ -564,7 +880,7 @@ def test_codex_workstream_publishes_admitted_receipt_before_provider(tmp_path: P
 
     launched = subprocess.run(command, env=env, text=True, capture_output=True, timeout=15, check=False)
     assert launched.returncode == 0, launched.stdout + launched.stderr
-    wt = repo / ".worktrees" / "codex-admission-publication"
+    wt = _worktree(repo, "codex-admission-publication")
     branch = "work/codex-admission-publication"
     receipt_rel = "docs/continuations/codex-admission-publication/workstream.json"
     first_head = _git("rev-parse", "HEAD", cwd=wt).stdout.strip()
@@ -659,7 +975,7 @@ def test_codex_workstream_denies_provider_when_admitted_receipt_push_fails(tmp_p
     assert not provider_marker.exists()
 
     pre_receive.unlink()
-    wt = repo / ".worktrees" / "codex-publication-rejected"
+    wt = _worktree(repo, "codex-publication-rejected")
     retried = subprocess.run(
         ["bash", str(wt / ".limen-workstream" / "kickstart.sh")],
         cwd=wt,
@@ -762,9 +1078,7 @@ def test_explicit_codex_profile_validates_live_catalog_and_launches_exact_argv(t
     ]
     assert "# Continuation capsule: explicit-agent-launch" in prompt_capture.read_text(encoding="utf-8")
     contract = json.loads(
-        (repo / ".worktrees" / "explicit-agent-launch" / ".limen-workstream" / "workstream.json").read_text(
-            encoding="utf-8"
-        )
+        (_worktree(repo, "explicit-agent-launch") / ".limen-workstream" / "workstream.json").read_text(encoding="utf-8")
     )
     assert contract["schema"] == "limen.workstream.contract.v2"
     assert contract["primary_launch"] == {
@@ -805,7 +1119,7 @@ def test_explicit_codex_profile_validates_live_catalog_and_launches_exact_argv(t
         )
         assert rejected.returncode == 2
         assert message in rejected.stderr
-        assert not (repo / ".worktrees" / slug.lower().replace(" ", "-")).exists()
+        assert not _worktree(repo, slug.lower().replace(" ", "-")).exists()
 
 
 def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(tmp_path: Path, monkeypatch) -> None:
@@ -832,7 +1146,7 @@ def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(
     missing = CliRunner().invoke(main, ["workstream", "--autonomous", str(repo), "No Prompt"])
     assert missing.exit_code == 2
     assert "requires --prompt or --prompt-file" in missing.output
-    assert not (repo / ".worktrees" / "no-prompt").exists()
+    assert not _worktree(repo, "no-prompt").exists()
 
     unbounded = CliRunner().invoke(
         main,
@@ -848,7 +1162,7 @@ def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(
     )
     assert unbounded.exit_code == 2
     assert "invalid workstream contract" in unbounded.output
-    assert not (repo / ".worktrees" / "unbounded").exists()
+    assert not _worktree(repo, "unbounded").exists()
 
     no_readme = CliRunner().invoke(
         main,
@@ -864,7 +1178,7 @@ def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(
     )
     assert no_readme.exit_code == 2
     assert "cannot be combined with --no-readme" in no_readme.output
-    assert not (repo / ".worktrees" / "no-readme").exists()
+    assert not _worktree(repo, "no-readme").exists()
 
     result = CliRunner().invoke(
         main,
@@ -883,7 +1197,7 @@ def test_autonomous_workstream_requires_prompt_and_launches_with_dynamic_readme(
     )
 
     assert result.exit_code == 0, result.output
-    wt = repo / ".worktrees" / "next-epoch"
+    wt = _worktree(repo, "next-epoch")
     capsule = wt / ".limen-workstream"
     readme = capsule / "README.md"
     manifest = capsule / "manifest.md"
@@ -1411,7 +1725,7 @@ def test_conduct_registration_precedes_runway_admission(tmp_path: Path, monkeypa
     )
     assert rendered.exit_code == 0, rendered.output
 
-    wt = repo / ".worktrees" / "conduct-ordering"
+    wt = _worktree(repo, "conduct-ordering")
     capsule = wt / ".limen-workstream"
     kickstart = capsule / "kickstart.sh"
     contract = capsule / "workstream.json"
@@ -1534,7 +1848,7 @@ def test_conduct_keepalive_refreshes_without_exposing_credential_to_provider(
     )
     assert rendered.exit_code == 0, rendered.output
 
-    wt = repo / ".worktrees" / "conduct-keepalive"
+    wt = _worktree(repo, "conduct-keepalive")
     capsule = wt / ".limen-workstream"
     launch_env = {
         **os.environ,
@@ -1638,7 +1952,7 @@ def test_workstream_rejects_symlinked_private_root_before_writing_prompt(tmp_pat
 
     created = CliRunner().invoke(main, ["workstream", "--no-readme", str(repo), "Symlink Root"])
     assert created.exit_code == 0, created.output
-    wt = repo / ".worktrees" / "symlink-root"
+    wt = _worktree(repo, "symlink-root")
     tracked_target = wt / "tracked-capsule-leak"
     tracked_target.mkdir()
     (wt / ".limen-workstream").symlink_to(tracked_target, target_is_directory=True)
@@ -1758,7 +2072,7 @@ def test_concurrent_capsule_render_keeps_partial_kickstart_unlaunchable(tmp_path
             time.sleep(0.01)
         assert sync_entered.exists(), rendering.stderr.read() if rendering.stderr else ""
 
-        wt = repo / ".worktrees" / "race-capsule"
+        wt = _worktree(repo, "race-capsule")
         capsule = wt / ".limen-workstream"
         kickstart = capsule / "kickstart.sh"
         identity = capsule / "capsule.identity"
@@ -1805,7 +2119,7 @@ def test_concurrent_capsule_render_keeps_partial_kickstart_unlaunchable(tmp_path
             render_stdout, render_stderr = rendering.communicate()
 
     assert rendering.returncode == 0, render_stdout + render_stderr
-    wt = repo / ".worktrees" / "race-capsule"
+    wt = _worktree(repo, "race-capsule")
     capsule = wt / ".limen-workstream"
     kickstart = capsule / "kickstart.sh"
     assert (capsule / "capsule.identity").exists()

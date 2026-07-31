@@ -1,0 +1,45 @@
+{
+  "schema": "limen.private_substrate_custody.v1",
+  "owner_ref": "organvm/limen#personal-custody",
+  "inventory_ref": "docs/storage-evacuation-inventory-20260727.json",
+  "sealed_inventories": [
+    {"label": "workspace-private-life", "source_class": "life", "sealed": false},
+    {"label": "workspace-private-finance", "source_class": "finance", "sealed": false},
+    {"label": "workspace-private-health", "source_class": "health", "sealed": false},
+    {"label": "workspace-private-people", "source_class": "people", "sealed": false}
+  ],
+  "receipts": [
+    {
+      "label": "workspace-private-life",
+      "restoration_passed": false,
+      "copy_count": 0,
+      "independent_physical_devices": false,
+      "failed_predicate": "Archive4T and T7Recovery content-addressed copies plus a materialized restoration probe",
+      "next_command": "python3 scripts/library-preserve.py custody-plan --inventory docs/storage-evacuation-inventory-20260727.json --label workspace-private-life --source \"$WORKSPACE_ROOT/_life-private\""
+    },
+    {
+      "label": "workspace-private-finance",
+      "restoration_passed": false,
+      "copy_count": 0,
+      "independent_physical_devices": false,
+      "failed_predicate": "Archive4T and T7Recovery content-addressed copies plus a materialized restoration probe",
+      "next_command": "python3 scripts/library-preserve.py custody-plan --inventory docs/storage-evacuation-inventory-20260727.json --label workspace-private-finance --source \"$WORKSPACE_ROOT/_finance-private\""
+    },
+    {
+      "label": "workspace-private-health",
+      "restoration_passed": false,
+      "copy_count": 0,
+      "independent_physical_devices": false,
+      "failed_predicate": "Archive4T and T7Recovery content-addressed copies plus a materialized restoration probe",
+      "next_command": "python3 scripts/library-preserve.py custody-plan --inventory docs/storage-evacuation-inventory-20260727.json --label workspace-private-health --source \"$WORKSPACE_ROOT/_health-private\""
+    },
+    {
+      "label": "workspace-private-people",
+      "restoration_passed": false,
+      "copy_count": 0,
+      "independent_physical_devices": false,
+      "failed_predicate": "Archive4T and T7Recovery content-addressed copies plus a materialized restoration probe",
+      "next_command": "python3 scripts/library-preserve.py custody-plan --inventory docs/storage-evacuation-inventory-20260727.json --label workspace-private-people --source \"$WORKSPACE_ROOT/_people-private\""
+    }
+  ]
+}

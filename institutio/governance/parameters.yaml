@@ -657,7 +657,7 @@ parameters:
     owner: continuity
     note: "GitHub login used by contribution-balance gates to keep public activity from becoming commit-only churn."
   LIMEN_CONTRIBUTION_BALANCE_PUBLIC_ROOT:
-    default: "~/Workspace/limen"
+    default: "~/Workspace/library/engine/organvm/limen"
     env: LIMEN_CONTRIBUTION_BALANCE_PUBLIC_ROOT
     self_update: none
     owner: continuity
@@ -1051,13 +1051,19 @@ parameters:
     env: LIMEN_ORPHAN_QUARANTINE
     self_update: none
     owner: continuity
-    note: "Off-worktree MOVE target for orphans preserved by the LIMEN_RECLAIM_ORPHANS sweep — a quarantine, not a delete. Empty (default) derives a `_limen-orphan-quarantine` sibling of the worktree root. The target must be outside every worktree scan root and on the SAME filesystem so abandonment is one atomic rename; cross-volume copy fallback is denied."
+    note: "Persistent MOVE target for orphans preserved by the LIMEN_RECLAIM_ORPHANS sweep — a quarantine, not a delete. Empty derives `$XDG_DATA_HOME/limen/orphan-quarantine`. An override must be an absolute physical descendant of the same XDG-owned Limen inventory and outside Workspace. The source and target must be on the SAME filesystem so abandonment is one atomic rename; cross-volume copy fallback is denied."
   LIMEN_ABANDONMENT_QUARANTINE:
     default: ""
     env: LIMEN_ABANDONMENT_QUARANTINE
     self_update: none
     owner: continuity
-    note: "Optional same-filesystem off-scan quarantine root used by limen.worktree_abandonment.v1 for standalone clones, residue, and ignored generated payloads. Empty derives an owner-root-aware sibling. Cross-device targets, nested destinations, symlinks, and collisions fail closed."
+    note: "Optional persistent quarantine root used by limen.worktree_abandonment.v1 for standalone clones, residue, and ignored generated payloads. Empty derives `$XDG_DATA_HOME/limen/worktree-abandonment`. An override must stay in that normalized physical XDG-owned Limen inventory and outside Workspace. Cross-device targets, nested destinations, symlink/non-directory chains, and collisions fail closed."
+  XDG_DATA_HOME:
+    default: "$HOME/.local/share"
+    env: XDG_DATA_HOME
+    self_update: none
+    owner: continuity
+    note: "Standard persistent application-data root. Worktree quarantine custody normalizes this absolute path, rejects relative or symlinked/non-directory chains, and uses only its `limen/` interior. It never creates a Workspace manifest exception."
   LIMEN_WORKTREE_ABANDONMENT_RECEIPTS:
     default: "$LIMEN_ROOT/logs/worktree-abandonment"
     env: LIMEN_WORKTREE_ABANDONMENT_RECEIPTS
@@ -1632,7 +1638,7 @@ parameters:
     owner: continuity
     note: "Photos Universe recovery checkout used by the receipt-only continuation beat."
   LIMEN_PORTVS_TRIPTYCH_ROOT:
-    default: "/Users/4jp/Workspace/4444J99/portvs/.worktrees/triptych-story"
+    default: "/Users/4jp/Workspace/library/engine/organvm/portvs/.worktrees/triptych-story"
     env: LIMEN_PORTVS_TRIPTYCH_ROOT
     self_update: none
     owner: continuity
@@ -2062,7 +2068,7 @@ parameters:
     owner: mail
     note: "Max messages archived_scan.py reads per mailbox (Archive + Sent) each beat — bounds the AppleScript enumeration so a large All-Mail never full-materializes. Paired with the scanner's --since-days window."
   LIMEN_MAIL_ARCHIVED_CURSOR:
-    default: "~/Workspace/limen/logs/.mail-archived-scan-cursor"
+    default: "~/Workspace/library/engine/organvm/limen/logs/.mail-archived-scan-cursor"
     env: LIMEN_MAIL_ARCHIVED_CURSOR
     self_update: none
     owner: mail
@@ -2449,12 +2455,12 @@ parameters:
   # The real work: migrate ALL of these from heartbeat-loop.sh / tasks.yaml / *.json
   # into this panel, then point the code here. (~70 total — see registry residual.)
   LIMEN_ROOT:
-    default: "~/Workspace/limen"
+    default: "~/Workspace/library/engine/organvm/limen"
     env: LIMEN_ROOT
     self_update: none
     owner: limen-daemon
   LIMEN_LIVE_ROOT:
-    default: "~/Workspace/limen"
+    default: "~/Workspace/library/engine/organvm/limen"
     env: LIMEN_LIVE_ROOT
     self_update: none
     owner: limen-daemon
@@ -2857,6 +2863,12 @@ parameters:
     self_update: none
     owner: limen-daemon
     note: "Whether reclaim/debt discovery scans historical dispatch worktree roots after the active Scratch migration. Auto means enabled in live sessions and disabled when a test/probe supplies an explicit LIMEN_WORKTREE_ROOT."
+  LIMEN_RECLAIM_CANONICAL_AGE_H:
+    default: 168
+    env: LIMEN_RECLAIM_CANONICAL_AGE_H
+    self_update: none
+    owner: limen-daemon
+    note: "Minimum idle hours before a canonical WORKSPACE_ROOT/runtime/worktrees/<repository-key>/<slug> unit is reclaim-eligible. This is intentionally independent from the shorter dispatch/Scratch age."
   LIMEN_RECLAIM_LEGACY_DISPATCH_AGE_H:
     default: "$LIMEN_RECLAIM_MIN_AGE_H"
     env: LIMEN_RECLAIM_LEGACY_DISPATCH_AGE_H
@@ -2930,7 +2942,7 @@ parameters:
     owner: limen-daemon
     note: "Min idle hours for a workspace checkout root when LIMEN_RECLAIM_WORKSPACE_CHECKOUTS=1."
   LIMEN_RECLAIM_MAIN_REPOS:
-    default: "$LIMEN_ROOT:$HOME/Workspace/4444J99/portvs"
+    default: "$LIMEN_ROOT:$PORTVS_ROOT"
     env: LIMEN_RECLAIM_MAIN_REPOS
     self_update: none
     owner: limen-daemon

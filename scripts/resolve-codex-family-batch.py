@@ -471,7 +471,7 @@ def build_receipt(batch_id: str) -> dict[str, Any]:
     else:
         evidence.append(
             "no exact local root directory existed for any root under /Users/4jp/Workspace/.limen-worktrees, "
-            "/Users/4jp/Workspace/limen/.worktrees, or /Users/4jp/Workspace/limen/.claude/worktrees at review time"
+            "/Users/4jp/Workspace/library/engine/organvm/limen/.worktrees, or /Users/4jp/Workspace/library/engine/organvm/limen/.claude/worktrees at review time"
         )
     evidence.append(
         f"gh repo view resolved owner repositories for {repo_count} of {len(roots)} inferred roots after repository redirects"

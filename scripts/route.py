@@ -122,7 +122,7 @@ def _read_usage_vendors() -> dict:
     """Read the LIVE usage meter (logs/usage.json) vendors dict — shared by the runway and
     cliff-urgency readers below so the file path + error handling live in one place. Returns {}
     on any read/parse error (fail-open), never raises. Derived from the live signal, never pinned."""
-    f = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen"))) / "logs" / "usage.json"
+    f = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))) / "logs" / "usage.json"
     try:
         return (json.loads(f.read_text()) or {}).get("vendors", {})
     except (OSError, ValueError):

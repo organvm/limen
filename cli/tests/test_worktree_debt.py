@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,69 @@ sys.path.insert(0, str(ROOT / "cli" / "src"))
 from limen import worktree_debt as wd  # noqa: E402
 from limen import worktree_roots as wr  # noqa: E402
 from limen.worktree_debt import worktree_debt_report  # noqa: E402
+from limen.worktree_layout import runtime_worktree_path  # noqa: E402
+from limen.worktree_receipts import live_worktree_receipt_fields  # noqa: E402
+
+
+def bound_receipt(path: Path, **values: object) -> dict[str, object]:
+    identity = live_worktree_receipt_fields(path)
+    assert identity is not None
+    return {"root": path.name, **identity, **values}
+
+
+def canonical_same_slug_worktree(tmp_path: Path, workspace: Path, owner: str) -> Path:
+    owner_root = tmp_path / owner
+    primary = owner_root / "primary"
+    remote = owner_root / "origin.git"
+    primary.mkdir(parents=True)
+    remote.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=primary, check=True)
+    subprocess.run(["git", "init", "-q", "--bare"], cwd=remote, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=primary, check=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=primary, check=True)
+    subprocess.run(["git", "commit", "-qm", "base", "--allow-empty"], cwd=primary, check=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=primary, check=True)
+    subprocess.run(["git", "push", "-qu", "origin", "main"], cwd=primary, check=True)
+    worktree = runtime_worktree_path(primary, "same-slug", workspace_root=workspace)
+    worktree.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["git", "worktree", "add", "-q", "-b", "work/same-slug", str(worktree), "HEAD"],
+        cwd=primary,
+        check=True,
+    )
+    return worktree
+
+
+def merged_receipt(path: Path) -> dict[str, object]:
+    return bound_receipt(
+        path,
+        lane="remote-merged",
+        status="merged_pr_preserved",
+        pr_state="MERGED",
+        pr_url="https://github.com/example/repo/pull/7",
+    )
+
+
+def test_remote_merged_receipt_is_bound_to_exact_same_slug_worktree_and_head(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "Workspace"
+    first = canonical_same_slug_worktree(tmp_path, workspace, "first")
+    second = canonical_same_slug_worktree(tmp_path, workspace, "second")
+    foreign = merged_receipt(first)
+    stale = merged_receipt(second)
+
+    subprocess.run(
+        ["git", "commit", "-qm", "local-only", "--allow-empty"],
+        cwd=second,
+        check=True,
+    )
+    current = merged_receipt(second)
+    args = (second, time.time(), 0, set())
+
+    assert wd._classify(*args, [foreign]) == "unpushed-commits"
+    assert wd._classify(*args, [stale]) == "unpushed-commits"
+    assert wd._classify(*args, [current]) == "receipt-remote-merged+clean+idle"
 
 
 def test_reachable_from_remote_uses_single_contains_query(tmp_path: Path, monkeypatch):
@@ -50,7 +114,7 @@ def test_reachable_from_remote_uses_single_contains_query(tmp_path: Path, monkey
     ]
 
 
-def test_documented_non_source_residue_is_visible_but_not_debt(tmp_path: Path, monkeypatch):
+def test_legacy_unbound_documented_residue_receipt_fails_closed_as_debt(tmp_path: Path, monkeypatch):
     worktrees = tmp_path / ".limen-worktrees"
     documented = worktrees / "cache-only-root"
     undocumented = worktrees / "unknown-root"
@@ -81,11 +145,42 @@ def test_documented_non_source_residue_is_visible_but_not_debt(tmp_path: Path, m
     report = worktree_debt_report(tmp_path)
     by_name = {item["name"]: item for item in report["items"]}
 
-    assert by_name["cache-only-root"]["reason"] == "documented-residue"
-    assert by_name["cache-only-root"]["debt"] is False
+    assert by_name["cache-only-root"]["reason"] == "not-a-git-dir"
+    assert by_name["cache-only-root"]["debt"] is True
     assert by_name["unknown-root"]["reason"] == "not-a-git-dir"
     assert by_name["unknown-root"]["debt"] is True
-    assert report["debt"] == 1
+    assert report["debt"] == 2
+
+
+def test_canonical_runtime_unit_and_legacy_dispatch_unit_are_classified_once(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = tmp_path / "Workspace"
+    namespace = workspace / "runtime" / "worktrees" / "owner--repo--digest"
+    canonical_unit = namespace / "canonical-task"
+    canonical_unit.mkdir(parents=True)
+    legacy = tmp_path / "Scratch" / "limen-worktrees"
+    legacy_unit = legacy / "legacy-task"
+    legacy_unit.mkdir(parents=True)
+    limen_root = tmp_path / "limen"
+    limen_root.mkdir()
+    monkeypatch.setenv("WORKSPACE_ROOT", str(workspace))
+    monkeypatch.setenv("LIMEN_WORKTREE_ROOT", str(legacy))
+    monkeypatch.setenv("LIMEN_RECLAIM_CLAUDE_WT", "0")
+    monkeypatch.setenv("LIMEN_RECLAIM_AGY_SCRATCH", "0")
+    monkeypatch.setenv("LIMEN_RECLAIM_REPO_LOCAL_WT", "0")
+    monkeypatch.setenv("LIMEN_RECLAIM_REGISTERED_WT", "0")
+
+    report = worktree_debt_report(limen_root)
+    paths = [Path(item["path"]) for item in report["items"]]
+    by_path = {Path(item["path"]): item for item in report["items"]}
+
+    assert paths.count(canonical_unit) == 1
+    assert paths.count(legacy_unit) == 1
+    assert namespace not in paths
+    assert by_path[canonical_unit]["reason"] == "not-a-git-dir"
+    assert by_path[legacy_unit]["reason"] == "not-a-git-dir"
 
 
 def test_generated_log_shell_is_visible_but_not_debt(tmp_path: Path, monkeypatch):
@@ -143,11 +238,11 @@ def test_remote_superseded_receipt_is_visible_but_not_debt(tmp_path: Path, monke
         json.dumps(
             {
                 "receipts": [
-                    {
-                        "root": "superseded-root",
-                        "lane": "remote-superseded",
-                        "status": "superseded_on_origin_main",
-                    }
+                    bound_receipt(
+                        root,
+                        lane="remote-superseded",
+                        status="superseded_on_origin_main",
+                    )
                 ]
             }
         ),
@@ -180,13 +275,13 @@ def test_remote_merged_receipt_is_visible_but_not_debt(tmp_path: Path, monkeypat
         json.dumps(
             {
                 "receipts": [
-                    {
-                        "root": "merged-pr-root",
-                        "lane": "remote-merged",
-                        "status": "merged_pr_preserved",
-                        "pr_state": "MERGED",
-                        "pr_url": "https://github.com/example/repo/pull/7",
-                    }
+                    bound_receipt(
+                        root,
+                        lane="remote-merged",
+                        status="merged_pr_preserved",
+                        pr_state="MERGED",
+                        pr_url="https://github.com/example/repo/pull/7",
+                    )
                 ]
             }
         ),
@@ -222,12 +317,12 @@ def test_remote_pr_open_receipt_is_visible_but_not_debt(tmp_path: Path, monkeypa
         json.dumps(
             {
                 "receipts": [
-                    {
-                        "root": "open-pr-root",
-                        "lane": "remote-pr-open",
-                        "status": "open_pr_preserved",
-                        "pr_state": "OPEN",
-                    }
+                    bound_receipt(
+                        root,
+                        lane="remote-pr-open",
+                        status="open_pr_preserved",
+                        pr_state="OPEN",
+                    )
                 ]
             }
         ),
@@ -262,13 +357,13 @@ def test_owner_blocker_private_receipt_is_visible_but_not_debt(tmp_path: Path, m
         json.dumps(
             {
                 "receipts": [
-                    {
-                        "root": "owner-blocked-root",
-                        "lane": "owner-blocker",
-                        "status": "private_patch_preserved",
-                        "private_receipt": ".limen-private/session-corpus/lifecycle/worktree-preserve/demo/receipt.json",
-                        "private_patch_sha256": "abc123",
-                    }
+                    bound_receipt(
+                        root,
+                        lane="owner-blocker",
+                        status="private_patch_preserved",
+                        private_receipt=".limen-private/session-corpus/lifecycle/worktree-preserve/demo/receipt.json",
+                        private_patch_sha256="abc123",
+                    )
                 ]
             }
         ),

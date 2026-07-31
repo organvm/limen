@@ -25,7 +25,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/4jp/Workspace/limen/scripts/heal-claude-lsregister.sh</string>
+        <string>/Users/4jp/Workspace/library/engine/organvm/limen/scripts/heal-claude-lsregister.sh</string>
         <string>--apply</string>
     </array>
     <key>WatchPaths</key>
@@ -40,7 +40,7 @@
     <key>RunAtLoad</key><true/>
     <key>ThrottleInterval</key><integer>10</integer>
     <key>ProcessType</key><string>Background</string>
-    <key>StandardOutPath</key><string>/Users/4jp/Workspace/limen/logs/claude-stub-heal.log</string>
-    <key>StandardErrorPath</key><string>/Users/4jp/Workspace/limen/logs/claude-stub-heal.log</string>
+    <key>StandardOutPath</key><string>/Users/4jp/Workspace/library/engine/organvm/limen/logs/claude-stub-heal.log</string>
+    <key>StandardErrorPath</key><string>/Users/4jp/Workspace/library/engine/organvm/limen/logs/claude-stub-heal.log</string>
 </dict>
 </plist>

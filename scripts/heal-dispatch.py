@@ -37,7 +37,7 @@ from limen.workstream_contract import WORKSTREAM_SUCCESSOR_REQUIRED_LABEL  # noq
 
 from _human_signals import is_human_gated, lever_ids  # noqa: E402
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
 LOCKD = ROOT / "logs" / ".queue.lock.d"
 PR_RE = re.compile(r"github\.com/[^/]+/[^/]+/pull/\d+")
 CASCADE_TOP = "codex"

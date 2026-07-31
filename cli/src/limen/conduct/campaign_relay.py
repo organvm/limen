@@ -24,6 +24,7 @@ from limen.workstream_contract import (
     ContractError,
     validate_contract,
 )
+from limen.worktree_layout import runtime_worktree_path
 
 _RECEIPT_CEILING = 65_536
 _PREDECESSOR_RECEIPT_CEILING = 262_144
@@ -379,12 +380,28 @@ def _relay_worktree(
 ) -> Path:
     """Resolve the generated successor worktree and bind it to the same repository."""
 
-    primary = _primary_checkout(
-        root,
+    primary = _primary_checkout(root, deadline_monotonic=deadline_monotonic)
+    listing = _git(
+        primary,
+        "worktree",
+        "list",
+        "--porcelain",
         deadline_monotonic=deadline_monotonic,
     )
-    candidate = primary / ".worktrees" / successor_slug
+    expected_branch = f"refs/heads/work/{successor_slug}"
+    candidates: list[Path] = []
+    for record in listing.split("\n\n"):
+        fields = dict(line.split(" ", 1) for line in record.splitlines() if " " in line)
+        if fields.get("branch") == expected_branch and fields.get("worktree"):
+            candidates.append(Path(fields["worktree"]))
+    if len(candidates) != 1:
+        raise CampaignRelayError(
+            "relay_worktree_invalid",
+            "campaign relay successor worktree is unavailable",
+        )
+    candidate = candidates[0]
     try:
+        expected_candidate = runtime_worktree_path(primary, successor_slug)
         resolved = candidate.resolve(strict=True)
         top_level = Path(
             _git(
@@ -403,12 +420,18 @@ def _relay_worktree(
             primary,
             deadline_monotonic=deadline_monotonic,
         )
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         raise CampaignRelayError(
             "relay_worktree_invalid",
             "campaign relay successor worktree is unavailable",
         ) from exc
-    if candidate.is_symlink() or not resolved.is_dir() or top_level != resolved or worktree_common != primary_common:
+    if (
+        candidate.is_symlink()
+        or not resolved.is_dir()
+        or candidate != expected_candidate
+        or top_level != resolved
+        or worktree_common != primary_common
+    ):
         raise CampaignRelayError(
             "relay_worktree_invalid",
             "campaign relay successor worktree does not match the primary checkout",

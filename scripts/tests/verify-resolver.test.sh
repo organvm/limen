@@ -18,6 +18,7 @@ set -euo pipefail
 #     verify-ci-hardening-test (the resolver's own CI fail-closed contract).
 #   - Executable Git/GitHub writer surfaces now implicate direct-main-writer-contract;
 #     the release parameter implicates the sync-release default-branch regression.
+#   - Executable/config substrate surfaces implicate the path-indirection contract.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VERIFY="$ROOT/scripts/verify.py"
@@ -46,6 +47,7 @@ diff-hygiene
 direct-main-writer-contract
 tasks-parse
 check-params
+substrate-path-contract-test
 ruff-lint
 ruff-format
 pytest-cli
@@ -62,6 +64,7 @@ pytest-api' web/api/main.py
 expect mcp-change 'syntax-changed
 diff-hygiene
 direct-main-writer-contract
+substrate-path-contract-test
 ruff-lint
 ruff-format' mcp/src/limen_mcp/server.py
 
@@ -72,13 +75,15 @@ merge-queue-contract-test
 direct-main-writer-contract
 await-pr-test
 check-params
-check-gates' scripts/merge-policy.sh
+check-gates
+substrate-path-contract-test' scripts/merge-policy.sh
 
 expect enactment-change 'syntax-changed
 diff-hygiene
 direct-main-writer-contract
 enactment-test
-check-params' scripts/enactment-audit.py
+check-params
+substrate-path-contract-test' scripts/enactment-audit.py
 
 expect board-change 'syntax-changed
 diff-hygiene
@@ -88,7 +93,8 @@ check-root-manifest' tasks.yaml
 
 expect organs-change 'syntax-changed
 diff-hygiene
-nomenclator' organs/consulting/FUNNEL-ENGINE.md
+nomenclator
+substrate-path-contract-test' organs/consulting/FUNNEL-ENGINE.md
 
 expect naming-roll-change 'syntax-changed
 diff-hygiene
@@ -130,7 +136,8 @@ web-build' spec/contracts/readiness.schema.json
 expect params-change 'syntax-changed
 diff-hygiene
 sync-release-test
-check-params' institutio/governance/parameters.yaml
+check-params
+substrate-path-contract-test' institutio/governance/parameters.yaml
 
 expect registry-change 'syntax-changed
 diff-hygiene
@@ -147,19 +154,22 @@ verify-resolver-test
 verify-parallel-test
 verify-ci-hardening-test
 check-params
-check-gates' scripts/verify.py
+check-gates
+substrate-path-contract-test' scripts/verify.py
 
 expect parallel-verifier-change 'syntax-changed
 diff-hygiene
 direct-main-writer-contract
 verify-parallel-test
-check-params' scripts/tests/verify-parallel.test.sh
+check-params
+substrate-path-contract-test' scripts/tests/verify-parallel.test.sh
 
 expect mixed-change 'syntax-changed
 diff-hygiene
 direct-main-writer-contract
 tasks-parse
 check-params
+substrate-path-contract-test
 ruff-lint
 ruff-format
 pytest-cli

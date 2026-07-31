@@ -28,7 +28,7 @@ seed dead-end work — get the scaffold onto the clone target FIRST (the studium
 
 Usage:
   python3 scripts/ingest-backlog.py                                   # dry-run vs $LIMEN_ROOT/tasks.yaml
-  python3 scripts/ingest-backlog.py --tasks ~/Workspace/limen/tasks.yaml --apply
+  python3 scripts/ingest-backlog.py --tasks ~/Workspace/library/engine/organvm/limen/tasks.yaml --apply
 """
 from __future__ import annotations
 
@@ -120,7 +120,7 @@ def main() -> int:
         "--tasks",
         default=os.environ.get(
             "LIMEN_TASKS",
-            str(Path(os.path.expanduser(os.environ.get("LIMEN_ROOT", "~/Workspace/limen"))) / "tasks.yaml"),
+            str(Path(os.path.expanduser(os.environ.get("LIMEN_ROOT", "~/Workspace/library/engine/organvm/limen"))) / "tasks.yaml"),
         ),
     )
     ap.add_argument("--apply", action="store_true", help="append to tasks.yaml losslessly (atomic, re-emitting)")

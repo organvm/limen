@@ -29,15 +29,15 @@
     <key>EnvironmentVariables</key>
     <dict>
         <key>HOME</key><string>/Users/4jp</string>
-        <key>LIMEN_ROOT</key><string>/Users/4jp/Workspace/limen</string>
-        <key>PYTHONPATH</key><string>/Users/4jp/Workspace/limen/cli/src</string>
+        <key>LIMEN_ROOT</key><string>/Users/4jp/Workspace/library/engine/organvm/limen</string>
+        <key>PYTHONPATH</key><string>/Users/4jp/Workspace/library/engine/organvm/limen/cli/src</string>
     </dict>
     <!-- RunAtLoad hydrates promptless lanes at login; StartInterval re-runs every 30 min.
          One-shot assess-and-exit model, so no KeepAlive. -->
     <key>StartInterval</key><integer>1800</integer>
     <key>RunAtLoad</key><true/>
     <key>ProcessType</key><string>Background</string>
-    <key>StandardOutPath</key><string>/Users/4jp/Workspace/limen/logs/creds-hydrate.out.log</string>
-    <key>StandardErrorPath</key><string>/Users/4jp/Workspace/limen/logs/creds-hydrate.err.log</string>
+    <key>StandardOutPath</key><string>/Users/4jp/Workspace/library/engine/organvm/limen/logs/creds-hydrate.out.log</string>
+    <key>StandardErrorPath</key><string>/Users/4jp/Workspace/library/engine/organvm/limen/logs/creds-hydrate.err.log</string>
 </dict>
 </plist>

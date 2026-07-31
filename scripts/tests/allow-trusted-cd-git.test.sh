@@ -20,7 +20,7 @@ export HOME="$(mktemp -d "${HOME%/}/.hooktest.XXXXXX")"
 export TMPDIR="/tmp/hooktest.$$"
 unset CLAUDE_JOB_DIR CLAUDE_PROJECT_DIR UNSET_VAR 2>/dev/null || true
 
-W="$HOME/Workspace/limen"                 # a primary repo checkout
+W="${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen"                 # a primary repo checkout
 WT="$HOME/.claude/worktrees"              # the disposable worktree container
 mkdir -p "$W/.git" "$W/domus-genoma/.git" "$W/.claude/worktrees/agent-y" \
          "$WT/agent-x" "$WT/agent-a" "$WT/agent-b" "$WT/agent z/stage dir" \

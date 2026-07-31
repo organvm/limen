@@ -208,9 +208,18 @@ class LimenFile(BaseModel):
 
 mcp = FastMCP("Limen")
 
+
+def _limen_root() -> Path:
+    configured = os.environ.get("LIMEN_ROOT")
+    if configured:
+        return Path(configured).expanduser()
+    workspace = Path(os.environ.get("WORKSPACE_ROOT", str(Path.home() / "Workspace"))).expanduser()
+    return workspace / "library" / "engine" / "organvm" / "limen"
+
+
 CIRCUIT_BREAKER_TRIPPED = False
 TASK_LOOP_TRACKER: Dict[str, int] = {}
-STATE_FILE = Path.home() / "Workspace" / "limen" / ".mcp_state.json"
+STATE_FILE = _limen_root() / ".mcp_state.json"
 
 
 def _load_state():
@@ -247,7 +256,7 @@ def _get_tasks_path() -> Path:
     p = os.environ.get("LIMEN_TASKS")
     if p:
         return Path(p)
-    default_path = Path.home() / "Workspace" / "limen" / "tasks.yaml"
+    default_path = _limen_root() / "tasks.yaml"
     if default_path.exists():
         return default_path
     return Path("tasks.yaml")

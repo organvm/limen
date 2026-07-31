@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from limen.worktree_receipts import live_worktree_receipt_fields
+
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "reclaim-worktrees.py"
 
@@ -23,6 +25,16 @@ def load_reclaim_worktrees():
     return module
 
 
+def xdg_quarantine(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+) -> Path:
+    data_home = tmp_path / "xdg-data"
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+    return data_home / "limen" / name
+
+
 def acceptance_event(root: Path, action: str = "remove-worktree", reason: str = "clean+merged+idle") -> dict:
     return {
         "accepted_at": "2026-07-06T06:00:00Z",
@@ -30,11 +42,79 @@ def acceptance_event(root: Path, action: str = "remove-worktree", reason: str = 
         "accepted": True,
         "action": action,
         "reason": reason,
+        "path": str(root.resolve()),
         "archive_status": "not_required_clean_merged_remote",
         "archive_proof": "remote/default preservation verified",
         "redaction_review": "not_required_remote_only",
         "redaction_proof": "clean merged worktree contains no private-only payload",
     }
+
+
+def bound_receipt(path: Path, **values: object) -> dict[str, object]:
+    identity = live_worktree_receipt_fields(path)
+    assert identity is not None
+    return {"root": path.name, **identity, **values}
+
+
+def canonical_same_slug_worktree(tmp_path: Path, workspace: Path, owner: str) -> Path:
+    owner_root = tmp_path / owner
+    primary = owner_root / "primary"
+    remote = owner_root / "origin.git"
+    primary.mkdir(parents=True)
+    remote.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=primary, check=True)
+    subprocess.run(["git", "init", "-q", "--bare"], cwd=remote, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=primary, check=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=primary, check=True)
+    subprocess.run(["git", "commit", "-qm", "base", "--allow-empty"], cwd=primary, check=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=primary, check=True)
+    subprocess.run(["git", "push", "-qu", "origin", "main"], cwd=primary, check=True)
+    key = live_worktree_receipt_fields(primary)
+    assert key is not None
+    worktree = workspace / "runtime" / "worktrees" / key["repository_key"] / "same-slug"
+    worktree.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["git", "worktree", "add", "-q", "-b", "work/same-slug", str(worktree), "HEAD"],
+        cwd=primary,
+        check=True,
+    )
+    return worktree
+
+
+def merged_receipt(path: Path) -> dict[str, object]:
+    return bound_receipt(
+        path,
+        lane="remote-merged",
+        status="merged_pr_preserved",
+        pr_state="MERGED",
+        pr_url="https://github.com/example/repo/pull/7",
+    )
+
+
+def test_reaper_remote_merged_receipt_is_bound_to_exact_same_slug_worktree_and_head(
+    tmp_path: Path,
+) -> None:
+    reclaim = load_reclaim_worktrees()
+    workspace = tmp_path / "Workspace"
+    first = canonical_same_slug_worktree(tmp_path, workspace, "first")
+    second = canonical_same_slug_worktree(tmp_path, workspace, "second")
+    foreign = merged_receipt(first)
+    stale = merged_receipt(second)
+
+    subprocess.run(
+        ["git", "commit", "-qm", "local-only", "--allow-empty"],
+        cwd=second,
+        check=True,
+    )
+    current = merged_receipt(second)
+    args = (second, time.time(), 0)
+
+    assert reclaim.classify(*args, [foreign]) == ("skip", "unpushed-commits")
+    assert reclaim.classify(*args, [stale]) == ("skip", "unpushed-commits")
+    assert reclaim.classify(*args, [current]) == (
+        "remove-worktree",
+        "receipt-remote-merged+clean+idle",
+    )
 
 
 def test_reclaim_standing_grant_accepts_loss_free_class_without_ledger(tmp_path: Path) -> None:
@@ -76,15 +156,14 @@ def test_debt_classifier_matches_accepted_reaper_for_remote_merged_receipt(tmp_p
     subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=root, check=True)
     subprocess.run(["git", "config", "user.name", "Test User"], cwd=root, check=True)
     subprocess.run(["git", "commit", "-qm", "init", "--allow-empty"], cwd=root, check=True)
-    receipts = {
-        root.name: {
-            "root": root.name,
-            "lane": "remote-merged",
-            "status": "merged_pr_preserved",
-            "pr_state": "MERGED",
-            "pr_url": "https://github.com/example/repo/pull/7",
-        }
-    }
+    receipt = bound_receipt(
+        root,
+        lane="remote-merged",
+        status="merged_pr_preserved",
+        pr_state="MERGED",
+        pr_url="https://github.com/example/repo/pull/7",
+    )
+    receipts = {root.name: receipt}
     now = time.time()
 
     action, reaper_reason = reclaim.classify(root, now, 0, receipts)
@@ -338,6 +417,88 @@ def test_apply_requires_matching_plan_digest_before_abandonment(tmp_path: Path, 
     assert candidate.exists()
 
 
+def test_apply_records_unsafe_quarantine_root_per_candidate_and_continues(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    reclaim = load_reclaim_worktrees()
+    unsafe = tmp_path / "unsafe"
+    safe = tmp_path / "safe"
+    unsafe.mkdir()
+    safe.mkdir()
+    targets = [type("Target", (), {"path": path, "min_age_h": 0, "source": "test"})() for path in (unsafe, safe)]
+    candidates = [
+        {
+            "root": path.name,
+            "path": str(path),
+            "source": "test",
+            "action": "remove-residue",
+            "reason": "generated-log-shell",
+        }
+        for path in (unsafe, safe)
+    ]
+    plan_sha = "a" * 64
+    monkeypatch.setattr(reclaim, "APPLY", True)
+    monkeypatch.setattr(reclaim, "CHECK", False)
+    monkeypatch.setattr(reclaim, "JSON_OUT", True)
+    monkeypatch.setattr(reclaim, "FORCE", True)
+    monkeypatch.setattr(reclaim, "GENERATED_ONLY", False)
+    monkeypatch.setattr(reclaim, "EXPECTED_PLAN_SHA", plan_sha)
+    monkeypatch.setattr(reclaim, "iter_worktree_targets", lambda _root: targets)
+    monkeypatch.setattr(reclaim, "active_process_cwds", dict)
+    monkeypatch.setattr(reclaim, "load_preservation_receipts", dict)
+    monkeypatch.setattr(reclaim, "load_reclaim_acceptance", list)
+    monkeypatch.setattr(reclaim, "load_estate_custody_context", lambda: None)
+    monkeypatch.setattr(
+        reclaim,
+        "build_candidate_manifest",
+        lambda *_args, **_kwargs: (
+            {"schema": "test", "candidates": candidates},
+            plan_sha,
+            [],
+            [],
+        ),
+    )
+    monkeypatch.setattr(
+        reclaim,
+        "classify",
+        lambda *_args, **_kwargs: ("remove-residue", "generated-log-shell"),
+    )
+    monkeypatch.setattr(reclaim, "reclaim_accepted", lambda *_args, **_kwargs: (True, "accepted"))
+    monkeypatch.setattr(
+        reclaim,
+        "abandonment_quarantine_root",
+        lambda path: (
+            (_ for _ in ()).throw(ValueError("quarantine-must-be-outside-canonical-worktree-inventory"))
+            if path == unsafe
+            else tmp_path / "quarantine"
+        ),
+    )
+    monkeypatch.setattr(
+        reclaim,
+        "quarantine_path",
+        lambda *_args, **_kwargs: {"receipt_path": tmp_path / "receipt.json"},
+    )
+    monkeypatch.setattr(reclaim, "persist_apply_receipt", lambda **_kwargs: None)
+
+    assert reclaim.main() == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["failed"] == [
+        {
+            "root": "unsafe",
+            "reason": "quarantine-must-be-outside-canonical-worktree-inventory",
+        }
+    ]
+    assert payload["reclaimed"] == [
+        {
+            "root": "safe",
+            "detail": "remove-residue:generated-log-shell:abandonment=receipt.json",
+        }
+    ]
+    assert unsafe.exists()
+
+
 def test_persist_apply_receipt_records_finite_completion_in_log_and_marker(tmp_path: Path, monkeypatch) -> None:
     reclaim = load_reclaim_worktrees()
     marker = tmp_path / "logs" / ".reclaim-last"
@@ -402,6 +563,37 @@ def test_reclaim_acceptance_requires_archive_and_redaction_proofs(tmp_path: Path
         assert reason == "missing-reclaim-acceptance"
 
 
+def test_reclaim_acceptance_requires_exact_path_even_for_same_root_name(tmp_path: Path) -> None:
+    reclaim = load_reclaim_worktrees()
+    reclaim.STANDING_ACCEPTANCE = False
+    first = tmp_path / "first" / "same-slug"
+    second = tmp_path / "second" / "same-slug"
+    first.mkdir(parents=True)
+    second.mkdir(parents=True)
+    foreign = acceptance_event(first)
+    pathless = acceptance_event(second)
+    pathless.pop("path")
+
+    assert reclaim.reclaim_accepted(
+        second,
+        "remove-worktree",
+        "clean+merged+idle",
+        [foreign],
+    ) == (False, "missing-reclaim-acceptance")
+    assert reclaim.reclaim_accepted(
+        second,
+        "remove-worktree",
+        "clean+merged+idle",
+        [pathless],
+    ) == (False, "missing-reclaim-acceptance")
+    assert reclaim.reclaim_accepted(
+        second,
+        "remove-worktree",
+        "clean+merged+idle",
+        [acceptance_event(second)],
+    ) == (True, "reclaim-accepted")
+
+
 def test_reclaim_generated_payloads_cleans_inactive_ignored_dirs(tmp_path: Path, monkeypatch) -> None:
     reclaim = load_reclaim_worktrees()
     monkeypatch.setenv("LIMEN_RECLAIM_GENERATED", "1")
@@ -418,7 +610,7 @@ def test_reclaim_generated_payloads_cleans_inactive_ignored_dirs(tmp_path: Path,
     )
     (repo / "node_modules").mkdir()
     (repo / "node_modules" / "dep.txt").write_text("generated\n", encoding="utf-8")
-    quarantine = tmp_path / "quarantine"
+    quarantine = xdg_quarantine(tmp_path, monkeypatch, "generated")
 
     monkeypatch.setattr(reclaim, "active_async_task_prefixes", lambda: set())
     monkeypatch.setattr(reclaim, "ABANDONMENT_QUARANTINE", str(quarantine))
@@ -478,13 +670,14 @@ def test_reclaim_generated_payloads_preserves_tracked_generated_name(
     )
 
     monkeypatch.setattr(reclaim, "active_async_task_prefixes", lambda: set())
-    monkeypatch.setattr(reclaim, "ABANDONMENT_QUARANTINE", str(tmp_path / "quarantine"))
+    quarantine = xdg_quarantine(tmp_path, monkeypatch, "generated")
+    monkeypatch.setattr(reclaim, "ABANDONMENT_QUARANTINE", str(quarantine))
     target = type("Target", (), {"path": repo, "min_age_h": 0})()
     result = reclaim.reclaim_generated_payloads([target])
 
     assert result["cleaned"] == [{"root": "repo", "detail": "quarantined:0"}]
     assert (repo / "dist" / "bundle.js").read_text(encoding="utf-8") == "tracked\n"
-    assert not (tmp_path / "quarantine").exists()
+    assert not quarantine.exists()
 
 
 def test_reclaim_root_apply_does_not_run_generated_cleanup(
@@ -1033,11 +1226,16 @@ def test_orphan_detector_finds_dead_gitdir_and_ignores_live(tmp_path: Path) -> N
     assert reclaim.orphan_gitdir_name(live) is None
 
 
-def test_reclaim_quarantines_dead_gitdir_orphan_under_throwaway_when_armed(tmp_path: Path, monkeypatch) -> None:
+@pytest.mark.parametrize("source", ["dispatch-root", "canonical-runtime-worktree:owner--repo"])
+def test_reclaim_quarantines_dead_gitdir_orphan_under_throwaway_when_armed(
+    tmp_path: Path,
+    monkeypatch,
+    source: str,
+) -> None:
     reclaim = load_reclaim_worktrees()
     monkeypatch.setattr(reclaim, "ORPHAN_SWEEP", True)
     orphan = _dead_gitdir_orphan(tmp_path)
-    action, reason = reclaim.classify(orphan, time.time(), 0, source="dispatch-root")
+    action, reason = reclaim.classify(orphan, time.time(), 0, source=source)
     assert (action, reason) == ("quarantine-orphan", reclaim.ORPHAN_REASON)
 
 
@@ -1046,7 +1244,7 @@ def test_quarantine_orphan_moves_and_never_deletes(tmp_path: Path, monkeypatch) 
     # work that never walked its lifecycle". After the sweep the source is gone but every byte, walked
     # or not, survives in quarantine, and a receipt records where it went.
     reclaim = load_reclaim_worktrees()
-    qroot = tmp_path / "quarantine"
+    qroot = xdg_quarantine(tmp_path, monkeypatch, "orphans")
     monkeypatch.setattr(reclaim, "ORPHAN_QUARANTINE", str(qroot))
     monkeypatch.setattr(reclaim, "ORPHAN_QUARANTINE_LOG", tmp_path / "orphan-quarantine.jsonl")
     orphan = _dead_gitdir_orphan(tmp_path, "wt-unwalked")
@@ -1064,11 +1262,64 @@ def test_quarantine_orphan_moves_and_never_deletes(tmp_path: Path, monkeypatch) 
     assert receipt["recoverable"] == "moved-not-deleted" and receipt["to"] == dest
 
 
+def test_canonical_quarantine_roots_are_persistent_xdg_data_outside_workspace(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = tmp_path / "Workspace"
+    canonical_root = workspace / "runtime" / "worktrees"
+    unit = canonical_root / "owner--repo--digest" / "same-slug"
+    unit.mkdir(parents=True)
+    monkeypatch.setenv("WORKSPACE_ROOT", str(workspace))
+    data_home = tmp_path / "xdg-data"
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+    reclaim = load_reclaim_worktrees()
+    monkeypatch.setattr(reclaim, "ABANDONMENT_QUARANTINE", "")
+    monkeypatch.setattr(reclaim, "ORPHAN_QUARANTINE", "")
+
+    abandonment = reclaim.abandonment_quarantine_root(unit)
+    orphan = reclaim.orphan_quarantine_root(unit)
+    abandonment.mkdir(parents=True)
+    orphan.mkdir(parents=True)
+
+    assert abandonment == data_home / "limen" / "worktree-abandonment"
+    assert orphan == data_home / "limen" / "orphan-quarantine"
+    assert not abandonment.is_relative_to(workspace)
+    assert not orphan.is_relative_to(workspace)
+    assert abandonment.stat().st_dev == unit.stat().st_dev == orphan.stat().st_dev
+    assert list(canonical_root.glob("*/*")) == [unit]
+
+
+@pytest.mark.parametrize("variable", ["ABANDONMENT_QUARANTINE", "ORPHAN_QUARANTINE"])
+def test_quarantine_override_inside_canonical_inventory_is_denied(
+    tmp_path: Path,
+    monkeypatch,
+    variable: str,
+) -> None:
+    workspace = tmp_path / "Workspace"
+    canonical_root = workspace / "runtime" / "worktrees"
+    unit = canonical_root / "owner--repo--digest" / "same-slug"
+    unit.mkdir(parents=True)
+    monkeypatch.setenv("WORKSPACE_ROOT", str(workspace))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
+    reclaim = load_reclaim_worktrees()
+    monkeypatch.setattr(reclaim, variable, str(canonical_root / "_unsafe"))
+
+    with pytest.raises(ValueError, match="quarantine-root"):
+        if variable == "ABANDONMENT_QUARANTINE":
+            reclaim.abandonment_quarantine_root(unit)
+        else:
+            reclaim.orphan_quarantine_root(unit)
+
+
 def test_quarantine_orphan_refuses_when_destination_unwritable(tmp_path: Path, monkeypatch) -> None:
     # Fail-closed: if quarantine can't be prepared, the orphan is LEFT in place, never half-removed.
     reclaim = load_reclaim_worktrees()
-    monkeypatch.setattr(reclaim, "ORPHAN_QUARANTINE", str(tmp_path / "afile" / "under"))
-    (tmp_path / "afile").write_text("not a dir\n", encoding="utf-8")  # mkdir under a file → OSError
+    data_home = tmp_path / "xdg-data"
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+    (data_home / "limen").mkdir(parents=True)
+    (data_home / "limen" / "afile").write_text("not a dir\n", encoding="utf-8")
+    monkeypatch.setattr(reclaim, "ORPHAN_QUARANTINE", str(data_home / "limen" / "afile" / "under"))
     orphan = _dead_gitdir_orphan(tmp_path, "wt-keep")
     ok, reason = reclaim.quarantine_orphan(orphan, "20260715T000000Z")
     assert ok is False

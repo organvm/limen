@@ -28,7 +28,7 @@ resolve() {
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 # repo root = parent of scripts/. Canonicalize (resolve symlinks, physical pwd) so a session
-# that reached the repo via a symlink (e.g. ~/limen -> ~/Workspace/limen) cannot render a
+# that reached the repo via a symlink (e.g. ~/limen -> ~/Workspace/library/engine/organvm/limen) cannot render a
 # plist whose paths drift from the committed copy.
 ROOT="$(cd "$(resolve "${LIMEN_ROOT:-$SCRIPT_DIR/..}")" && pwd -P)"
 HOME_DIR="${HOME:?HOME is unset}"

@@ -3,7 +3,7 @@
 # Called as a slow voice by heartbeat-loop.sh so the browser view stays current without a
 # human rebuild. READ-only w.r.t. the conductor (only rebuilds web/app/out + serves it).
 set -uo pipefail
-ROOT="${LIMEN_ROOT:-$HOME/Workspace/limen}"
+ROOT="${LIMEN_ROOT:-${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen}"
 APP="$ROOT/web/app"
 PORT="${LIMEN_WEB_PORT:-8788}"
 [ -d "$APP/node_modules" ] || { echo "  web: node_modules missing — skip"; exit 0; }

@@ -21,7 +21,7 @@
 set -uo pipefail
 
 export HOME="${HOME:-/Users/4jp}"
-LIMEN_ROOT="${LIMEN_ROOT:-$HOME/Workspace/limen}"
+LIMEN_ROOT="${LIMEN_ROOT:-${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen}"
 UMA_ROOT="${UMA_ROOT:-$HOME/Workspace/universal-mail--automation}"
 LEDGER="${LIMEN_OBLIGATIONS_LEDGER:-$LIMEN_ROOT/obligations-ledger.json}"
 PY="${LIMEN_PY:-python3}"

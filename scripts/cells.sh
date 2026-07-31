@@ -30,7 +30,7 @@
 # (build/verify within the cell), never fleet-wide merges, so two cells never fight over main.
 set -uo pipefail
 
-LIMEN_ROOT="${LIMEN_ROOT:-$HOME/Workspace/limen}"
+LIMEN_ROOT="${LIMEN_ROOT:-${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen}"
 WT_DIR="$LIMEN_ROOT/.claude/worktrees"
 CELL_LOGS="$LIMEN_ROOT/logs/cells"
 BRANCH_PREFIX="cell/"

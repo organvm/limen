@@ -56,27 +56,29 @@ workstream --agent auto --prompt "short objective and constraints" limen my-work
 ```
 
 The command works from Terminal, Kitty, Ghostty, Warp, or any normal shell. It creates or reuses
-`<repo>/.worktrees/<slug>` on `work/<slug>`, then writes a private modular capsule at:
+`$WORKSPACE_ROOT/runtime/worktrees/<repo-key>/<slug>` on `work/<slug>`. The collision-resistant
+`<repo-key>` derives from the repository's origin identity, so equal basenames cannot collide. It
+then writes a private modular capsule at:
 
 ```text
-<repo>/.worktrees/<slug>/.limen-workstream/README.md
-<repo>/.worktrees/<slug>/.limen-workstream/manifest.md
-<repo>/.worktrees/<slug>/.limen-workstream/workstream.json
-<repo>/.worktrees/<slug>/.limen-workstream/intent.md
-<repo>/.worktrees/<slug>/.limen-workstream/runtime.md
-<repo>/.worktrees/<slug>/.limen-workstream/closeout.md
+$WORKSPACE_ROOT/runtime/worktrees/<repo-key>/<slug>/.limen-workstream/README.md
+$WORKSPACE_ROOT/runtime/worktrees/<repo-key>/<slug>/.limen-workstream/manifest.md
+$WORKSPACE_ROOT/runtime/worktrees/<repo-key>/<slug>/.limen-workstream/workstream.json
+$WORKSPACE_ROOT/runtime/worktrees/<repo-key>/<slug>/.limen-workstream/intent.md
+$WORKSPACE_ROOT/runtime/worktrees/<repo-key>/<slug>/.limen-workstream/runtime.md
+$WORKSPACE_ROOT/runtime/worktrees/<repo-key>/<slug>/.limen-workstream/closeout.md
 ```
 
 It also writes:
 
 ```text
-<repo>/.worktrees/<slug>/.limen-workstream/kickstart.sh
+$WORKSPACE_ROOT/runtime/worktrees/<repo-key>/<slug>/.limen-workstream/kickstart.sh
 ```
 
-Run it from any terminal with:
+Run the exact path printed by the launcher from any terminal:
 
 ```bash
-bash <repo>/.worktrees/<slug>/.limen-workstream/kickstart.sh
+bash "$WORKSPACE_ROOT/runtime/worktrees/<repo-key>/<slug>/.limen-workstream/kickstart.sh"
 ```
 
 Autonomous Codex capsules preserve the interactive UI when standard input and output are attached

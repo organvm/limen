@@ -16,10 +16,30 @@ import time
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+REPO = SCRIPTS.parent
 _spec = importlib.util.spec_from_file_location("reap_clones", SCRIPTS / "reap-clones.py")
 reap = importlib.util.module_from_spec(_spec)
 sys.modules["reap_clones"] = reap  # dataclass needs the module discoverable during exec
 _spec.loader.exec_module(reap)
+
+
+def test_help_imports_checkout_modules_before_canonical_cutover():
+    """The bridge checkout remains directly executable while canonical LIMEN_ROOT is empty."""
+
+    env = os.environ.copy()
+    for name in ("PYTHONPATH", "LIMEN_ROOT", "WORKSPACE_ROOT"):
+        env.pop(name, None)
+    result = subprocess.run(
+        [sys.executable, str(SCRIPTS / "reap-clones.py"), "--help"],
+        cwd=REPO,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Reap pure pushed-mirror clones" in result.stdout
 
 
 # ---------------------------------------------------------------- git helpers
@@ -360,7 +380,9 @@ def test_local_only_tag_is_never_reaped(tmp_path):
     (clone / "release.bin").write_text("release artifact v1.0\n")
     _git(clone, "add", "-A")
     _git(clone, "commit", "-qm", "release v1.0")
-    _git(clone, "tag", "v1.0-local")  # local only, never pushed
+    # A developer-global tag.gpgSign=true must not turn this lightweight
+    # fixture tag into an interactive annotated-tag editor session.
+    _git(clone, "-c", "tag.gpgSign=false", "tag", "v1.0-local")  # local only, never pushed
     _git(clone, "reset", "--hard", "HEAD~1")  # orphan the tagged commit off refs/heads
     v = _verdict(clone, age_days=99, pressure=True)
     assert v.reap is False

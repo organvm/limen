@@ -54,7 +54,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
 HOME = Path(os.environ.get("HOME", str(Path.home())))
 DEFAULT_SESSIONS_ROOT = HOME / ".codex" / "sessions"
 DEFAULT_OUTPUT = ROOT / "logs" / "codex-token-report.json"

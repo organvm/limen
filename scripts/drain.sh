@@ -8,7 +8,7 @@
 # error in `limen harvest`) can NEVER abort the rest — the merge + heal organs must run every beat.
 # Keep -u/pipefail for safety; every step is individually guarded with `|| true`.
 set -uo pipefail
-export LIMEN_ROOT="${LIMEN_ROOT:-$HOME/Workspace/limen}"
+export LIMEN_ROOT="${LIMEN_ROOT:-${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen}"
 export LIMEN_TASKS="${LIMEN_TASKS:-$LIMEN_ROOT/tasks.yaml}"
 PY="$LIMEN_ROOT/cli/src"
 

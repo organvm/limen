@@ -217,7 +217,7 @@ def build_receipt(batch_id: str) -> dict[str, Any]:
         )
     evidence.append(
         "no exact local worktree directory existed for the named Limen subagent clusters under /Users/4jp/Workspace/.limen-worktrees, "
-        "/Users/4jp/Workspace/limen/.worktrees, or /Users/4jp/Workspace/limen/.claude/worktrees at review time"
+        "/Users/4jp/Workspace/library/engine/organvm/limen/.worktrees, or /Users/4jp/Workspace/library/engine/organvm/limen/.claude/worktrees at review time"
     )
     if merged_numbers:
         evidence.append("gh api branch lookup and gh pr list --head against organvm/limen found merged PR receipts for " + ", ".join(merged_numbers))

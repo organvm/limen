@@ -219,6 +219,70 @@ def _default_cwd_owner_probe(target: Path) -> int | None:
     return None
 
 
+def _normalized_absolute_path(path: Path, *, label: str) -> Path:
+    expanded = path.expanduser()
+    if not expanded.is_absolute():
+        raise ValueError(f"{label}-must-be-absolute")
+    return Path(os.path.abspath(expanded))
+
+
+def _require_physical_directory_chain(path: Path, *, allow_missing: bool) -> None:
+    """Reject symlink and non-directory components without following either."""
+
+    current = Path(path.anchor)
+    for part in path.parts[1:]:
+        current /= part
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            if allow_missing:
+                continue
+            raise ValueError(f"quarantine-directory-missing:{current}") from None
+        except OSError as exc:
+            raise ValueError(f"quarantine-directory-unmeasured:{current}:{type(exc).__name__}") from exc
+        if stat.S_ISLNK(info.st_mode):
+            raise ValueError(f"quarantine-directory-symlink:{current}")
+        if not stat.S_ISDIR(info.st_mode):
+            raise ValueError(f"quarantine-directory-not-directory:{current}")
+
+
+def xdg_data_home() -> Path:
+    """Return the normalized physical XDG data root used for recoverable payloads."""
+
+    configured = os.environ.get("XDG_DATA_HOME")
+    candidate = Path(configured).expanduser() if configured else Path("~/.local/share").expanduser()
+    candidate = _normalized_absolute_path(candidate, label="xdg-data-home")
+    _require_physical_directory_chain(candidate, allow_missing=True)
+    return candidate
+
+
+def validated_quarantine_root(quarantine_root: Path, *, workspace_root: Path | None = None) -> Path:
+    """Confine quarantine payloads to the persistent XDG-owned Limen inventory."""
+
+    candidate = _normalized_absolute_path(quarantine_root, label="quarantine-root")
+    data_root = xdg_data_home()
+    limen_data_root = data_root / "limen"
+
+    workspace = workspace_root
+    if workspace is None:
+        workspace = Path(os.environ.get("WORKSPACE_ROOT", str(Path("~/Workspace").expanduser())))
+    workspace = _normalized_absolute_path(workspace, label="workspace-root")
+    _require_physical_directory_chain(candidate, allow_missing=True)
+    candidate_physical = candidate.resolve(strict=False)
+    workspace_physical = workspace.resolve(strict=False)
+    if (
+        candidate == workspace
+        or candidate.is_relative_to(workspace)
+        or candidate_physical == workspace_physical
+        or candidate_physical.is_relative_to(workspace_physical)
+    ):
+        raise ValueError("quarantine-root-must-be-outside-workspace")
+    if candidate == limen_data_root or not candidate.is_relative_to(limen_data_root):
+        raise ValueError("quarantine-root-must-be-inside-xdg-limen")
+
+    return candidate
+
+
 def detach_registered_worktree(
     superproject: Path,
     target: Path,
@@ -325,7 +389,7 @@ def quarantine_path(
         if owner is not None:
             code = "owner-probe-unavailable" if owner == -1 else f"active-process-cwd:{owner}"
             raise RuntimeError(code)
-        proposed_quarantine_root = quarantine_root.expanduser().resolve(strict=False)
+        proposed_quarantine_root = validated_quarantine_root(quarantine_root)
         if (
             proposed_quarantine_root == source
             or source in proposed_quarantine_root.parents
@@ -333,7 +397,10 @@ def quarantine_path(
         ):
             raise RuntimeError("quarantine-source-destination-nesting")
         proposed_quarantine_root.mkdir(parents=True, exist_ok=True)
+        _require_physical_directory_chain(proposed_quarantine_root, allow_missing=False)
         quarantine_root = proposed_quarantine_root.resolve(strict=True)
+        if quarantine_root != proposed_quarantine_root:
+            raise RuntimeError("quarantine-root-physical-identity-mismatch")
         if quarantine_root == source or source in quarantine_root.parents or quarantine_root in source.parents:
             raise RuntimeError("quarantine-source-destination-nesting")
         if not _same_filesystem(source, quarantine_root):
@@ -353,6 +420,11 @@ def quarantine_path(
                 "source_device": source.stat().st_dev,
                 "destination": str(destination),
                 "recoverable": True,
+                "restoration_pointer": {
+                    "from": str(destination),
+                    "to": str(source),
+                    "method": "same-filesystem-atomic-rename",
+                },
             },
         )
         phase = "move"
@@ -816,4 +888,6 @@ __all__ = [
     "purge_remote_proven_path",
     "quarantine_path",
     "remove_stable_zero_byte_lock",
+    "validated_quarantine_root",
+    "xdg_data_home",
 ]

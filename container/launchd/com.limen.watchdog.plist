@@ -25,8 +25,8 @@
     <key>EnvironmentVariables</key>
     <dict>
         <key>HOME</key><string>/Users/4jp</string>
-        <key>LIMEN_ROOT</key><string>/Users/4jp/Workspace/limen</string>
-        <key>PYTHONPATH</key><string>/Users/4jp/Workspace/limen/cli/src</string>
+        <key>LIMEN_ROOT</key><string>/Users/4jp/Workspace/library/engine/organvm/limen</string>
+        <key>PYTHONPATH</key><string>/Users/4jp/Workspace/library/engine/organvm/limen/cli/src</string>
         <key>LIMEN_WATCHDOG_HEAL</key><string>1</string>
     </dict>
     <!-- StartInterval re-fires every 5 min no matter what; KeepAlive would fight the one-shot
@@ -34,7 +34,7 @@
     <key>StartInterval</key><integer>300</integer>
     <key>RunAtLoad</key><true/>
     <key>ProcessType</key><string>Background</string>
-    <key>StandardOutPath</key><string>/Users/4jp/Workspace/limen/logs/watchdog.out.log</string>
-    <key>StandardErrorPath</key><string>/Users/4jp/Workspace/limen/logs/watchdog.err.log</string>
+    <key>StandardOutPath</key><string>/Users/4jp/Workspace/library/engine/organvm/limen/logs/watchdog.out.log</string>
+    <key>StandardErrorPath</key><string>/Users/4jp/Workspace/library/engine/organvm/limen/logs/watchdog.err.log</string>
 </dict>
 </plist>

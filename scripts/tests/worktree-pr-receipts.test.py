@@ -69,6 +69,11 @@ with tempfile.TemporaryDirectory() as tmp:
         "headRefOid": "a" * 40,
         "url": "https://github.com/organvm/limen/pull/42",
     }
+    module.live_worktree_receipt_fields = lambda path: {
+        "worktree": str(path.resolve(strict=False)),
+        "head": "a" * 40,
+        "repository_key": "limen--" + "b" * 64,
+    }
 
     rows = [
         {
@@ -98,3 +103,46 @@ assert second == {"updated": 0, "dry_run": False}, second
 assert second_bytes == first_bytes
 assert second_data["receipts"][0]["evidence_updated_utc"] == first_timestamp
 print("PASS: unchanged preservation evidence is an idempotent apply fixed point")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    paths = [root / owner / "same-slug" for owner in ("first", "second")]
+    for path in paths:
+        path.mkdir(parents=True)
+    receipt_path = root / "worktree-preservation-receipts.json"
+    receipt_path.write_text('{"receipts": []}\n', encoding="utf-8")
+    module.PRESERVATION_RECEIPTS = receipt_path
+    module.pr_view = lambda cwd, repo, number_or_url: {
+        "number": int(number_or_url),
+        "state": "OPEN",
+        "isDraft": True,
+        "headRefName": "work/same-slug",
+        "headRefOid": "c" * 40,
+        "url": f"https://github.com/{repo}/pull/{number_or_url}",
+    }
+    module.live_worktree_receipt_fields = lambda path: {
+        "worktree": str(path.resolve(strict=False)),
+        "head": "c" * 40,
+        "repository_key": f"{path.parent.name}--" + "d" * 64,
+    }
+    rows = [
+        {
+            "action": "pr_exists",
+            "branch": "work/same-slug",
+            "name": "same-slug",
+            "path": str(path),
+            "repo": f"{path.parent.name}/same-slug",
+            "url": f"https://github.com/{path.parent.name}/same-slug/pull/{index}",
+        }
+        for index, path in enumerate(paths, start=41)
+    ]
+
+    result = module.update_preservation_receipts(rows, apply=True)
+    receipts = json.loads(receipt_path.read_text(encoding="utf-8"))["receipts"]
+
+assert result == {"updated": 2, "dry_run": False}, result
+assert [row["root"] for row in receipts] == ["same-slug", "same-slug"]
+assert len({row["worktree"] for row in receipts}) == 2
+assert len({row["repository_key"] for row in receipts}) == 2
+print("PASS: same-slug worktrees retain distinct exact preservation rows")

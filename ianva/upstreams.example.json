@@ -3,7 +3,7 @@
 
   "limen": {
     "command": "uv",
-    "args": ["--directory", "/Users/4jp/Workspace/limen/mcp", "run", "limen-mcp"],
+    "args": ["--directory", "/Users/4jp/Workspace/library/engine/organvm/limen/mcp", "run", "limen-mcp"],
     "enabled": true,
     "group": "fleet"
   },

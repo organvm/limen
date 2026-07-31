@@ -27,7 +27,7 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
 sys.path.insert(0, str(ROOT / "cli" / "src"))
 PR_RE = re.compile(r"github\.com/[^/\s]+/[^/\s]+/pull/\d+")
 

@@ -25,7 +25,7 @@ from limen.io import load_limen_file  # noqa: E402
 from limen.jules_supply import dispatchable_supply, expand_supply, load_supply_registry  # noqa: E402
 from limen.tabularius import submit_task_upsert  # noqa: E402
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
 TASKS = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
 REGISTRY = Path(os.environ.get("LIMEN_JULES_SUPPLY_TEMPLATES", str(ROOT / "docs" / "jules-supply-templates.yaml")))
 

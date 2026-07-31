@@ -25,7 +25,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
 LEDGER = Path(os.environ.get("LIMEN_OBLIGATIONS_LEDGER", ROOT / "obligations-ledger.json"))
 DISPOSITIONS = Path(os.environ.get("LIMEN_CORRESPONDENCE_DISPOSITIONS", ROOT / "logs" / "correspondence-dispositions.json"))
 MAX_AGE_HOURS = float(os.environ.get("LIMEN_MAIL_LEDGER_MAX_AGE_HOURS", "12"))

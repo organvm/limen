@@ -34,7 +34,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 # Declared governance params (see institutio/governance/parameters.yaml).
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
 PRIVATE_ROOT = Path(os.environ.get("LIMEN_PRIVATE_ROOT", ROOT / ".limen-private"))
 QUEUE_DIR = PRIVATE_ROOT / "media-scheduler"
 QUEUE_PATH = QUEUE_DIR / "queue.jsonl"

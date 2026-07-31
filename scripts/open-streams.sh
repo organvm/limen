@@ -106,7 +106,7 @@ while [[ $# -gt 0 ]]; do
     --status)
       # The registry owns state derivation — this is a pure delegate, so the launcher and the
       # checker can never tell the operator two different stories about the same stream.
-      exec python3 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/check-session-streams.py" --status ;;
+      exec python3 "$script_dir/check-session-streams.py" --status ;;
     --lane)
       # Choose which native lane opens the domains. The REGISTRY stays vendor-neutral — it emits
       # `--agent auto` because the capsule contract declares `lane_selection:
@@ -204,8 +204,9 @@ fi
 # The ready set, its bound, and each row's shell-quoted command — derived in one place. The checker
 # exits non-zero on registry drift, and `set -e` makes that fatal here: we never open a set derived
 # from an incoherent graph.
-plan="$(
-  python3 - "$repo_root" "${max_parallel:-}" "$unbounded" "$family" <<'PY'
+plan_file="$(mktemp -t limen-open-streams.XXXXXX)"
+trap 'rm -f "$plan_file"' EXIT
+python3 - "$repo_root" "${max_parallel:-}" "$unbounded" "$family" >"$plan_file" <<'PY'
 import json
 import os
 import shlex
@@ -292,7 +293,7 @@ for i, row in enumerate(rows):
     kind = ("REOPEN" if row.get("reopen") else "OPEN") if i < cap else "DEFER"
     print(f"{kind}\t{row['id']}\t{row['job_class']}\t{shlex.join(row['argv'])}\t{row['title']}")
 PY
-)"
+plan="$(<"$plan_file")"
 
 cap_line="$(printf '%s\n' "$plan" | awk -F'\t' '$1=="CAP"')"
 cap="$(printf '%s' "$cap_line" | cut -f2)"

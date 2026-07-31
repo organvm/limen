@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://organvm.dev/contracts/workspace-manifest-v1.schema.json",
+  "title": "PORTVS Literal Workspace Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "workspace_root", "limits", "rows"],
+  "properties": {
+    "schema": {"const": "portvs.workspace_manifest.v1"},
+    "workspace_root": {"type": "string", "minLength": 1},
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_scan_entries", "max_violations", "max_unmeasured", "max_compatibility_links"],
+      "properties": {
+        "max_scan_entries": {"type": "integer", "minimum": 1},
+        "max_violations": {"type": "integer", "minimum": 0},
+        "max_unmeasured": {"type": "integer", "minimum": 0},
+        "max_compatibility_links": {"type": "integer", "minimum": 0}
+      }
+    },
+    "rows": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["path", "kind", "owner_ref", "residency"],
+        "properties": {
+          "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+"},
+          "kind": {"enum": ["structural", "repository", "private", "ephemeral", "index"]},
+          "owner_ref": {"type": "string", "minLength": 1},
+          "residency": {"enum": ["structural", "laptop", "private", "ephemeral", "remote-index"]},
+          "remote": {"type": "string", "minLength": 1},
+          "custody_ref": {"type": "string", "minLength": 1},
+          "expires_after": {"type": "integer", "minimum": 1},
+          "reaper": {"type": "string", "minLength": 1},
+          "sealed_inventory_ref": {"type": "string", "minLength": 1},
+          "restoration_receipt_ref": {"type": "string", "minLength": 1},
+          "custody_label": {"type": "string", "minLength": 1},
+          "source_ref": {"type": "string", "minLength": 1},
+          "generator": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "migration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "compatibility_links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "target", "owner_ref", "expires_at"],
+            "properties": {
+              "path": {"type": "string", "minLength": 1},
+              "target": {"type": "string", "minLength": 1},
+              "owner_ref": {"type": "string", "minLength": 1},
+              "expires_at": {"type": "string", "format": "date-time"}
+            }
+          }
+        }
+      }
+    }
+  }
+}

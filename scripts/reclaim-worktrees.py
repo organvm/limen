@@ -15,6 +15,8 @@ those:
     docs/worktree-reclaim-acceptance.jsonl immediately before physical removal.
 
 It scans every known creation site (the historical blind spot — see worktree-lifecycle-blind-spot):
+  • WORKSPACE_ROOT/runtime/worktrees/<repo-key>/<slug> — canonical disposable units,
+    min-age 168h (LIMEN_RECLAIM_CANONICAL_AGE_H).
   • LIMEN_WORKTREE_ROOT (Scratch-first, or $LIMEN_WORKDIR/.limen-worktrees fallback) — dispatch
     throwaway, min-age 6h.
   • LIMEN_RECLAIM_LEGACY_WORKTREE_ROOTS (default: ~/Workspace/.limen-worktrees) — historical
@@ -38,7 +40,8 @@ Dry-run by default; pass --apply to execute. Use --check --json for a structured
 candidate receipt. Self-throttles to once per
 LIMEN_RECLAIM_EVERY_MIN minutes so it is cheap to call every beat.
 
-Env: LIMEN_WORKTREE_ROOT, LIMEN_RECLAIM_MIN_AGE_H (6), LIMEN_RECLAIM_CLAUDE_WT (1),
+Env: LIMEN_WORKTREE_ROOT, LIMEN_RECLAIM_MIN_AGE_H (6), LIMEN_RECLAIM_CANONICAL_AGE_H (168),
+     LIMEN_RECLAIM_CLAUDE_WT (1),
      LIMEN_RECLAIM_LEGACY_DISPATCH_WT, LIMEN_RECLAIM_LEGACY_WORKTREE_ROOTS,
      LIMEN_RECLAIM_LEGACY_DISPATCH_AGE_H,
      LIMEN_RECLAIM_CLAUDE_AGE_H (24), LIMEN_RECLAIM_REPO_LOCAL_WT, LIMEN_RECLAIM_REPO_LOCAL_AGE_H,
@@ -47,14 +50,15 @@ Env: LIMEN_WORKTREE_ROOT, LIMEN_RECLAIM_MIN_AGE_H (6), LIMEN_RECLAIM_CLAUDE_WT (
      LIMEN_RECLAIM_WORKSPACE_ROOTS, LIMEN_RECLAIM_WORKSPACE_CHECKOUTS,
      LIMEN_RECLAIM_WORKSPACE_CHECKOUT_AGE_H, LIMEN_RECLAIM_MAX (50), LIMEN_RECLAIM_EVERY_MIN (30),
      LIMEN_RECLAIM_ORPHANS (0 — observable-first arm for the dead-gitdir orphan sweep),
-     LIMEN_ORPHAN_QUARANTINE (same-volume off-worktree target for preserved orphans),
-     LIMEN_ABANDONMENT_QUARANTINE (same-volume target for clones/residue/generated payloads),
+     XDG_DATA_HOME (~/.local/share; persistent owner root for recoverable quarantines),
+     LIMEN_ORPHAN_QUARANTINE (XDG-contained target for preserved orphans),
+     LIMEN_ABANDONMENT_QUARANTINE (XDG-contained target for clones/residue/generated payloads),
      LIMEN_WORKTREE_ABANDONMENT_RECEIPTS (private typed receipt root).
 
 Dead-gitdir orphan sweep (LIMEN_RECLAIM_ORPHANS=1): a checkout under a THROWAWAY root whose `.git`
 pointer targets a superproject gitdir that no longer exists (prune-race debris — `git worktree prune`
-fired while its volume was unmounted) is, past min-age, PRESERVED — MOVED into an off-worktree
-quarantine (LIMEN_ORPHAN_QUARANTINE), never deleted. Because git is dead on the checkout the sweep
+fired while its volume was unmounted) is, past min-age, PRESERVED — MOVED into persistent XDG
+application data (LIMEN_ORPHAN_QUARANTINE), never deleted. Because git is dead on the checkout the sweep
 cannot prove it walked its lifecycle, so it must not destroy it; the reversible move resolves the debt
 while losing nothing. Deleting a quarantined orphan is a SEPARATE proof-gated step. Default OFF.
 """
@@ -95,9 +99,14 @@ from limen.worktree_abandonment import (
     purge_custody_proven_path,
     purge_remote_proven_path,
     quarantine_path,
+    validated_quarantine_root,
+    xdg_data_home,
 )
 from limen.worktree_debt import is_generated_log_shell
-from limen.worktree_roots import iter_worktree_targets
+from limen.worktree_receipts import matching_worktree_receipt
+from limen.worktree_roots import (
+    iter_worktree_targets,
+)
 from reap_acceptance import (
     REQUIRED_ACCEPTANCE_PROOF_FIELDS as SHARED_REQUIRED_ACCEPTANCE_PROOF_FIELDS,
 )
@@ -125,7 +134,8 @@ def _float_env(name: str, default: float) -> float:
 MAX_REMOVE = _int_env("LIMEN_RECLAIM_MAX", 50)
 EVERY_MIN = _float_env("LIMEN_RECLAIM_EVERY_MIN", 30)
 GENERATED_RECLAIM_MAX = _int_env("LIMEN_RECLAIM_GENERATED_MAX", 80)
-LIMEN_ROOT = Path(os.environ.get("LIMEN_ROOT", f"{HOME}/Workspace/limen"))
+WORKSPACE_ROOT = Path(os.environ.get("WORKSPACE_ROOT", str(Path(HOME) / "Workspace")))
+LIMEN_ROOT = Path(os.environ.get("LIMEN_ROOT", str(WORKSPACE_ROOT / "library" / "engine" / "organvm" / "limen")))
 AGY_SCRATCH_ROOT = Path(os.environ.get("LIMEN_AGY_SCRATCH_ROOT", f"{HOME}/.gemini/antigravity-cli/scratch"))
 AGY_ROOT = AGY_SCRATCH_ROOT.expanduser().parent
 LOG = LIMEN_ROOT / "logs" / "reclaim-worktrees.jsonl"
@@ -238,15 +248,12 @@ def has_generated_payload(d: Path) -> bool:
 
 
 def abandonment_quarantine_root(source_root: Path) -> Path:
-    """Choose an off-scan, same-volume default unless the host injects one."""
+    """Choose the persistent XDG-owned quarantine; the move boundary enforces same-device."""
     if ABANDONMENT_QUARANTINE:
-        return Path(ABANDONMENT_QUARANTINE).expanduser()
-    creation_root = source_root.parent
-    if creation_root.name == ".worktrees":
-        return creation_root.parent.parent / "_limen-worktree-abandonment"
-    if creation_root.name == "worktrees" and creation_root.parent.name == ".claude":
-        return creation_root.parent.parent.parent / "_limen-worktree-abandonment"
-    return creation_root.parent / "_limen-worktree-abandonment"
+        candidate = Path(ABANDONMENT_QUARANTINE).expanduser()
+    else:
+        candidate = xdg_data_home() / "limen" / "worktree-abandonment"
+    return validated_quarantine_root(candidate, workspace_root=WORKSPACE_ROOT)
 
 
 def idle_enough(target, now: float) -> bool:
@@ -259,7 +266,10 @@ def idle_enough(target, now: float) -> bool:
 
 def purge_generated_payloads(d: Path) -> tuple[bool, str]:
     moved = 0
-    qroot = abandonment_quarantine_root(d)
+    try:
+        qroot = abandonment_quarantine_root(d)
+    except (OSError, ValueError) as exc:
+        return False, f"generated-quarantine-root-denied:{str(exc)[:120]}"
     for relative in GENERATED_CLEAN_PATHS:
         source = d / relative
         if not source.exists() and not source.is_symlink():
@@ -348,10 +358,14 @@ def remote_refs_containing_head(cwd: Path, head: str) -> tuple[str, ...]:
             return ()
         if not remote_object or not remote_ref.startswith("refs/"):
             return ()
-        if remote_object == head or git(
-            ["merge-base", "--is-ancestor", head, remote_object],
-            cwd,
-        ).returncode == 0:
+        if (
+            remote_object == head
+            or git(
+                ["merge-base", "--is-ancestor", head, remote_object],
+                cwd,
+            ).returncode
+            == 0
+        ):
             containing.append(remote_ref)
     return tuple(sorted(containing))
 
@@ -397,11 +411,7 @@ def all_local_refs_remote_proof(cwd: Path) -> tuple[dict[str, object], ...] | No
         if len(parts) != 3:
             return None
         local_ref, object_id, peeled = parts
-        containing: list[str] = [
-            remote_ref
-            for remote_ref, remote_object in remote
-            if object_id == remote_object
-        ]
+        containing: list[str] = [remote_ref for remote_ref, remote_object in remote if object_id == remote_object]
         object_type = git(["cat-file", "-t", object_id], cwd)
         if object_type.returncode != 0:
             return None
@@ -521,14 +531,12 @@ def load_preservation_receipts():
     try:
         data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
     except (OSError, ValueError):
-        return {}
-    receipts = {}
+        return []
+    receipts = []
     for receipt in data.get("receipts") or []:
         if not isinstance(receipt, dict):
             continue
-        root = receipt.get("root")
-        if root:
-            receipts[str(root)] = receipt
+        receipts.append(receipt)
     return receipts
 
 
@@ -655,9 +663,10 @@ STANDING_ACCEPTANCE_REASONS = {"clean+merged+idle", "receipt-remote-merged+clean
 # this autonomous sweep. Confined to THROWAWAY roots, past min-age, only when armed.
 ORPHAN_SWEEP = os.environ.get("LIMEN_RECLAIM_ORPHANS", "1") != "0"
 ORPHAN_REASON = "orphan-dead-gitdir+throwaway+idle"
-# Off-worktree quarantine root (a MOVE target, not a delete). Default: a sibling of the worktree
-# root on the same volume (an instant rename, off the worktree-scan path). An override must stay on
-# that same volume; cross-device copy fallback is denied. NEVER place it under a worktree root.
+# Persistent quarantine root (a MOVE target, not a delete). The default lives in XDG application
+# data, outside disposable Workspace runtime. Overrides remain confined to the same XDG-owned Limen
+# inventory. The atomic move boundary separately requires the source and destination to share a
+# device; cross-device copy fallback is denied.
 ORPHAN_QUARANTINE = os.environ.get("LIMEN_ORPHAN_QUARANTINE", "")
 ORPHAN_QUARANTINE_LOG = LIMEN_ROOT / "logs" / "orphan-quarantine.jsonl"
 ABANDONMENT_RECEIPTS = Path(
@@ -671,7 +680,13 @@ if ORPHAN_SWEEP:
     STANDING_ACCEPTANCE_REASONS = STANDING_ACCEPTANCE_REASONS | {ORPHAN_REASON}
 # Only THROWAWAY creation roots are eligible for orphan reap — never interactive/registered cells
 # (.claude/worktrees, repo-local, registered) which may hold hand-dev work.
-_THROWAWAY_SOURCE_PREFIXES = ("dispatch-root", "dispatch-clone-cache", "legacy-dispatch-root", "agy-scratch")
+_THROWAWAY_SOURCE_PREFIXES = (
+    "canonical-runtime-worktree",
+    "dispatch-root",
+    "dispatch-clone-cache",
+    "legacy-dispatch-root",
+    "agy-scratch",
+)
 
 
 def _is_throwaway_source(source: str) -> bool:
@@ -711,28 +726,24 @@ def orphan_branch_on_origin(name: str) -> bool:
     return name in segs
 
 
-def orphan_quarantine_root() -> Path:
-    """Where preserved orphans are MOVED to. Explicit override wins; else a sibling of the worktree
-    root (same volume ⇒ instant rename, and OUTSIDE the worktree-scan path so it clears the debt)."""
+def orphan_quarantine_root(source_root: Path | None = None) -> Path:
+    """Where preserved orphans are MOVED: persistent XDG data outside disposable Workspace."""
     if ORPHAN_QUARANTINE:
-        return Path(ORPHAN_QUARANTINE).expanduser()
-    try:
-        from limen.worktree_roots import effective_worktree_root
-
-        return effective_worktree_root().parent / "_limen-orphan-quarantine"
-    except Exception:
-        return Path(HOME) / "Workspace" / "_limen-orphan-quarantine"
+        candidate = Path(ORPHAN_QUARANTINE).expanduser()
+    else:
+        candidate = xdg_data_home() / "limen" / "orphan-quarantine"
+    return validated_quarantine_root(candidate, workspace_root=WORKSPACE_ROOT)
 
 
 def quarantine_orphan(d: Path, stamp: str) -> tuple[bool, str]:
     """PRESERVE, never delete: MOVE a dead-gitdir orphan out of the worktree roots into quarantine.
     Reversible; loses nothing (walked lifecycle or not). Returns (ok, dest-or-reason). Refuses if the
     destination would land under a worktree root (which would re-create the debt) or is unwritable."""
-    qroot = orphan_quarantine_root()
     try:
+        qroot = orphan_quarantine_root(d)
         if d.resolve() in _SELF_GUARD:  # never move the live checkout
             return False, "self/live-checkout"
-    except OSError as e:
+    except (OSError, ValueError) as e:
         return False, f"quarantine-unwritable:{str(e)[:80]}"
     destination_name = f"{stamp}-{d.name}"
     if (qroot / destination_name).exists():
@@ -791,6 +802,8 @@ def reclaim_accepted(
         wildcard_custody = root == "*" and reason == CUSTODY_RESTORED_REASON
         if root != path.name and not wildcard_custody:
             continue
+        if not wildcard_custody and event.get("path") != resolved:
+            continue
         if reason == CUSTODY_RESTORED_REASON:
             if not estate_custody_proof:
                 continue
@@ -806,8 +819,6 @@ def reclaim_accepted(
             continue
         if event.get("reason") and event.get("reason") != reason:
             continue
-        if event.get("path") and event.get("path") != resolved:
-            continue
         archive_ok = event.get("archive_verified") is True or event.get("archive_status") in ACCEPTED_ARCHIVE_STATUSES
         if not archive_ok:
             continue
@@ -820,7 +831,7 @@ def reclaim_accepted(
 
 
 def receipt_remote_merged(path: Path, preservation_receipts) -> bool:
-    receipt = preservation_receipts.get(path.name)
+    receipt = matching_worktree_receipt(path, preservation_receipts)
     if not isinstance(receipt, dict):
         return False
     if receipt.get("private_receipt") or receipt.get("private_patch_sha256"):
@@ -1308,11 +1319,7 @@ def main():
                     except (KeyError, TypeError, ValueError):
                         failed.append((directory.name, "custody-purge-identity-invalid"))
                         continue
-                    content_states = (
-                        estate_custody_context.get("content_states", {})
-                        if estate_custody_context
-                        else {}
-                    )
+                    content_states = estate_custody_context.get("content_states", {}) if estate_custody_context else {}
                     content_state = (
                         content_states.get(str(directory.resolve(strict=True)))
                         if isinstance(content_states, dict)
@@ -1414,7 +1421,7 @@ def main():
                         f"{action}:{reason}:abandonment={Path(str(receipt['receipt_path'])).name}",
                     )
                 )
-            except (OSError, WorktreeAbandonmentError) as exc:
+            except (OSError, ValueError, WorktreeAbandonmentError) as exc:
                 failed.append((directory.name, str(exc)[:120]))
 
         try:

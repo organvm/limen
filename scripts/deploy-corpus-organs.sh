@@ -11,7 +11,7 @@
 set -uo pipefail
 
 SRC="$(cd "$(dirname "$0")" && pwd)"                 # the worktree's scripts/ dir (this file's home)
-LIVE="${LIMEN_ROOT:-$HOME/Workspace/limen}"
+LIVE="${LIMEN_ROOT:-${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen}"
 ENV="$HOME/.limen.env"
 
 echo "[deploy] source : $SRC"

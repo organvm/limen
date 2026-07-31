@@ -58,7 +58,7 @@ from _pr_scan import (  # noqa: E402
 
 # DERIVED from env so the conductor survives relocation; same defaults as merge-drain.py.
 OWNERS = [o.strip() for o in os.environ.get("LIMEN_OWNERS", "organvm,4444J99").split(",") if o.strip()]
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
 LOCKD = ROOT / "logs" / ".queue.lock.d"
 LOG = ROOT / "logs" / "self-heal.log"
 HEAL_CONVERGENCE = ROOT / "logs" / "heal-convergence.json"

@@ -23,7 +23,7 @@
 # is un-summonable (dirty tree, unpushed commits, credential drift). Read-only — never mutates.
 # Beat-wired as the hot-cache sensor (sensors.yaml, gate LIMEN_HOTCACHE_CHECK, daily cadence).
 set -uo pipefail
-ROOT="${LIMEN_ROOT:-$HOME/Workspace/limen}"
+ROOT="${LIMEN_ROOT:-${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen}"
 WS="${LIMEN_WORKDIR:-$HOME/Workspace}"
 cd "$ROOT"
 
