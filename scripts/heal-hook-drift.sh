@@ -8,7 +8,7 @@
 # This effector re-installs the canonical copy (install -m 755) whenever ~/.claude/hooks/<hook> is
 # missing or its sha256 differs from the canonical. It ONLY reinstalls the two hook files it owns; it
 # NEVER touches ~/.claude/settings.json (that boundary is classifier-blocked and stays a human lever).
-# Canonical source = the LIVE checkout (LIMEN_ROOT, default ~/Workspace/limen), NEVER a WIP worktree,
+# Canonical source = the LIVE checkout (LIMEN_ROOT, default ~/Workspace/library/engine/organvm/limen), NEVER a WIP worktree,
 # so an unmerged worktree hook can't be pushed to the live fleet.
 #
 # Dry-run by default (reports the drift + cure). Arm with LIMEN_HOOK_DRIFT_HEAL=1 to apply (the
@@ -16,7 +16,7 @@
 # (or all healed); exit 1 if drift is found on a dry-run, or drift remains after apply.
 set -uo pipefail
 
-ROOT="${LIMEN_ROOT:-$HOME/Workspace/limen}"
+ROOT="${LIMEN_ROOT:-${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen}"
 HOOKS_SRC="$ROOT/scripts/hooks"
 HOOKS_LIVE="$HOME/.claude/hooks"
 HOOKS="allow-trusted-cd-git.sh insights-capture.sh"

@@ -91,7 +91,9 @@ def provider_health_policy() -> ProviderHealthPolicy:
 
 
 def provider_outcome_ledger_path() -> Path:
-    root = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen")).expanduser()
+    root = Path(
+        os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen")
+    ).expanduser()
     raw = str(parameter("LIMEN_PROVIDER_OUTCOME_LEDGER", str(root / "logs" / "provider-outcomes.jsonl")))
     return Path(raw.replace("$LIMEN_ROOT", str(root))).expanduser()
 

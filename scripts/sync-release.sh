@@ -20,7 +20,7 @@
 # deliberately does NOT `git add -A` (that is what once swept the governor gate into a commit).
 set -uo pipefail
 export HOME="${HOME:-/Users/4jp}"
-ROOT="${LIMEN_ROOT:-$HOME/Workspace/limen}"
+ROOT="${LIMEN_ROOT:-${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen}"
 BRANCH="${LIMEN_RELEASE_BRANCH:-main}"
 
 # Regenerable daemon bookkeeping — receipt files the beat REWRITES every cycle. A commit touching ONLY

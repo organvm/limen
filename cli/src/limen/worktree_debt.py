@@ -348,7 +348,18 @@ def worktree_debt_report(limen_root: Path | None = None, *, strict: bool = False
     that cannot be read or registered repositories whose Git inventory fails then raise instead of
     disappearing from an apparently empty report.
     """
-    root = limen_root or Path(os.environ.get("LIMEN_ROOT", f"{os.environ.get('HOME', '/Users/4jp')}/Workspace/limen"))
+    workspace = Path(
+        os.environ.get(
+            "WORKSPACE_ROOT",
+            str(Path(os.environ.get("HOME", str(Path.home()))) / "Workspace"),
+        )
+    )
+    root = limen_root or Path(
+        os.environ.get(
+            "LIMEN_ROOT",
+            str(workspace / "library" / "engine" / "organvm" / "limen"),
+        )
+    )
     self_guard: set[Path] = set()
     for candidate in (root, Path.cwd()):
         try:

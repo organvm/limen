@@ -19,7 +19,7 @@ fi
 echo "⚠ GitHub mutation gate: transfers are IRREVERSIBLE. Verify you have admin:org + workflow."
 echo ""
 echo "Running consolidation transfer (--apply)..."
-cd /Users/4jp/Workspace/limen
+cd /Users/4jp/Workspace/library/engine/organvm/limen
 PYTHONPATH=cli/src python3 scripts/consolidate-github.py --apply
 
 echo ""

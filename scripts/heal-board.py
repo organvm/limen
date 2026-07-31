@@ -50,7 +50,7 @@ from limen.io import load_limen_file, queue_lock  # noqa: E402
 from limen.models import VALID_STATUSES, DispatchLogEntry, Task  # noqa: E402
 from limen.tabularius import apply_limen_file_sync, restore_limen_projection_text  # noqa: E402
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
 BOARD = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
 HEAL_ON = os.environ.get("LIMEN_BOARD_HEAL", "1") != "0"
 ACTIVE = {"open", "dispatched", "in_progress", "needs_human"}

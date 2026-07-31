@@ -130,6 +130,14 @@ from limen.work_loan_journal import (
 )
 
 
+def _limen_root() -> Path:
+    configured = os.environ.get("LIMEN_ROOT")
+    if configured:
+        return Path(configured).expanduser()
+    workspace = Path(os.environ.get("WORKSPACE_ROOT", str(Path.home() / "Workspace"))).expanduser()
+    return workspace / "library" / "engine" / "organvm" / "limen"
+
+
 def _int_or_default(raw: object, default: int) -> int:
     if isinstance(raw, bool):
         return default
@@ -213,7 +221,7 @@ def _usage_dead_lanes() -> set[str]:
     signal, never pinned: a lane auto-rejoins the instant its rolling window refills (no manual edit).
     This is what makes dispatch HONEST — we never assign a task to a lane that physically cannot
     produce, and we never burn one to 0."""
-    f = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen"))) / "logs" / "usage.json"
+    f = _limen_root() / "logs" / "usage.json"
     try:
         vendors = (json.loads(f.read_text()) or {}).get("vendors", {})
     except (OSError, ValueError):
@@ -334,7 +342,7 @@ def _down_lanes() -> set[str]:
          when every observed provider is in auth/rate cooldown.
     Rebalance + dispatch + route skip these so tasks aren't wasted on a lane that can't produce.
     Sources 2–4 self-heal; remove a line from source 1 when that lane is healthy again."""
-    f = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen"))) / "logs" / "lanes-down.txt"
+    f = _limen_root() / "logs" / "lanes-down.txt"
     manual: set[str] = set()
     try:
         manual = {ln.split("#")[0].strip() for ln in f.read_text().splitlines() if ln.split("#")[0].strip()}
@@ -393,7 +401,7 @@ def run_always_working_before_dispatch(tasks_path: Path, *, dry_run: bool = Fals
     """
     if dry_run or os.environ.get("LIMEN_ALWAYS_WORKING_BEFORE_DISPATCH", "1") != "1":
         return True
-    root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen"))).resolve()
+    root = _limen_root().resolve()
     try:
         if tasks_path.resolve() != (root / "tasks.yaml").resolve():
             return True
@@ -1159,7 +1167,7 @@ def _value_tier_repos() -> set[str]:
     repos: set[str] = {r.strip() for r in os.environ.get("LIMEN_VALUE_REPOS", "").split(",") if r.strip()}
     fpath = os.environ.get(
         "LIMEN_VALUE_REPOS_FILE",
-        str(Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen"))) / "value-repos.json"),
+        str(_limen_root() / "value-repos.json"),
     )
     try:
         data = json.loads(Path(fpath).read_text())
@@ -1718,13 +1726,13 @@ def _journaled_agent_dispatch(
 
 
 def _remote_receipt_store() -> ReceiptStore:
-    root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
+    root = _limen_root()
     configured = os.environ.get("LIMEN_REMOTE_RECEIPT_ROOT")
     return ReceiptStore(Path(configured).expanduser() if configured else root / "logs" / "remote-execution")
 
 
 def _receipt_path_for_board(path: Path) -> str:
-    root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
+    root = _limen_root()
     try:
         return str(path.resolve().relative_to(root.resolve()))
     except ValueError:
@@ -1732,7 +1740,7 @@ def _receipt_path_for_board(path: Path) -> str:
 
 
 def _authoritative_remote_verification(task: Task) -> tuple[Task, dict[str, object]]:
-    root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
+    root = _limen_root()
     tasks_path = Path(os.environ.get("LIMEN_TASKS", str(root / "tasks.yaml"))).expanduser()
     if not tasks_path.is_file():
         raise RemoteExecutionError("authoritative task board is unavailable for verification-only dispatch")
@@ -1903,7 +1911,7 @@ def _flame_preamble() -> str:
     a missing/unreadable kernel must NEVER block a dispatch (derive-never-pin, fail-open)."""
     if os.environ.get("LIMEN_FLAME_KERNEL", "1") != "1":
         return ""
-    root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
+    root = _limen_root()
     f = root / os.environ.get("LIMEN_FLAME_FILE", "FLAME.md")
     try:
         key = f"{f}:{f.stat().st_mtime_ns}"
@@ -3049,7 +3057,7 @@ def _local_repo_matches(repo: str | None, identity: str) -> bool:
         for raw in (
             os.environ.get("LIMEN_ROOT"),
             os.environ.get("LIMEN_LIVE_ROOT"),
-            str(Path.home() / "Workspace" / "limen"),
+            str(Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"),
         )
         if raw
     }
@@ -4286,7 +4294,7 @@ def _bridge_agy_scratch(task: Task, wt: Path) -> None:
 def _lane_run_env(agent: str, wt: Path | None = None, task: Task | None = None) -> dict[str, str]:
     run_env = os.environ.copy()
     if wt is not None:
-        live_root = os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen"))
+        live_root = str(_limen_root())
         run_env["LIMEN_LIVE_ROOT"] = live_root
         run_env["LIMEN_ROOT"] = str(wt)
         run_env["LIMEN_TASKS"] = str(wt / "tasks.yaml")
@@ -4300,9 +4308,7 @@ def _lane_run_env(agent: str, wt: Path | None = None, task: Task | None = None) 
     # agy/antigravity defense-in-depth: if auth falls through to browser opening mid-run,
     # make the opener a no-op inside the lane subprocess only.
     if agent in ("agy", "antigravity"):
-        shim = str(
-            Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen"))) / "scripts" / "agy-noop-shim"
-        )
+        shim = str(_limen_root() / "scripts" / "agy-noop-shim")
         run_env["PATH"] = shim + os.pathsep + run_env.get("PATH", "")
         run_env["BROWSER"] = "true"
     # claude fleet auth must not share or mutate the interactive session's macOS Keychain token.
@@ -4585,7 +4591,7 @@ def _record_worktree_lifecycle(
     generated_cleanup: str,
     pushed: bool,
 ) -> None:
-    root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
+    root = _limen_root()
     try:
         log = root / "logs" / "worktree-lifecycle.jsonl"
         log.parent.mkdir(parents=True, exist_ok=True)
@@ -4966,7 +4972,7 @@ def _window_hours(agent: str) -> float:
     (5h rolling windows) refill ~5x/day instead of being throttled by a once-a-day cap,
     while jules/gemini/opencode/agy refill daily."""
     try:
-        root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
+        root = _limen_root()
         with open(root / "logs" / "usage-limits.json") as fh:
             limits = json.load(fh)
         window = str((limits.get(agent) or {}).get("window", ""))
@@ -5505,7 +5511,7 @@ def _apply_result(
 def _ledger_lanes() -> dict[str, dict[str, list[str]]]:
     """logs/ledger.json lanes map (waste_classes/win_classes per lane) — fail-open to {}."""
     try:
-        root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
+        root = _limen_root()
         return json.loads((root / "logs" / "ledger.json").read_text()).get("lanes", {}) or {}
     except Exception:
         return {}
@@ -5514,7 +5520,7 @@ def _ledger_lanes() -> dict[str, dict[str, list[str]]]:
 def _lane_fitness() -> dict[str, dict[str, dict]]:
     """logs/lane-fitness.json per-(agent, task_class) fitness map — fail-open to {}."""
     try:
-        root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
+        root = _limen_root()
         return json.loads((root / "logs" / "lane-fitness.json").read_text()).get("pairs", {}) or {}
     except Exception:
         return {}
@@ -5673,7 +5679,7 @@ def _claude_tier_overrides() -> dict[str, list[str]]:
     Fail-open to {} (→ the ledger-DISCOVERED default). Demoted to an override: the default
     pre-assign set is discovered from the ledger, not pinned. Same read pattern as _ledger_lanes()."""
     try:
-        root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
+        root = _limen_root()
         return json.loads((root / "logs" / "model-tiers.json").read_text()).get("claude") or {}
     except Exception:
         return {}

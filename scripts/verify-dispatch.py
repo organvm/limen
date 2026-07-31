@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 from limen.dispatch_ownership import active_typed_pr_owner_id  # noqa: E402
 from limen.workstream_contract import WORKSTREAM_SUCCESSOR_REQUIRED_LABEL  # noqa: E402
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
 PR_RE = re.compile(r"github\.com/([^/]+)/([^/]+)/pull/(\d+)")
 # A dispatch is RESERVED (status=dispatched, updated stamped, reserve log appended) before its
 # slow run. A freshly reserved local task still has no PR/session result, so only treat it as

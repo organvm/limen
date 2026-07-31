@@ -1466,7 +1466,7 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
             "",
             "## Commands",
             "",
-            "- Refresh this review: `env LIMEN_ROOT=/Users/4jp/Workspace/limen python3 scripts/agent-session-full-stack-review.py --write`",
+            "- Refresh this review: `env LIMEN_ROOT=/Users/4jp/Workspace/library/engine/organvm/limen python3 scripts/agent-session-full-stack-review.py --write`",
             "- Inspect raw prompts locally: `less .limen-private/session-corpus/full-stack-review/verbatim-prompts.jsonl`",
         ]
     )

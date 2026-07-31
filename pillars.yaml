@@ -69,24 +69,24 @@ pillars:
     name: Local views
     role: Where you already look — corpus / money / omni / obligations / pillars faces + the heartbeat.
     owner: limen
-    path: ~/Workspace/limen
+    path: ~/Workspace/library/engine/organvm/limen
     health_signal: logs/omni-view.json
   - id: censor
     name: The Censor
     role: Insights → actions on cadence — reads the system's own signals (fleet, organs, drift) and acts to change/grow, governed by separation of powers + the protocol→precedent→exploration→ideal-form cascade.
     owner: limen
-    path: ~/Workspace/limen/scripts/censor.py
+    path: ~/Workspace/library/engine/organvm/limen/scripts/censor.py
     producer: scripts/censor.py
     health_signal: logs/censor-view.json
   - id: mint
     name: Sovereign mint (MONETA)
     role: Take payment straight to an owner-controlled Bitcoin address and sign each product's own offline Pro licence — no Stripe/Ko-fi/Lemon Squeezy, no processor in the path. Unconfigured, it pools demand as reserved orders and auto-opens them the moment the receive address is set (the valve).
     owner: limen
-    path: ~/Workspace/limen/moneta
+    path: ~/Workspace/library/engine/organvm/limen/moneta
   - id: contributions
     name: Contributions mirror (SPECVLVM)
     role: Look outward at other projects' wiring to improve inward — upstream contributions rendered as proof (merged/open/closed…); community + name recognition accrue as byproducts of genuine value. Never sends — outbound is the human's hand.
     owner: limen
-    path: ~/Workspace/limen/organs/contributions
+    path: ~/Workspace/library/engine/organvm/limen/organs/contributions
     producer: scripts/contributions-organ.py
     health_signal: logs/contributions.json

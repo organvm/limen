@@ -4,7 +4,7 @@
 # The frozen Archive4T/T7Recovery backups are never modified. Run: bash rollback.sh
 set -uo pipefail
 HOME="${HOME:-/Users/4jp}"
-ROOT="$HOME/Workspace/limen"
+ROOT="${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen"
 CONT="$ROOT/container"; BK="$CONT/backup"; STATE="$CONT/state/deploy.json"
 PLIST="$HOME/Library/LaunchAgents/com.limen.heartbeat.plist"
 LOCKD="$ROOT/logs/.saturate.lock.d"; LABEL="com.limen.heartbeat"; GUI="gui/$(id -u)"

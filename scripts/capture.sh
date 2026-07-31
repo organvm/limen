@@ -22,7 +22,7 @@
 # Toggles: LIMEN_CAPTURE_DRY=1 (or --dry-run) previews without committing/pushing.
 #          LIMEN_WORKSPACE overrides the scan root (default ~/Workspace).
 set -uo pipefail
-export LIMEN_ROOT="${LIMEN_ROOT:-$HOME/Workspace/limen}"
+export LIMEN_ROOT="${LIMEN_ROOT:-${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen}"
 WORKSPACE="${LIMEN_WORKSPACE:-$HOME/Workspace}"
 [ -f "$HOME/.limen.env" ] && { set -a; . "$HOME/.limen.env"; set +a; }
 

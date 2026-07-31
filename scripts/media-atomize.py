@@ -41,7 +41,7 @@ import sys
 from pathlib import Path
 from urllib.parse import quote
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
 sys.path.insert(0, str(ROOT / "cli" / "src"))
 
 # Section boundaries: markdown headings; falls back to paragraph blocks when there are none.

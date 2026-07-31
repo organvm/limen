@@ -90,7 +90,7 @@ from limen.dispatch import (  # noqa: E402
     sort_value_gate_candidates,
 )
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
 TASKS = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
 RUNS = ROOT / "logs" / "async-runs"
 RECEIPT_ARCHIVE = ROOT / ".limen-private" / "async-runs" / "archive"

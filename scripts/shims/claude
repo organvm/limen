@@ -47,7 +47,7 @@ def _injected_model(args):
     try:
         import importlib.util
 
-        root = os.environ.get("LIMEN_ROOT", os.path.expanduser("~/Workspace/limen"))
+        root = os.environ.get("LIMEN_ROOT", os.path.expanduser("~/Workspace/library/engine/organvm/limen"))
         path = os.path.join(root, "cli", "src", "limen", "model_selection.py")
         spec = importlib.util.spec_from_file_location("_limen_model_selection_shim", path)
         if spec is None or spec.loader is None:

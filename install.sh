@@ -4,8 +4,8 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/organvm/limen/main/install.sh | bash
 #
-# Clones the limen repo, creates ~/limen symlink, installs Python CLI,
-# and optionally installs legacy host PATH/wrapper conveniences.
+# Clones the limen repo into its manifest-owned engine container, installs the
+# Python CLI, and optionally installs legacy host PATH/wrapper conveniences.
 set -euo pipefail
 
 HOST_MUTATION="${LIMEN_INSTALL_HOST_MUTATION:-0}"
@@ -41,8 +41,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 LIMEN_SOURCE="${LIMEN_SOURCE:-https://github.com/organvm/limen.git}"
-LIMEN_TARGET="${LIMEN_TARGET:-$HOME/Workspace/limen}"
-LIMEN_LINK="${LIMEN_LINK:-$HOME/limen}"
+LIMEN_TARGET="${LIMEN_TARGET:-${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen}"
 LIMEN_CLI="${LIMEN_TARGET}/cli"
 
 echo "==> limen installer"
@@ -57,17 +56,7 @@ else
   git clone "$LIMEN_SOURCE" "$LIMEN_TARGET"
 fi
 
-# 2. Create symlink
-if [[ -L "$LIMEN_LINK" ]]; then
-  echo "  symlink $LIMEN_LINK already exists"
-elif [[ -e "$LIMEN_LINK" ]]; then
-  echo "  WARNING: $LIMEN_LINK exists and is not a symlink — skipping"
-else
-  ln -s "$LIMEN_TARGET" "$LIMEN_LINK"
-  echo "  symlink $LIMEN_LINK -> $LIMEN_TARGET"
-fi
-
-# 3. Install Python CLI
+# 2. Install Python CLI
 if command -v python3 &>/dev/null; then
   echo "  installing Python CLI"
   python3 -m venv "${LIMEN_CLI}/.venv"
@@ -77,10 +66,11 @@ else
   echo "  WARNING: python3 not found — skipping CLI install"
 fi
 
-# 4. Optional legacy host mutation
+# 3. Optional legacy host mutation
 LIMEN_BIN="${LIMEN_CLI}/.venv/bin"
 USER_BIN="${HOME}/.local/bin"
-LIMEN_ENV_LINE='export LIMEN_ROOT="$HOME/limen"'
+LIMEN_ENV_LINE='export WORKSPACE_ROOT="$HOME/Workspace"
+export LIMEN_ROOT="$WORKSPACE_ROOT/library/engine/organvm/limen"'
 LIMEN_PATH_LINE="export PATH=\"${USER_BIN}:${LIMEN_BIN}:\$PATH\""
 ZSHRC="${ZDOTDIR:-$HOME}/.zshenv"
 

@@ -23,7 +23,7 @@
 set -uo pipefail
 export HOME="${HOME:-/Users/4jp}"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-export LIMEN_ROOT="${LIMEN_ROOT:-$HOME/Workspace/limen}"
+export LIMEN_ROOT="${LIMEN_ROOT:-${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen}"
 # Pin the daemon to its OWN python — a STABLE binary path (created with `venv --copies`) so a single
 # one-time macOS Full Disk Access grant on that ONE binary survives Homebrew python upgrades and lets the
 # usage organ read vendor app-data (~/.codex, ~/.claude, ~/.gemini) WITHOUT the recurring TCC consent
@@ -237,7 +237,7 @@ from limen.capacity import select_lanes
 from limen.dispatch import _down_lanes
 from limen.io import load_limen_file
 
-root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
+root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen")))
 tasks = Path(os.environ.get("LIMEN_TASKS", str(root / "tasks.yaml")))
 try:
     board = load_limen_file(tasks)

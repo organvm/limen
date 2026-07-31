@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
 POLICY_PATH = ROOT / "logs" / "autonomy-policy.json"
 MAINTENANCE_BLOCKER_PATH = ROOT / "logs" / "autonomy-maintenance-blocker.json"
 PAUSE_MARKER = ROOT / "logs" / "AUTONOMY_PAUSED"

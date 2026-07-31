@@ -48,10 +48,9 @@ first kickstart, survives successor sessions, and is never silently reset by a r
 packet defines live probes and completion/switch predicates; it never predeclares the ending.
 
 Aliases:
-  portvs, portus  /Users/4jp/Workspace/4444J99/portvs
-  limen           /Users/4jp/Workspace/limen
-  domus           /Users/4jp/Workspace/domus-genoma
-  relpipe         /Users/4jp/Workspace/4444J99/relationship-pipeline
+  portvs, portus  $PORTVS_ROOT
+  limen           $LIMEN_ROOT
+  domus           $DOMUS_ROOT
 
 Creates or reuses:
   <repo>/.worktrees/<slug> on branch <branch-prefix>/<slug> (default work/)
@@ -531,29 +530,42 @@ fi
 repo_arg="$1"
 raw_slug="$2"
 
+workspace_root="${WORKSPACE_ROOT:-$HOME/Workspace}"
+portvs_root="${PORTVS_ROOT:-$workspace_root/library/engine/organvm/portvs}"
+limen_root="${LIMEN_ROOT:-$workspace_root/library/engine/organvm/limen}"
+domus_root="${DOMUS_ROOT:-$workspace_root/library/engine/organvm/domus-genoma}"
+
 case "$repo_arg" in
   portvs|portus)
-    repo="/Users/4jp/Workspace/4444J99/portvs"
+    repo="$portvs_root"
     ;;
   limen)
-    repo="/Users/4jp/Workspace/limen"
+    repo="$limen_root"
     ;;
   domus|domus-genoma)
-    repo="/Users/4jp/Workspace/domus-genoma"
-    ;;
-  relationship-pipeline|relpipe|maddie)
-    repo="/Users/4jp/Workspace/4444J99/relationship-pipeline"
+    repo="$domus_root"
     ;;
   *)
     if [[ -d "$repo_arg" ]]; then
       repo="$repo_arg"
-    elif [[ -d "/Users/4jp/Workspace/$repo_arg" ]]; then
-      repo="/Users/4jp/Workspace/$repo_arg"
-    elif [[ -d "/Users/4jp/Workspace/4444J99/$repo_arg" ]]; then
-      repo="/Users/4jp/Workspace/4444J99/$repo_arg"
     else
-      echo "repo not found: $repo_arg" >&2
-      exit 1
+      repo=""
+      for candidate in \
+        "$workspace_root/library/engine/organvm/$repo_arg" \
+        "$workspace_root/library/storefront/4444J99/$repo_arg" \
+        "$workspace_root"/library/shelves/*/"$repo_arg"; do
+        if [[ -d "$candidate" ]]; then
+          if [[ -n "$repo" ]]; then
+            echo "repo alias is ambiguous; pass an explicit path: $repo_arg" >&2
+            exit 1
+          fi
+          repo="$candidate"
+        fi
+      done
+      if [[ -z "$repo" ]]; then
+        echo "repo not found in the manifest container tree: $repo_arg" >&2
+        exit 1
+      fi
     fi
     ;;
 esac

@@ -190,7 +190,7 @@ def cmd_bearer(args) -> int:
         print("New gateway bearer (store it, then restart ianva before exposing the endpoint):\n")
         print(f"  {tok}\n")
         print(
-            f"  bash ~/Workspace/limen/scripts/set-credential.sh {creds.BEARER_ENV}"
+            f"  bash ~/Workspace/library/engine/organvm/limen/scripts/set-credential.sh {creds.BEARER_ENV}"
             "   # paste the value above at the silent prompt"
         )
         return 0

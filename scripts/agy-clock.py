@@ -11,7 +11,7 @@ def get_tasks_path() -> Path:
     p = os.environ.get("LIMEN_TASKS")
     if p:
         return Path(p)
-    default_path = Path.home() / "Workspace" / "limen" / "tasks.yaml"
+    default_path = Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen" / "tasks.yaml"
     if default_path.exists():
         return default_path
     return Path("tasks.yaml")

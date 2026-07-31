@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """LIVE-TREE-COHERENCE probe — is the tree the beat actually executes identical to origin/main?
 
-The measurement behind IF-LIVE-TREE-COHERENCE. `LIMEN_ROOT` (default ~/Workspace/limen) is the
+The measurement behind IF-LIVE-TREE-COHERENCE. `LIMEN_ROOT` (default ~/Workspace/library/engine/organvm/limen) is the
 checkout `scripts/metabolize.sh` cd's into and runs every rung from; a session worktree is NOT
 that tree. Nothing looked at it, so on 2026-07-29 it was found frozen at a 2026-07-23 commit —
 120 behind origin/main, one unpushed local commit, 12 dirty files — meaning every governance
@@ -40,7 +40,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-DEFAULT_ROOT = Path.home() / "Workspace" / "limen"
+DEFAULT_ROOT = Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"
 DEFAULT_BRANCH = "main"
 UNVERIFIABLE = "live-checkout: state=unverifiable-here branch={b} drift=0 ahead=0 behind=0 dirty=0  ({why})"
 

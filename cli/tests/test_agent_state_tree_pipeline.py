@@ -230,6 +230,10 @@ def test_custody_guard_uses_filesystem_identity_for_case_aliases(
     source = tmp_path / "Data"
     alias = tmp_path / "data"
     source.mkdir()
+    if alias.exists():
+        # The default macOS volume is case-insensitive; retain two distinct
+        # fixture paths and let the samefile shim model the alias identity.
+        alias = tmp_path / "case-alias"
     alias.mkdir()
     real_samefile = tree_pipeline.os.path.samefile
 

@@ -111,7 +111,7 @@ def main() -> int:
     print("    The cartridge is UNPLUGGED: chezmoi is managing a scratch/wrong source, so")
     print("    chezmoi verify/status/health are all meaninglessly green. Re-point without")
     print("    broad apply after the cartridge is current:")
-    print("      chezmoi init --source ~/Workspace/domus-genoma --data --promptDefaults")
+    print("      chezmoi init --source \"$DOMUS_ROOT\" --data --promptDefaults")
     print("    Then run a targeted diff before any apply.")
     return 1
 

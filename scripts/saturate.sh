@@ -12,7 +12,7 @@
 # a live checkout. Knobs: LIMEN_LOCAL_LIMIT (50) LIMEN_JULES_LIMIT (100)
 # LIMEN_LANES (codex,opencode,agy,claude — live lanes; gemini excluded until authed).
 set -uo pipefail
-export LIMEN_ROOT="${LIMEN_ROOT:-$HOME/Workspace/limen}"
+export LIMEN_ROOT="${LIMEN_ROOT:-${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen}"
 export LIMEN_TASKS="${LIMEN_TASKS:-$LIMEN_ROOT/tasks.yaml}"
 export LIMEN_WORKDIR="${LIMEN_WORKDIR:-$HOME/Workspace}"
 export LIMEN_ISOLATION="${LIMEN_ISOLATION:-worktree}"

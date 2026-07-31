@@ -70,10 +70,10 @@ PAYLOADS: dict[str, list[dict]] = {
     ],
 }
 KERNEL_CANDIDATES = [
-    "~/Workspace/limen/FLAME.md",
-    "~/Workspace/limen/his-hand-levers.json",
-    "~/Workspace/limen/cloud-routines.json",
-    "~/Workspace/limen/logs/obligations-ledger.json",
+    "~/Workspace/library/engine/organvm/limen/FLAME.md",
+    "~/Workspace/library/engine/organvm/limen/his-hand-levers.json",
+    "~/Workspace/library/engine/organvm/limen/cloud-routines.json",
+    "~/Workspace/library/engine/organvm/limen/logs/obligations-ledger.json",
     "~/.arca-vault/manifest.json",
 ]
 

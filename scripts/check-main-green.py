@@ -72,7 +72,7 @@ from limen.models import DispatchLogEntry, Task, has_jules_landing_hold  # noqa:
 from limen.tabularius import apply_limen_file_sync  # noqa: E402
 from limen.workstream_contract import WORKSTREAM_SUCCESSOR_REQUIRED_LABEL  # noqa: E402
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
 LOCKD = ROOT / "logs" / ".queue.lock.d"
 STAMP = ROOT / "logs" / "main-green.json"
 WORKFLOW = os.environ.get("LIMEN_MAIN_GREEN_WORKFLOW", "ci.yml")

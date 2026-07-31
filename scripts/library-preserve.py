@@ -153,7 +153,7 @@ def preserve_sliver() -> int:
     # FDA-protected stores (Mail/Messages) are reached ONLY when we actually hold Full Disk Access —
     # otherwise even an os.path.exists on them triggers the recurring macOS consent dialog. Skipping
     # them when FDA is absent raises NO prompt and is non-destructive (the .claude sliver is still
-    # preserved; granting FDA to ~/Workspace/limen/.venv/bin/python3 later resumes them automatically).
+    # preserved; granting FDA to ~/Workspace/library/engine/organvm/limen/.venv/bin/python3 later resumes them automatically).
     sliver = list(SLIVER_SAFE)
     if _has_fda():
         sliver += SLIVER_FDA

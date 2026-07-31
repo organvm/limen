@@ -28,12 +28,12 @@ from pathlib import Path
 from typing import Any
 
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
 PHOTOS = Path(os.environ.get("LIMEN_PHOTOS_UNIVERSE_ROOT", "/Users/4jp/Workspace/photos-universe-20260629-182431"))
 PORTVS = Path(
     os.environ.get(
         "LIMEN_PORTVS_TRIPTYCH_ROOT",
-        "/Users/4jp/Workspace/4444J99/portvs/.worktrees/triptych-story",
+        "/Users/4jp/Workspace/library/engine/organvm/portvs/.worktrees/triptych-story",
     )
 )
 TRIPTYCH = PORTVS / "incubator" / "triptych-video-canon"

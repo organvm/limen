@@ -31,7 +31,7 @@ def main() -> int:
     )
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
-    root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
+    root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen")))
     policy_path = root / "logs" / "autonomy-policy.json"
     if not args.dry_run and os.environ.get("LIMEN_FORCE_AUTONOMY") != "1":
         try:

@@ -18,7 +18,7 @@
     <key>EnvironmentVariables</key>
     <dict>
         <key>HOME</key><string>/Users/4jp</string>
-        <key>LIMEN_ROOT</key><string>/Users/4jp/Workspace/limen</string>
+        <key>LIMEN_ROOT</key><string>/Users/4jp/Workspace/library/engine/organvm/limen</string>
         <key>PYTHONPATH</key><string>/Users/4jp/.local/share/limen/current/source/cli/src</string>
         <key>LIMEN_OVERNIGHT_WATCH_EXPECT_DISPATCH_ASYNC</key><string>1</string>
         <key>LIMEN_OVERNIGHT_WATCH_EXPECT_DISPATCH_LANES</key><string>auto</string>
@@ -26,7 +26,7 @@
     <key>StartInterval</key><integer>300</integer>
     <key>RunAtLoad</key><true/>
     <key>ProcessType</key><string>Background</string>
-    <key>StandardOutPath</key><string>/Users/4jp/Workspace/limen/logs/overnight-watch.out.log</string>
-    <key>StandardErrorPath</key><string>/Users/4jp/Workspace/limen/logs/overnight-watch.err.log</string>
+    <key>StandardOutPath</key><string>/Users/4jp/Workspace/library/engine/organvm/limen/logs/overnight-watch.out.log</string>
+    <key>StandardErrorPath</key><string>/Users/4jp/Workspace/library/engine/organvm/limen/logs/overnight-watch.err.log</string>
 </dict>
 </plist>

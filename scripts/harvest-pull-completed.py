@@ -21,7 +21,7 @@ from pathlib import Path
 
 import yaml
 
-LIMEN_ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+LIMEN_ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
 TASKS = Path(os.environ.get("LIMEN_TASKS", LIMEN_ROOT / "tasks.yaml"))
 HARVEST = Path.home() / "Workspace" / "session-meta" / "scheduler" / "jules" / "harvest"
 

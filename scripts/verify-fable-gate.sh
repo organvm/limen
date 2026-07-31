@@ -18,8 +18,8 @@ cd "$ROOT"
 # Pick an interpreter that can import the worktree's `limen` package.
 if [ -x "$ROOT/.venv/bin/python" ]; then
   PY=("$ROOT/.venv/bin/python")
-elif [ -x "$HOME/Workspace/limen/.venv/bin/python" ]; then
-  PY=("$HOME/Workspace/limen/.venv/bin/python")
+elif [ -x "${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen/.venv/bin/python" ]; then
+  PY=("${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen/.venv/bin/python")
 else
   PY=(python3)
 fi

@@ -345,7 +345,9 @@ def iter_worktree_targets(limen_root: Path | None = None, *, strict: bool = Fals
     unreadable configured scope or failed registered-repo query means inventory is incomplete and
     must block new local creation or a false zero-debt verdict.
     """
-    root = limen_root or Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+    root = limen_root or Path(
+        os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen")
+    )
 
     targets: list[WorktreeTarget] = []
     dispatch_root = effective_worktree_root()

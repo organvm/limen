@@ -13,7 +13,7 @@ for root,_,files in os.walk(DERIV):
         if u not in uset: continue
         p=os.path.join(root,f); sz=os.path.getsize(p)
         if u not in best or sz>best[u][1]: best[u]=(p,sz)
-board=json.load(open('/Users/4jp/Workspace/limen/.claude/worktrees/feat-vision-board-studio/apps/vision-board-studio/boards/tony-2017.json'))
+board=json.load(open('/Users/4jp/Workspace/library/engine/organvm/limen/.claude/worktrees/feat-vision-board-studio/apps/vision-board-studio/boards/tony-2017.json'))
 tiles=board['tiles']
 # image embeddings of salvage crops
 def embed_imgs(paths):

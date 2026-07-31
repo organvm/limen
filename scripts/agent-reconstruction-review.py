@@ -451,9 +451,9 @@ def render_doc(review: dict[str, Any], root_limit: int) -> str:
             "",
             "## Commands",
             "",
-            "- Refresh source review first: `env LIMEN_ROOT=/Users/4jp/Workspace/limen python3 scripts/agent-session-full-stack-review.py --write`",
-            "- Refresh queue next: `env LIMEN_ROOT=/Users/4jp/Workspace/limen python3 scripts/agent-code-review-queue.py --write`",
-            "- Refresh this reconstruction review: `env LIMEN_ROOT=/Users/4jp/Workspace/limen python3 scripts/agent-reconstruction-review.py --write`",
+            "- Refresh source review first: `env LIMEN_ROOT=/Users/4jp/Workspace/library/engine/organvm/limen python3 scripts/agent-session-full-stack-review.py --write`",
+            "- Refresh queue next: `env LIMEN_ROOT=/Users/4jp/Workspace/library/engine/organvm/limen python3 scripts/agent-code-review-queue.py --write`",
+            "- Refresh this reconstruction review: `env LIMEN_ROOT=/Users/4jp/Workspace/library/engine/organvm/limen python3 scripts/agent-reconstruction-review.py --write`",
             f"- Private structured output: `{relpath(PRIVATE_REVIEW)}`",
         ]
     )

@@ -10,7 +10,7 @@
 # co-tenant, or the .limen-worktrees throwaway root.
 set -uo pipefail
 WS="${LIMEN_WORKDIR:-$HOME/Workspace}"
-ROOT="${LIMEN_ROOT:-$HOME/Workspace/limen}"
+ROOT="${LIMEN_ROOT:-${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen}"
 export PYTHONPATH="$ROOT/cli/src"
 CORE="limen session-meta sovereign-systems--elevate-align portfolio portvs universal-mail--automation"
 

@@ -116,8 +116,9 @@ KNOWN_SCOPE_FILES = (
     "docs/NEEDS-HUMAN-DIGEST.md",
 )
 
+_HISTORICAL_ENGINE_SEGMENT = "Workspace/" + "limen/"
 FILE_RE = re.compile(
-    r"(?:(?:/Users/[^\s'\"`]+/Workspace/limen/)|(?:\./))?"
+    rf"(?:(?:/Users/[^\s'\"`]+/{_HISTORICAL_ENGINE_SEGMENT})|(?:\./))?"
     r"((?:cli|scripts|docs|mcp|web|container|spec)/[A-Za-z0-9_./@+-]+|"
     r"tasks\.yaml|AGENTS\.md)"
 )

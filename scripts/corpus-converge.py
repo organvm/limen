@@ -40,7 +40,7 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
 sys.path.insert(0, str(ROOT / "cli" / "src"))
 
 from limen.session_atoms import iter_atoms  # noqa: E402

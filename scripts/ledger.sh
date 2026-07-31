@@ -6,7 +6,7 @@
 # impact. The canonical ledger therefore lives on the INTERNAL disk; Archive4T holds only
 # a mirror that catches up on remount. Appending never fails when the SSD is unplugged.
 set -uo pipefail
-ROOT="${LIMEN_ROOT:-$HOME/Workspace/limen}"
+ROOT="${LIMEN_ROOT:-${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen}"
 LEDGER="$ROOT/MASTER-PLAN.md"
 MIRROR="/Volumes/Archive4T/agent-operating-system--master-plan-2026-06-16.md"
 

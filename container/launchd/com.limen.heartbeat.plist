@@ -12,12 +12,12 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/4jp/Workspace/limen/scripts/heartbeat-loop.sh</string>
+        <string>/Users/4jp/Workspace/library/engine/organvm/limen/scripts/heartbeat-loop.sh</string>
     </array>
     <key>EnvironmentVariables</key>
     <dict>
         <key>HOME</key><string>/Users/4jp</string>
-        <key>LIMEN_ROOT</key><string>/Users/4jp/Workspace/limen</string>
+        <key>LIMEN_ROOT</key><string>/Users/4jp/Workspace/library/engine/organvm/limen</string>
         <key>LIMEN_WORKDIR</key><string>/Users/4jp/Workspace</string>
         <key>LIMEN_WORKTREES</key><string>/Volumes/Scratch/limen-worktrees</string>
         <key>LIMEN_WORKTREE_ROOT</key><string>/Volumes/Scratch/limen-worktrees</string>
@@ -30,7 +30,7 @@
     <key>RunAtLoad</key><true/>
     <key>ThrottleInterval</key><integer>60</integer>
     <key>ProcessType</key><string>Background</string>
-    <key>StandardOutPath</key><string>/Users/4jp/Workspace/limen/logs/heartbeat.out.log</string>
-    <key>StandardErrorPath</key><string>/Users/4jp/Workspace/limen/logs/heartbeat.err.log</string>
+    <key>StandardOutPath</key><string>/Users/4jp/Workspace/library/engine/organvm/limen/logs/heartbeat.out.log</string>
+    <key>StandardErrorPath</key><string>/Users/4jp/Workspace/library/engine/organvm/limen/logs/heartbeat.err.log</string>
 </dict>
 </plist>

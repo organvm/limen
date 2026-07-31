@@ -19,7 +19,7 @@ from limen.jules_landing_custody import completed_sessions, load_orphan_adoption
 from limen.jules_landing_transaction import process_session  # noqa: E402
 from limen.models import dispatch_session_id  # noqa: E402
 
-ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "limen"))
+ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
 TASKS = Path(os.environ.get("LIMEN_TASKS", ROOT / "tasks.yaml"))
 ADOPTIONS = Path(os.environ.get("LIMEN_JULES_ADOPTIONS", str(ROOT / "docs" / "jules-orphan-adoptions.jsonl")))
 

@@ -134,7 +134,7 @@ def public_line(text: Any) -> str:
     root_aliases = {
         str(ROOT),
         str(Path.cwd()),
-        str((Path.home() / "Workspace" / "limen").expanduser()),
+        str((Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen").expanduser()),
         os.environ.get("LIMEN_ROOT", ""),
         os.environ.get("LIMEN_LIVE_ROOT", ""),
     }

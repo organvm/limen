@@ -19,10 +19,10 @@
 # COLUMN: SLOT  CONTAINER-TARGET  KIND  SIZE  NOTES
 #
 # ---- STATE DIRS (the bulk; symlink-with-verify, cache excluded from git) ----
-~/.claude	/Users/4jp/Workspace/limen/container/state/claude	symlink-state-absolute	2.1G	Claude Code state. Contains ~/.claude.json sibling (separate file, also a secret) + settings.json already folded by base manifest. Verify sub-symlink (settings.json) survives the dir move.
-~/.codex	/Users/4jp/Workspace/limen/container/state/codex	symlink-state-absolute	468M	Codex CLI state. logs_2.sqlite alone is ~93M and grows; exclude *.sqlite-wal/-shm from git. auth.json is a secret.
-~/.gemini	/Users/4jp/Workspace/limen/container/state/gemini	symlink-state-absolute	8.7G	NOTE: 8.7G is almost entirely .gemini/antigravity-cli (the agy/antigravity install). The CLAUDE.md base manifest says leave ~/.gemini REAL — folding it conflicts with that and dumps 8.7G onto a 69GiB-free internal disk. RECOMMEND: keep .gemini REAL, or symlink ONLY .gemini/config + .gemini/history (sub-slot), leaving antigravity-cli in place.
-~/.claude.json	/Users/4jp/Workspace/limen/container/state/claude.json	guard-secret	-	Separate from ~/.claude/ dir. Carries account/session data. Gitignore + external-only backup.
+~/.claude	/Users/4jp/Workspace/library/engine/organvm/limen/container/state/claude	symlink-state-absolute	2.1G	Claude Code state. Contains ~/.claude.json sibling (separate file, also a secret) + settings.json already folded by base manifest. Verify sub-symlink (settings.json) survives the dir move.
+~/.codex	/Users/4jp/Workspace/library/engine/organvm/limen/container/state/codex	symlink-state-absolute	468M	Codex CLI state. logs_2.sqlite alone is ~93M and grows; exclude *.sqlite-wal/-shm from git. auth.json is a secret.
+~/.gemini	/Users/4jp/Workspace/library/engine/organvm/limen/container/state/gemini	symlink-state-absolute	8.7G	NOTE: 8.7G is almost entirely .gemini/antigravity-cli (the agy/antigravity install). The CLAUDE.md base manifest says leave ~/.gemini REAL — folding it conflicts with that and dumps 8.7G onto a 69GiB-free internal disk. RECOMMEND: keep .gemini REAL, or symlink ONLY .gemini/config + .gemini/history (sub-slot), leaving antigravity-cli in place.
+~/.claude.json	/Users/4jp/Workspace/library/engine/organvm/limen/container/state/claude.json	guard-secret	-	Separate from ~/.claude/ dir. Carries account/session data. Gitignore + external-only backup.
 #
 # ---- SECRET-BEARING FILES inside the state dirs (flag for gitignore + guard) ----
 ~/.codex/auth.json	(stays inside symlinked ~/.codex)	guard-secret	4.7K	chmod 600. Never into git; external-only backup.

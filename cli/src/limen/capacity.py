@@ -522,7 +522,9 @@ def format_capacity_census(rows: list[CapacityRow]) -> str:
 
 
 def _root() -> Path:
-    return Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
+    return Path(
+        os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
+    )
 
 
 def _load_usage(root: Path | None = None) -> dict[str, object]:

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# migrate.sh — fold the scattered conductor into ONE in-place container (~/Workspace/limen).
+# migrate.sh — fold the scattered conductor into ONE in-place container (~/Workspace/library/engine/organvm/limen).
 #
 # DECIDED PATH: git-deploy / zero-move (workflow wf_6fd8a8f7-9fb, 5 paths, adversarially judged).
 # The repo STAYS where the live launchd plist already points. OS-pinned slots that are
@@ -13,12 +13,12 @@
 # Archive4T + T7Recovery are mountpoint-GUARDED (an unplugged volume is SKIPPED, never written to
 # the internal disk). The secret value is never printed.
 #
-# Run ONCE:  bash ~/Workspace/limen/container/migrate.sh
-# Undo:      bash ~/Workspace/limen/container/rollback.sh
+# Run ONCE:  bash ~/Workspace/library/engine/organvm/limen/container/migrate.sh
+# Undo:      bash ~/Workspace/library/engine/organvm/limen/container/rollback.sh
 set -uo pipefail
 
 HOME="${HOME:-/Users/4jp}"
-ROOT="$HOME/Workspace/limen"
+ROOT="${WORKSPACE_ROOT:-$HOME/Workspace}/library/engine/organvm/limen"
 CONT="$ROOT/container"
 ENVDIR="$ROOT/env"
 BK="$CONT/backup"

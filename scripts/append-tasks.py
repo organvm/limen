@@ -57,7 +57,7 @@ tasks_to_add[40] = {"id": "LIMEN-100", "title": "Audit all GitHub orgs for open 
 
 tasks_path = Path('tasks.yaml').expanduser()
 if not tasks_path.exists():
-    tasks_path = Path('~/Workspace/limen/tasks.yaml').expanduser()
+    tasks_path = Path('~/Workspace/library/engine/organvm/limen/tasks.yaml').expanduser()
 
 with open(tasks_path) as f:
     data = yaml.safe_load(f)

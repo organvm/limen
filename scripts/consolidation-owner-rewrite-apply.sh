@@ -19,7 +19,7 @@ fi
 echo "⚠ GitHub mutation gate: rewrite is IRREVERSIBLE. Verify transfer completed before proceeding."
 echo ""
 echo "Running owner-rewrite (tasks.yaml refs + local remotes)..."
-cd /Users/4jp/Workspace/limen
+cd /Users/4jp/Workspace/library/engine/organvm/limen
 PYTHONPATH=cli/src python3 scripts/rewrite-owners.py --apply --emit-remotes /tmp/limen-remotes.sh
 
 echo ""
