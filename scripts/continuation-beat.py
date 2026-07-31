@@ -22,10 +22,20 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+
+SOURCE_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(SOURCE_ROOT / "cli" / "src"))
+
+from limen.worktree_receipts import (  # noqa: E402
+    live_worktree_receipt_fields,
+    receipt_worktree_key,
+)
 
 
 ROOT = Path(os.environ.get("LIMEN_ROOT", Path.home() / "Workspace" / "library" / "engine" / "organvm" / "limen"))
@@ -804,7 +814,13 @@ def update_pr_receipts(rows: list[dict[str, Any]], *, apply: bool) -> dict[str, 
         return {"error": f"could not load preservation receipts: {exc}"}
 
     receipts = data.setdefault("receipts", [])
-    by_root = {str(row.get("root")): row for row in receipts if isinstance(row, dict)}
+    by_worktree: dict[str, list[dict[str, Any]]] = {}
+    for receipt_row in receipts:
+        if not isinstance(receipt_row, dict):
+            continue
+        key = receipt_worktree_key(receipt_row)
+        if key:
+            by_worktree.setdefault(key, []).append(receipt_row)
     updated = 0
     now = utc_now()
 
@@ -815,17 +831,25 @@ def update_pr_receipts(rows: list[dict[str, Any]], *, apply: bool) -> dict[str, 
         root = str(row.get("name") or path.name)
         if not repo or not branch or not root:
             continue
+        identity = live_worktree_receipt_fields(path)
+        if identity is None:
+            continue
         url = str(row.get("url") or (row.get("pr") or {}).get("url") or "")
         number = pr_number_from_url(url)
         view = pr_view(str(repo), str(number or url), path if path.is_dir() else ROOT) if (number or url) else {}
         head = str(view.get("headRefOid") or (git(path, "rev-parse", "HEAD").stdout.strip() if path.is_dir() else ""))
+        if head != identity["head"]:
+            continue
         if not url:
             url = str(view.get("url") or "")
-        receipt = by_root.get(root)
+        existing = by_worktree.get(identity["worktree"], [])
+        if len(existing) > 1:
+            continue
+        receipt = existing[0] if existing else None
         if receipt is None:
             receipt = {"root": root}
             receipts.append(receipt)
-            by_root[root] = receipt
+            by_worktree[identity["worktree"]] = [receipt]
         new_values = {
             "branch": str(view.get("headRefName") or branch),
             "classification": "open draft PR preserves local worktree head",
@@ -840,8 +864,10 @@ def update_pr_receipts(rows: list[dict[str, Any]], *, apply: bool) -> dict[str, 
             "pr_state": str(view.get("state") or "OPEN"),
             "pr_url": url,
             "repo": str(repo),
+            "repository_key": identity["repository_key"],
             "score_discount": 35,
             "status": "open_pr_preserved",
+            "worktree": identity["worktree"],
         }
         if any(receipt.get(key) != value for key, value in new_values.items()):
             new_values["evidence_updated_utc"] = now

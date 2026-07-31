@@ -133,6 +133,16 @@ def test_receipt_refresh_does_not_churn_timestamp_without_new_evidence(tmp_path,
     receipt_path = root / "docs" / "worktree-preservation-receipts.json"
     receipt_path.write_text(json.dumps({"receipts": [{"root": "lane"}]}), encoding="utf-8")
     module = _load(monkeypatch, root, photos, portvs)
+    worktree = tmp_path / "missing-worktree"
+    monkeypatch.setattr(
+        module,
+        "live_worktree_receipt_fields",
+        lambda path: {
+            "worktree": str(path.resolve(strict=False)),
+            "head": "abc123",
+            "repository_key": "example--" + "a" * 64,
+        },
+    )
     monkeypatch.setattr(
         module,
         "pr_view",
@@ -150,7 +160,7 @@ def test_receipt_refresh_does_not_churn_timestamp_without_new_evidence(tmp_path,
     rows = [
         {
             "name": "lane",
-            "path": str(tmp_path / "missing-worktree"),
+            "path": str(worktree),
             "repo": "organvm/example",
             "branch": "work/lane",
             "url": "https://example.test/pull/7",
@@ -164,6 +174,60 @@ def test_receipt_refresh_does_not_churn_timestamp_without_new_evidence(tmp_path,
     assert first["updated"] == 1
     assert second["updated"] == 0
     assert receipt_path.read_bytes() == first_bytes
+
+
+def test_pr_receipts_retain_distinct_same_slug_worktrees(tmp_path, monkeypatch):
+    root = tmp_path / "limen"
+    photos = tmp_path / "photos"
+    portvs = tmp_path / "portvs"
+    (root / "docs").mkdir(parents=True)
+    photos.mkdir()
+    portvs.mkdir()
+    receipt_path = root / "docs" / "worktree-preservation-receipts.json"
+    receipt_path.write_text('{"receipts": []}\n', encoding="utf-8")
+    module = _load(monkeypatch, root, photos, portvs)
+    paths = [tmp_path / owner / "same-slug" for owner in ("first", "second")]
+    for path in paths:
+        path.mkdir(parents=True)
+    monkeypatch.setattr(
+        module,
+        "live_worktree_receipt_fields",
+        lambda path: {
+            "worktree": str(path.resolve(strict=False)),
+            "head": "abc123",
+            "repository_key": f"{path.parent.name}--" + "a" * 64,
+        },
+    )
+    monkeypatch.setattr(
+        module,
+        "pr_view",
+        lambda repo, number_or_url, path: {
+            "number": int(number_or_url),
+            "state": "OPEN",
+            "isDraft": True,
+            "headRefName": "work/same-slug",
+            "headRefOid": "abc123",
+            "url": f"https://example.test/{repo}/pull/{number_or_url}",
+        },
+    )
+    rows = [
+        {
+            "name": "same-slug",
+            "path": str(path),
+            "repo": f"{path.parent.name}/same-slug",
+            "branch": "work/same-slug",
+            "url": f"https://example.test/pull/{index}",
+        }
+        for index, path in enumerate(paths, start=41)
+    ]
+
+    result = module.update_pr_receipts(rows, apply=True)
+    receipts = json.loads(receipt_path.read_text(encoding="utf-8"))["receipts"]
+
+    assert result["updated"] == 2
+    assert [row["root"] for row in receipts] == ["same-slug", "same-slug"]
+    assert len({row["worktree"] for row in receipts}) == 2
+    assert len({row["repository_key"] for row in receipts}) == 2
 
 
 def test_merged_pr_custody_clears_exact_retry_ref_then_clean_beat_is_fixed_point(tmp_path, monkeypatch):

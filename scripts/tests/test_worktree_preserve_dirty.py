@@ -33,7 +33,7 @@ def git(repo: Path, *args: str) -> str:
 
 def make_repo(tmp_path: Path, name: str = "owner-repo") -> Path:
     repo = tmp_path / name
-    repo.mkdir()
+    repo.mkdir(parents=True)
     subprocess.run(["git", "init", "-b", "main", str(repo)], check=True, capture_output=True)
     git(repo, "config", "user.name", "Test User")
     git(repo, "config", "user.email", "test@example.com")
@@ -206,6 +206,44 @@ def test_apply_is_content_addressed_and_byte_idempotent(
     assert module.main() == 0
     assert ledger.read_bytes() == first
     assert sorted(path.name for path in module.PRIVATE_ROOT.iterdir()) == first_dirs
+
+
+def test_apply_retains_distinct_same_slug_worktrees(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_module()
+    root = configure_paths(module, tmp_path, monkeypatch)
+    first = make_repo(tmp_path, "first/same-slug")
+    second = make_repo(tmp_path, "second/same-slug")
+    (first / "tracked.txt").write_text("first change\n", encoding="utf-8")
+    (second / "tracked.txt").write_text("second change\n", encoding="utf-8")
+    monkeypatch.setattr(
+        module,
+        "worktree_debt_report",
+        lambda _root: {"items": [dirty_item(first), dirty_item(second)]},
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "worktree-preserve-dirty.py",
+            "--apply",
+            "--json",
+            "--max-patch-bytes",
+            str(1024 * 1024),
+            "--max-total-patch-bytes",
+            str(2 * 1024 * 1024),
+        ],
+    )
+
+    assert module.main() == 0
+    receipts = json.loads((root / "docs" / "worktree-preservation-receipts.json").read_text(encoding="utf-8"))[
+        "receipts"
+    ]
+    assert [row["root"] for row in receipts] == ["same-slug", "same-slug"]
+    assert len({row["worktree"] for row in receipts}) == 2
+    assert len({row["repository_key"] for row in receipts}) == 2
 
 
 def test_aggregate_ceiling_fails_before_any_durable_write(

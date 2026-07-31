@@ -41,6 +41,9 @@ LIMIT_KEYS = (
 GIT_TIMEOUT_SECONDS = 60
 REPOSITORY_FETCH_BUDGET_SECONDS = 120.0
 LSOF_TIMEOUT_SECONDS = 15
+CUSTODY_LEDGER_MAX_BYTES = 16 * 1024 * 1024
+CUSTODY_LEDGER_MAX_ROWS = 50_000
+CUSTODY_LEDGER_DEADLINE_SECONDS = 10.0
 _monotonic = time.monotonic
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _CUSTODY_IDENTITY_FIELDS = ("inventory_sha256", "plan_sha256", "content_sha256")
@@ -107,6 +110,191 @@ class RepositoryFetchBudget:
             self.exhausted = True
             return None
         return min(float(GIT_TIMEOUT_SECONDS), remaining)
+
+
+@dataclass(frozen=True)
+class CustodyLedgerRows:
+    """One bounded, coherent selection from a private custody ledger."""
+
+    available: bool
+    rows: tuple[Mapping[str, Any], ...] = ()
+    inspection_error: str | None = None
+
+
+@dataclass(frozen=True)
+class _CustodyLedgerSource:
+    available: bool
+    kind: str = ""
+    value: Any = None
+    inspection_error: str | None = None
+
+
+@dataclass
+class CustodyLedgerReader:
+    """Read every unique custody source once under one aggregate byte/row/deadline budget."""
+
+    max_bytes: int = CUSTODY_LEDGER_MAX_BYTES
+    max_rows: int = CUSTODY_LEDGER_MAX_ROWS
+    deadline_seconds: float = CUSTODY_LEDGER_DEADLINE_SECONDS
+    started_at: float = field(default_factory=lambda: _monotonic())
+    bytes_consumed: int = 0
+    rows_consumed: int = 0
+    inspection_errors: list[tuple[Path, str]] = field(default_factory=list)
+    _sources: dict[Path, _CustodyLedgerSource] = field(default_factory=dict)
+    _selections: dict[tuple[Path, tuple[str, ...]], CustodyLedgerRows] = field(default_factory=dict)
+
+    def _deadline_error(self) -> str | None:
+        if _monotonic() - self.started_at >= self.deadline_seconds:
+            return "aggregate custody ledger inspection deadline exhausted"
+        return None
+
+    def _record_error(self, path: Path, error: str) -> None:
+        item = (path, error)
+        if item not in self.inspection_errors:
+            self.inspection_errors.append(item)
+
+    def _source_error(self, path: Path, message: str, *, available: bool = True) -> _CustodyLedgerSource:
+        self._record_error(path, message)
+        return _CustodyLedgerSource(available=available, inspection_error=message)
+
+    def _read_jsonl(self, path: Path, handle: Any) -> _CustodyLedgerSource:
+        rows: list[Mapping[str, Any]] = []
+        while True:
+            if error := self._deadline_error():
+                return self._source_error(path, error)
+            remaining = self.max_bytes - self.bytes_consumed
+            raw = handle.readline(max(1, remaining + 1))
+            if not raw:
+                break
+            if len(raw) > remaining:
+                self.bytes_consumed += max(0, remaining)
+                return self._source_error(path, "aggregate custody ledger byte ceiling exceeded")
+            self.bytes_consumed += len(raw)
+            if error := self._deadline_error():
+                return self._source_error(path, error)
+            if not raw.strip():
+                continue
+            if self.rows_consumed + 1 > self.max_rows:
+                return self._source_error(path, "aggregate custody ledger row ceiling exceeded")
+            self.rows_consumed += 1
+            try:
+                value = json.loads(raw.decode("utf-8"))
+            except UnicodeDecodeError:
+                return self._source_error(path, "custody ledger is not valid UTF-8")
+            except json.JSONDecodeError:
+                return self._source_error(path, "custody ledger contains malformed JSONL")
+            if isinstance(value, dict):
+                rows.append(value)
+        if error := self._deadline_error():
+            return self._source_error(path, error)
+        return _CustodyLedgerSource(available=True, kind="jsonl", value=tuple(rows))
+
+    def _read_json(self, path: Path, handle: Any) -> _CustodyLedgerSource:
+        if error := self._deadline_error():
+            return self._source_error(path, error)
+        remaining = self.max_bytes - self.bytes_consumed
+        raw = handle.read(max(1, remaining + 1))
+        if len(raw) > remaining:
+            self.bytes_consumed += max(0, remaining)
+            return self._source_error(path, "aggregate custody ledger byte ceiling exceeded")
+        self.bytes_consumed += len(raw)
+        if error := self._deadline_error():
+            return self._source_error(path, error)
+        try:
+            value = json.loads(raw.decode("utf-8"))
+        except UnicodeDecodeError:
+            return self._source_error(path, "custody ledger is not valid UTF-8")
+        except json.JSONDecodeError:
+            return self._source_error(path, "custody ledger contains malformed JSON")
+        if error := self._deadline_error():
+            return self._source_error(path, error)
+        return _CustodyLedgerSource(available=True, kind="json", value=value)
+
+    def _source(self, path: Path) -> tuple[Path, _CustodyLedgerSource]:
+        resolved = path.expanduser().resolve(strict=False)
+        cached = self._sources.get(resolved)
+        if cached is not None:
+            return resolved, cached
+        if error := self._deadline_error():
+            source = self._source_error(resolved, error, available=False)
+            self._sources[resolved] = source
+            return resolved, source
+        try:
+            with resolved.open("rb") as handle:
+                source = (
+                    self._read_jsonl(resolved, handle)
+                    if resolved.suffix.lower() == ".jsonl"
+                    else self._read_json(resolved, handle)
+                )
+        except FileNotFoundError:
+            source = _CustodyLedgerSource(available=False)
+        except OSError as exc:
+            source = self._source_error(
+                resolved,
+                f"custody ledger read failed: {type(exc).__name__}",
+            )
+        self._sources[resolved] = source
+        return resolved, source
+
+    def read_rows(
+        self,
+        path: Path,
+        *,
+        collection_keys: Sequence[str] = ("receipts",),
+    ) -> CustodyLedgerRows:
+        resolved, source = self._source(path)
+        if source.inspection_error:
+            return CustodyLedgerRows(source.available, inspection_error=source.inspection_error)
+        if not source.available:
+            return CustodyLedgerRows(False)
+        if source.kind == "jsonl":
+            selection_key = (resolved, ("__jsonl__",))
+            rows = tuple(source.value)
+            result = CustodyLedgerRows(True, rows=rows)
+            self._selections.setdefault(selection_key, result)
+            return self._selections[selection_key]
+
+        value = source.value
+        selection_id: tuple[str, ...]
+        raw_rows: list[object]
+        if isinstance(value, list):
+            selection_id = ("__top_level__",)
+            raw_rows = value
+        elif isinstance(value, dict):
+            selected_key = next(
+                (key for key in collection_keys if isinstance(value.get(key), list)),
+                None,
+            )
+            if selected_key is None:
+                selection_id = ("__mapping__",)
+                raw_rows = [value]
+            else:
+                selection_id = ("__collection__", selected_key)
+                raw_rows = value[selected_key]
+        else:
+            selection_id = ("__top_level__",)
+            raw_rows = [value]
+        cache_key = (resolved, selection_id)
+        cached = self._selections.get(cache_key)
+        if cached is not None:
+            return cached
+        if error := self._deadline_error():
+            self._record_error(resolved, error)
+            result = CustodyLedgerRows(True, inspection_error=error)
+        elif self.rows_consumed + len(raw_rows) > self.max_rows:
+            error = "aggregate custody ledger row ceiling exceeded"
+            self._record_error(resolved, error)
+            result = CustodyLedgerRows(True, inspection_error=error)
+        else:
+            self.rows_consumed += len(raw_rows)
+            rows = tuple(row for row in raw_rows if isinstance(row, dict))
+            if error := self._deadline_error():
+                self._record_error(resolved, error)
+                result = CustodyLedgerRows(True, inspection_error=error)
+            else:
+                result = CustodyLedgerRows(True, rows=rows)
+        self._selections[cache_key] = result
+        return result
 
 
 def _nonempty_string(value: object) -> bool:
@@ -630,8 +818,28 @@ def _audit_ephemeral_root(
                 )
                 truncated = True
                 break
-            if row.path == "runtime/worktrees" and entry.is_dir() and not entry.is_symlink():
+            if row.path == "runtime/worktrees" and entry.is_symlink():
+                violations.append(
+                    Violation(
+                        "ephemeral_nonphysical_entry",
+                        f"{row.path}/{entry.name}",
+                        "repository namespace must be a physical directory, not a symlink",
+                    )
+                )
+                units.append((entry.name, entry))
+            elif row.path == "runtime/worktrees" and not entry.is_dir():
+                violations.append(
+                    Violation(
+                        "ephemeral_nonphysical_entry",
+                        f"{row.path}/{entry.name}",
+                        "repository namespace must be a physical directory",
+                    )
+                )
+                units.append((entry.name, entry))
+            elif row.path == "runtime/worktrees" and entry.is_dir():
                 namespace_count += 1
+                namespace_unit_count = 0
+                namespace_measured = True
                 try:
                     for unit in entry.iterdir():
                         if not budget.consume():
@@ -643,14 +851,41 @@ def _audit_ephemeral_root(
                                 )
                             )
                             truncated = True
+                            namespace_measured = False
                             break
+                        if unit.is_symlink():
+                            violations.append(
+                                Violation(
+                                    "ephemeral_nonphysical_entry",
+                                    f"{row.path}/{entry.name}/{unit.name}",
+                                    "worktree lifecycle unit must be a physical directory, not a symlink",
+                                )
+                            )
+                        elif not unit.is_dir():
+                            violations.append(
+                                Violation(
+                                    "ephemeral_nonphysical_entry",
+                                    f"{row.path}/{entry.name}/{unit.name}",
+                                    "worktree lifecycle unit must be a physical directory",
+                                )
+                            )
                         units.append((f"{entry.name}/{unit.name}", unit))
+                        namespace_unit_count += 1
                 except OSError as exc:
+                    namespace_measured = False
                     violations.append(
                         Violation(
                             "unmeasured_state",
                             f"{row.path}/{entry.name}",
                             f"cannot list worktree namespace: {exc}",
+                        )
+                    )
+                if namespace_measured and namespace_unit_count == 0:
+                    violations.append(
+                        Violation(
+                            "ephemeral_empty_namespace",
+                            f"{row.path}/{entry.name}",
+                            "empty repository namespace is accidental state, not a lifecycle unit",
                         )
                     )
                 if truncated:
@@ -971,37 +1206,6 @@ def _resolve_reference(
     return path.resolve(strict=False), fragment if separator else None
 
 
-def _read_receipt_rows(
-    path: Path,
-    *,
-    collection_keys: Sequence[str] = ("receipts",),
-) -> list[Mapping[str, Any]]:
-    if not path.is_file():
-        return []
-    try:
-        if path.suffix == ".jsonl":
-            rows: list[Mapping[str, Any]] = []
-            for line in path.read_text(encoding="utf-8").splitlines():
-                if not line.strip():
-                    continue
-                value = json.loads(line)
-                if isinstance(value, dict):
-                    rows.append(value)
-            return rows
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return []
-    if isinstance(value, list):
-        return [row for row in value if isinstance(row, dict)]
-    if isinstance(value, dict):
-        for key in collection_keys:
-            nested = value.get(key)
-            if isinstance(nested, list):
-                return [row for row in nested if isinstance(row, dict)]
-        return [value]
-    return []
-
-
 def _copy_count(value: object) -> int:
     if isinstance(value, bool):
         return 0
@@ -1029,6 +1233,11 @@ def _audit_private_custody(
 ) -> tuple[list[Violation], list[dict[str, Any]]]:
     violations: list[Violation] = []
     receipts: list[dict[str, Any]] = []
+    reader = CustodyLedgerReader(
+        max_bytes=CUSTODY_LEDGER_MAX_BYTES,
+        max_rows=CUSTODY_LEDGER_MAX_ROWS,
+        deadline_seconds=CUSTODY_LEDGER_DEADLINE_SECONDS,
+    )
     for row in rows:
         if row.kind != "private":
             continue
@@ -1045,11 +1254,28 @@ def _audit_private_custody(
             rows=rows,
         )
         label = str(row.raw["custody_label"])
-        inventory_available = inventory.is_file()
-        inventory_rows = _read_receipt_rows(
+        inventory_result = reader.read_rows(
             inventory,
             collection_keys=("sealed_inventories", "inventories"),
         )
+        receipt_result = reader.read_rows(receipt_path)
+        row_inspection_errors: dict[Path, str] = {}
+        for source_path, result in (
+            (inventory, inventory_result),
+            (receipt_path, receipt_result),
+        ):
+            if result.inspection_error:
+                row_inspection_errors[source_path.resolve(strict=False)] = result.inspection_error
+        for source_path, error in row_inspection_errors.items():
+            violations.append(
+                Violation(
+                    "unmeasured_state",
+                    row.path,
+                    f"private custody ledger inspection failed closed: {source_path.name}: {error}",
+                )
+            )
+
+        inventory_rows = inventory_result.rows
         inventory_label_matches = inventory_fragment in {None, label}
         matching_inventories = [
             candidate
@@ -1068,11 +1294,11 @@ def _audit_private_custody(
             if inventory_verified and sealed_inventory is not None
             else None
         )
-        if not inventory_available:
+        if not inventory_result.available:
             violations.append(
                 Violation("private_inventory_missing", row.path, "sealed inventory reference is unavailable")
             )
-        elif not inventory_verified:
+        elif inventory_result.inspection_error is None and not inventory_verified:
             violations.append(
                 Violation(
                     "private_inventory_unverified",
@@ -1082,9 +1308,7 @@ def _audit_private_custody(
                 )
             )
         receipt_label_matches = fragment in {None, label}
-        candidates = [
-            candidate for candidate in _read_receipt_rows(receipt_path) if str(candidate.get("label", "")) == label
-        ]
+        candidates = [candidate for candidate in receipt_result.rows if str(candidate.get("label", "")) == label]
         valid = next(
             (
                 candidate
@@ -1103,15 +1327,16 @@ def _audit_private_custody(
             {
                 "path": row.path,
                 "custody_label": label,
-                "inventory_available": inventory_available,
+                "inventory_available": inventory_result.available,
                 "sealed_inventory_verified": inventory_verified,
-                "restoration_receipt_available": receipt_path.is_file(),
+                "restoration_receipt_available": receipt_result.available,
                 "restoration_identity_verified": valid is not None,
                 "restoration_verified": restoration_verified,
                 "custody_verified": inventory_verified and restoration_verified,
+                "inspection_complete": not row_inspection_errors,
             }
         )
-        if not restoration_verified:
+        if not restoration_verified and not row_inspection_errors:
             violations.append(
                 Violation(
                     "private_restoration_unverified",
@@ -1120,6 +1345,12 @@ def _audit_private_custody(
                     "sealed inventory and inventory/plan/content identity",
                 )
             )
+    if reader.inspection_errors:
+        # Aggregate exhaustion means the court did not measure the complete private-custody
+        # evidence set. Earlier valid rows remain useful diagnostics, but cannot authorize custody.
+        for receipt in receipts:
+            receipt["inspection_complete"] = False
+            receipt["custody_verified"] = False
     return violations, receipts
 
 

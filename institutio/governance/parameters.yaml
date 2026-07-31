@@ -2857,6 +2857,12 @@ parameters:
     self_update: none
     owner: limen-daemon
     note: "Whether reclaim/debt discovery scans historical dispatch worktree roots after the active Scratch migration. Auto means enabled in live sessions and disabled when a test/probe supplies an explicit LIMEN_WORKTREE_ROOT."
+  LIMEN_RECLAIM_CANONICAL_AGE_H:
+    default: 168
+    env: LIMEN_RECLAIM_CANONICAL_AGE_H
+    self_update: none
+    owner: limen-daemon
+    note: "Minimum idle hours before a canonical WORKSPACE_ROOT/runtime/worktrees/<repository-key>/<slug> unit is reclaim-eligible. This is intentionally independent from the shorter dispatch/Scratch age."
   LIMEN_RECLAIM_LEGACY_DISPATCH_AGE_H:
     default: "$LIMEN_RECLAIM_MIN_AGE_H"
     env: LIMEN_RECLAIM_LEGACY_DISPATCH_AGE_H

@@ -33,6 +33,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "cli" / "src"))
 
 from limen.worktree_debt import worktree_debt_report
+from limen.worktree_receipts import live_worktree_receipt_fields, receipt_worktree_key
 
 PRESERVATION_RECEIPTS = ROOT / "docs" / "worktree-preservation-receipts.json"
 PRIVATE_ROOT = ROOT / ".limen-private" / "session-corpus" / "lifecycle" / "worktree-preserve"
@@ -281,6 +282,11 @@ def prepare_item(
     finally:
         verification_patch.unlink(missing_ok=True)
 
+    identity = live_worktree_receipt_fields(path)
+    if identity is None or identity["head"] != head:
+        staged_patch.unlink(missing_ok=True)
+        raise PreservationError(f"{path}: exact worktree receipt identity is unavailable or changed")
+
     private_dir_name = f"{safe_name(root)}-{path_digest[:8]}-{capture['sha256'][:16]}"
     private_dir = PRIVATE_ROOT / private_dir_name
     private_patch = private_dir / "dirty.patch"
@@ -306,12 +312,13 @@ def prepare_item(
         "private_patch_sha256": capture["sha256"],
         "private_receipt": rel_to_root(private_receipt),
         "repo": repo_slug(remote) or remote,
+        "repository_key": identity["repository_key"],
         "root": root,
         "status": "private_patch_preserved",
         "untracked_paths_count": 0,
         "untracked_paths_sha256": sha256_text(""),
         "untracked_paths_sample": [],
-        "worktree": str(path),
+        "worktree": identity["worktree"],
         "worktree_status_count": len(status_lines),
         "worktree_status_sample": status_lines[:PUBLIC_SAMPLE_LIMIT],
         "worktree_status_sha256": sha256_text("\n".join(status_lines)),
@@ -486,15 +493,20 @@ def main() -> int:
 
             data = load_receipts()
             receipt_rows = data["receipts"]
-            by_root = {
-                str(row.get("root")): (index, row)
-                for index, row in enumerate(receipt_rows)
-                if isinstance(row, dict) and row.get("root")
-            }
+            by_worktree: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+            for index, receipt_row in enumerate(receipt_rows):
+                if not isinstance(receipt_row, dict):
+                    continue
+                key = receipt_worktree_key(receipt_row)
+                if key:
+                    by_worktree.setdefault(key, []).append((index, receipt_row))
             candidates: list[tuple[int | None, dict[str, Any], dict[str, Any]]] = []
             for prepared in prepared_items:
-                root = str(prepared["receipt"]["root"])
-                index, existing = by_root.get(root, (None, None))
+                worktree = str(prepared["receipt"]["worktree"])
+                existing_rows = by_worktree.get(worktree, [])
+                if len(existing_rows) > 1:
+                    raise PreservationError(f"{worktree}: preservation ledger has ambiguous duplicate identities")
+                index, existing = existing_rows[0] if existing_rows else (None, None)
                 candidate = candidate_receipt(existing, prepared)
                 artifacts_valid = private_artifacts_valid(candidate)
                 if existing != candidate or not artifacts_valid:

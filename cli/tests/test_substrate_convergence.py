@@ -41,7 +41,7 @@ def _restoration_receipt(
     restoration_passed: bool = True,
 ) -> dict[str, object]:
     return {
-        "label": "life",
+        "label": str(inventory.get("label", "life")),
         "restoration_passed": restoration_passed,
         "copy_count": 2 if restoration_passed else 1,
         "independent_physical_devices": restoration_passed,
@@ -119,7 +119,7 @@ def _base_rows(remote: Path) -> list[dict[str, object]]:
             "kind": "ephemeral",
             "owner_ref": "limen/reaper",
             "residency": "ephemeral",
-            "expires_after": 86400,
+            "expires_after": 604800,
             "reaper": "limen worktree reap",
         },
     ]
@@ -306,6 +306,84 @@ def test_canonical_runtime_worktree_is_measured_without_nested_repository_violat
     assert report["ok"] is True, report
 
 
+@pytest.mark.parametrize("symlink_level", ["namespace", "unit"])
+def test_runtime_worktree_symlink_is_a_bounded_physical_containment_violation(
+    tmp_path: Path,
+    symlink_level: str,
+) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    runtime_root = workspace / "runtime" / "worktrees"
+    outside = tmp_path / "outside-runtime"
+    outside.mkdir()
+    (outside / "sentinel").write_text("do not follow\n", encoding="utf-8")
+    namespace = runtime_root / "foreign-key"
+    if symlink_level == "namespace":
+        namespace.symlink_to(outside, target_is_directory=True)
+        expected_path = "runtime/worktrees/foreign-key"
+        expected_namespace_count = 0
+    else:
+        namespace.mkdir()
+        (namespace / "foreign-unit").symlink_to(outside, target_is_directory=True)
+        expected_path = "runtime/worktrees/foreign-key/foreign-unit"
+        expected_namespace_count = 1
+
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+
+    matching = [
+        violation
+        for violation in report["violations"]
+        if violation["code"] == "ephemeral_nonphysical_entry" and violation["path"] == expected_path
+    ]
+    runtime_receipt = next(row for row in report["ephemeral_roots"] if row["path"] == "runtime/worktrees")
+    assert report["ok"] is False
+    assert len(matching) == 1
+    assert runtime_receipt["namespace_count"] == expected_namespace_count
+    assert runtime_receipt["entry_count"] == 1
+    assert (outside / "sentinel").read_text(encoding="utf-8") == "do not follow\n"
+
+
+@pytest.mark.parametrize("invalid_shape", ["empty-namespace", "namespace-file", "unit-file"])
+def test_runtime_worktree_invalid_physical_shape_fails_closed(
+    tmp_path: Path,
+    invalid_shape: str,
+) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    runtime_root = workspace / "runtime" / "worktrees"
+    namespace = runtime_root / "arbitrary-key"
+    if invalid_shape == "empty-namespace":
+        namespace.mkdir()
+        expected_code = "ephemeral_empty_namespace"
+        expected_path = "runtime/worktrees/arbitrary-key"
+        expected_namespace_count = 1
+        expected_entry_count = 0
+    elif invalid_shape == "namespace-file":
+        namespace.write_text("not a namespace\n", encoding="utf-8")
+        expected_code = "ephemeral_nonphysical_entry"
+        expected_path = "runtime/worktrees/arbitrary-key"
+        expected_namespace_count = 0
+        expected_entry_count = 1
+    else:
+        namespace.mkdir()
+        (namespace / "not-a-worktree").write_text("not a worktree\n", encoding="utf-8")
+        expected_code = "ephemeral_nonphysical_entry"
+        expected_path = "runtime/worktrees/arbitrary-key/not-a-worktree"
+        expected_namespace_count = 1
+        expected_entry_count = 1
+
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+
+    matching = [
+        violation
+        for violation in report["violations"]
+        if violation["code"] == expected_code and violation["path"] == expected_path
+    ]
+    runtime_receipt = next(row for row in report["ephemeral_roots"] if row["path"] == "runtime/worktrees")
+    assert report["ok"] is False
+    assert len(matching) == 1
+    assert runtime_receipt["namespace_count"] == expected_namespace_count
+    assert runtime_receipt["entry_count"] == expected_entry_count
+
+
 def test_dirty_and_unpushed_repository_cannot_converge(tmp_path: Path) -> None:
     manifest, workspace, _ = _fixture(tmp_path)
     repo = workspace / "library" / "engine" / "organvm" / "limen"
@@ -458,7 +536,223 @@ def test_malformed_private_inventory_fails_closed(tmp_path: Path) -> None:
 
     report = audit(manifest, workspace_root=workspace, active_cwds=[])
 
-    assert "private_inventory_unverified" in _codes(report)
+    assert "unmeasured_state" in _codes(report)
+    assert report["counts"]["unmeasured"] >= 1
+    assert report["private_custody"][0]["custody_verified"] is False
+
+
+@pytest.mark.parametrize("suffix", ["json", "jsonl"])
+def test_shared_private_custody_source_is_opened_once_across_rows(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    suffix: str,
+) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    data = yaml.safe_load(manifest.read_text(encoding="utf-8"))
+    life = _sealed_inventory()
+    finance = {**_sealed_inventory(), "label": "finance"}
+    shared = manifest.parent / f"shared.{suffix}"
+    if suffix == "json":
+        shared.write_text(
+            json.dumps(
+                {
+                    "sealed_inventories": [life, finance],
+                    "receipts": [_restoration_receipt(life), _restoration_receipt(finance)],
+                }
+            ),
+            encoding="utf-8",
+        )
+    else:
+        shared.write_text(
+            "\n".join(
+                json.dumps(row) for row in (life, finance, _restoration_receipt(life), _restoration_receipt(finance))
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    life_row = next(row for row in data["rows"] if row["kind"] == "private")
+    life_row["sealed_inventory_ref"] = f"manifest://shared.{suffix}#life"
+    life_row["restoration_receipt_ref"] = f"manifest://shared.{suffix}#life"
+    data["rows"].append(
+        {
+            "path": "private/finance",
+            "kind": "private",
+            "owner_ref": "private-inventory/finance",
+            "residency": "private",
+            "sealed_inventory_ref": f"manifest://shared.{suffix}#finance",
+            "restoration_receipt_ref": f"manifest://shared.{suffix}#finance",
+            "custody_label": "finance",
+        }
+    )
+    (workspace / "private" / "finance").mkdir()
+    manifest.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    monkeypatch.setattr(convergence, "CUSTODY_LEDGER_MAX_ROWS", 4)
+    real_open = Path.open
+    real_read_text = Path.read_text
+    open_count = 0
+
+    def counting_open(path: Path, *args: object, **kwargs: object):
+        nonlocal open_count
+        if path.resolve(strict=False) == shared.resolve(strict=False):
+            open_count += 1
+        return real_open(path, *args, **kwargs)
+
+    def guarded_read_text(path: Path, *args: object, **kwargs: object):
+        if path.resolve(strict=False) == shared.resolve(strict=False):
+            raise AssertionError("custody source must use the bounded binary reader")
+        return real_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", counting_open)
+    monkeypatch.setattr(Path, "read_text", guarded_read_text)
+
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+
+    assert report["ok"] is True, report
+    assert open_count == 1
+    assert len(report["private_custody"]) == 2
+    assert all(row["custody_verified"] is True for row in report["private_custody"])
+
+
+def test_private_custody_aggregate_byte_exhaustion_is_unmeasured(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    data = yaml.safe_load(manifest.read_text(encoding="utf-8"))
+    finance = {**_sealed_inventory(), "label": "finance"}
+    data["rows"].append(
+        {
+            "path": "private/finance",
+            "kind": "private",
+            "owner_ref": "private-inventory/finance",
+            "residency": "private",
+            "sealed_inventory_ref": "manifest://finance-inventory.json",
+            "restoration_receipt_ref": "manifest://finance-receipts.json#finance",
+            "custody_label": "finance",
+        }
+    )
+    (workspace / "private" / "finance").mkdir()
+    finance_inventory = manifest.parent / "finance-inventory.json"
+    finance_receipts = manifest.parent / "finance-receipts.json"
+    finance_inventory.write_text(
+        json.dumps({"sealed_inventories": [finance]}),
+        encoding="utf-8",
+    )
+    finance_receipts.write_text(
+        json.dumps({"receipts": [_restoration_receipt(finance)]}) + (" " * 1024),
+        encoding="utf-8",
+    )
+    manifest.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    complete_prefix_bytes = sum(
+        path.stat().st_size
+        for path in (
+            manifest.parent / "inventory.json",
+            manifest.parent / "receipts.json",
+            finance_inventory,
+        )
+    )
+    monkeypatch.setattr(convergence, "CUSTODY_LEDGER_MAX_BYTES", complete_prefix_bytes + 1)
+
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+
+    assert "unmeasured_state" in _codes(report)
+    assert report["counts"]["unmeasured"] >= 1
+    assert report["private_custody"][0]["sealed_inventory_verified"] is True
+    assert report["private_custody"][0]["restoration_verified"] is True
+    assert [row["custody_verified"] for row in report["private_custody"]] == [False, False]
+    assert not any(row["code"] == "private_restoration_unverified" for row in report["violations"])
+
+
+def test_private_custody_aggregate_row_exhaustion_counts_irrelevant_records(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    receipt_path = manifest.parent / "receipts.json"
+    valid = _restoration_receipt(_sealed_inventory())
+    receipt_path.write_text(
+        json.dumps({"receipts": [valid, "irrelevant-but-counted"]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(convergence, "CUSTODY_LEDGER_MAX_ROWS", 2)
+
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+
+    assert "unmeasured_state" in _codes(report)
+    assert report["counts"]["unmeasured"] >= 1
+    assert report["private_custody"][0]["custody_verified"] is False
+    assert any("row ceiling exceeded" in row["message"] for row in report["violations"])
+
+
+def test_private_custody_shared_deadline_stops_later_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    receipt_path = (manifest.parent / "receipts.json").resolve()
+    clock = [0.0]
+    receipt_opens = 0
+    real_read_rows = convergence.CustodyLedgerReader.read_rows
+    real_open = Path.open
+    calls = 0
+
+    def advance_after_first_selection(
+        reader: convergence.CustodyLedgerReader,
+        path: Path,
+        *,
+        collection_keys: tuple[str, ...] = ("receipts",),
+    ) -> convergence.CustodyLedgerRows:
+        nonlocal calls
+        result = real_read_rows(reader, path, collection_keys=collection_keys)
+        calls += 1
+        if calls == 1:
+            clock[0] = convergence.CUSTODY_LEDGER_DEADLINE_SECONDS + 1
+        return result
+
+    def counting_open(path: Path, *args: object, **kwargs: object):
+        nonlocal receipt_opens
+        if path.resolve(strict=False) == receipt_path:
+            receipt_opens += 1
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(convergence, "_monotonic", lambda: clock[0])
+    monkeypatch.setattr(convergence.CustodyLedgerReader, "read_rows", advance_after_first_selection)
+    monkeypatch.setattr(Path, "open", counting_open)
+
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+
+    assert "unmeasured_state" in _codes(report)
+    assert report["counts"]["unmeasured"] >= 1
+    assert report["private_custody"][0]["custody_verified"] is False
+    assert receipt_opens == 0
+    assert any("deadline exhausted" in row["message"] for row in report["violations"])
+
+
+@pytest.mark.parametrize("failure", ["invalid-utf8", "permission"])
+def test_private_custody_inspection_failure_is_unmeasured(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    inventory = (manifest.parent / "inventory.json").resolve()
+    if failure == "invalid-utf8":
+        inventory.write_bytes(b"\xff\xfe")
+    else:
+        real_open = Path.open
+
+        def denied_open(path: Path, *args: object, **kwargs: object):
+            if path.resolve(strict=False) == inventory:
+                raise PermissionError("fixture denial")
+            return real_open(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "open", denied_open)
+
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+
+    assert "unmeasured_state" in _codes(report)
+    assert report["counts"]["unmeasured"] >= 1
+    assert report["private_custody"][0]["custody_verified"] is False
 
 
 def test_private_reference_resolves_through_declared_legacy_repo_during_migration(

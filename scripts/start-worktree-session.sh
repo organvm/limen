@@ -664,9 +664,18 @@ fi
 
 mkdir -p "$(dirname "$wt")"
 
-if [[ -d "$wt" ]]; then
+if [[ -L "$wt" ]]; then
+  echo "canonical worktree path must be a physical directory, not a symlink: $wt" >&2
+  exit 1
+elif [[ -d "$wt" ]]; then
   if ! git -C "$wt" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "path exists but is not a git worktree: $wt" >&2
+    exit 1
+  fi
+  wt_top="$(git -C "$wt" rev-parse --path-format=absolute --show-toplevel 2>/dev/null || true)"
+  if [[ -z "$wt_top" ]] \
+    || [[ "$(cd "$wt" && pwd -P)" != "$(cd "$wt_top" && pwd -P)" ]]; then
+    echo "canonical worktree path is not the resolved Git top-level: $wt" >&2
     exit 1
   fi
   repo_common="$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir)"

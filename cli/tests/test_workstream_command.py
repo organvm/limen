@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "cli" / "src"))
 
 from limen.cli import main  # noqa: E402
-from limen.worktree_layout import runtime_worktree_path  # noqa: E402
+from limen.worktree_layout import repository_storage_key, runtime_worktree_path  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -151,6 +151,100 @@ def test_launcher_isolates_same_basename_repositories_under_runtime_root(
         assert ".worktrees/" not in exclude.read_text(encoding="utf-8").splitlines()
 
 
+def test_relative_local_origin_key_is_stable_across_cwd_and_linked_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    origin = tmp_path / "origin.git"
+    origin.mkdir()
+    _git("init", "--bare", "-q", cwd=origin)
+    repo = tmp_path / "primary"
+    repo.mkdir()
+    _git("init", "-q", "-b", "main", cwd=repo)
+    _git("config", "user.email", "test@example.invalid", cwd=repo)
+    _git("config", "user.name", "Test User", cwd=repo)
+    _git("remote", "add", "origin", "../origin.git", cwd=repo)
+    (repo / "README.md").write_text("fixture\n", encoding="utf-8")
+    _git("add", "README.md", cwd=repo)
+    _git("commit", "-qm", "init", cwd=repo)
+    linked = tmp_path / "linked"
+    _git("worktree", "add", "-q", "-b", "work/linked", str(linked), "HEAD", cwd=repo)
+
+    monkeypatch.chdir(tmp_path)
+    primary_key = repository_storage_key(repo)
+    primary_path = runtime_worktree_path(repo, "cwd-stable")
+    arbitrary_cwd = tmp_path / "arbitrary" / "deep"
+    arbitrary_cwd.mkdir(parents=True)
+    monkeypatch.chdir(arbitrary_cwd)
+
+    assert repository_storage_key(repo) == primary_key
+    assert repository_storage_key(linked) == primary_key
+    assert runtime_worktree_path(repo, "cwd-stable") == primary_path
+    assert runtime_worktree_path(linked, "cwd-stable") == primary_path
+
+
+def test_no_origin_key_is_stable_across_linked_worktree_and_ref_changes(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "primary"
+    repo.mkdir()
+    _git("init", "-q", "-b", "main", cwd=repo)
+    _git("config", "user.email", "test@example.invalid", cwd=repo)
+    _git("config", "user.name", "Test User", cwd=repo)
+    (repo / "README.md").write_text("fixture\n", encoding="utf-8")
+    _git("add", "README.md", cwd=repo)
+    _git("commit", "-qm", "init", cwd=repo)
+    linked = tmp_path / "differently-named-linked"
+    _git("worktree", "add", "-q", "-b", "work/linked", str(linked), "HEAD", cwd=repo)
+
+    initial = repository_storage_key(repo)
+    tree = _git("rev-parse", "HEAD^{tree}", cwd=repo).stdout.strip()
+    orphan = _git("commit-tree", tree, "-m", "orphan root", cwd=repo).stdout.strip()
+    _git("update-ref", "refs/heads/orphan-history", orphan, cwd=repo)
+
+    assert repository_storage_key(repo) == initial
+    assert repository_storage_key(linked) == initial
+
+
+def test_relative_file_uri_origins_are_cwd_stable_and_do_not_collide(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repos: list[Path] = []
+    for owner in ("first", "second"):
+        owner_root = tmp_path / owner
+        origin = owner_root / "origin.git"
+        repo = owner_root / "primary"
+        origin.mkdir(parents=True)
+        repo.mkdir()
+        _git("init", "--bare", "-q", cwd=origin)
+        _git("init", "-q", "-b", "main", cwd=repo)
+        _git("remote", "add", "origin", "file:../origin.git", cwd=repo)
+        repos.append(repo)
+
+    monkeypatch.chdir(tmp_path)
+    keys = [repository_storage_key(repo) for repo in repos]
+    arbitrary_cwd = tmp_path / "arbitrary" / "deep"
+    arbitrary_cwd.mkdir(parents=True)
+    monkeypatch.chdir(arbitrary_cwd)
+
+    assert repository_storage_key(repos[0]) == keys[0]
+    assert repository_storage_key(repos[1]) == keys[1]
+    assert keys[0] != keys[1]
+
+
+def test_network_transport_changes_preserve_repository_storage_key(tmp_path: Path) -> None:
+    repo = tmp_path / "primary"
+    repo.mkdir()
+    _git("init", "-q", "-b", "main", cwd=repo)
+    _git("remote", "add", "origin", "https://github.com/organvm/limen.git", cwd=repo)
+
+    https_key = repository_storage_key(repo)
+    _git("remote", "set-url", "origin", "git@github.com:organvm/limen.git", cwd=repo)
+
+    assert repository_storage_key(repo) == https_key
+
+
 @pytest.mark.parametrize("unsafe_slug", [".", "..", "../escape", "nested/escape"])
 def test_launcher_rejects_unsafe_slug_without_creating_outside_runtime(
     tmp_path: Path,
@@ -227,6 +321,96 @@ def test_launcher_rejects_runtime_container_symlink_escape(
 
     assert result.returncode != 0
     assert list(outside.iterdir()) == []
+
+
+def test_launcher_rejects_final_worktree_symlink_to_matching_external_checkout(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "symlink-final-repo"
+    repo.mkdir()
+    _git("init", "-q", "-b", "main", cwd=repo)
+    _git("config", "user.email", "test@example.invalid", cwd=repo)
+    _git("config", "user.name", "Test User", cwd=repo)
+    (repo / "README.md").write_text("fixture\n", encoding="utf-8")
+    _git("add", "README.md", cwd=repo)
+    _git("commit", "-qm", "init", cwd=repo)
+
+    slug = "symlink-final"
+    canonical = _worktree(repo, slug)
+    outside = tmp_path / "outside-worktree"
+    _git("worktree", "add", "-q", "-b", f"work/{slug}", str(outside), "HEAD", cwd=repo)
+    outside_head = _git("rev-parse", "HEAD", cwd=outside).stdout
+    outside_status = _git("status", "--porcelain=v1", "--untracked-files=all", cwd=outside).stdout
+    canonical.parent.mkdir(parents=True)
+    canonical.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="target must be physical"):
+        runtime_worktree_path(repo, slug)
+    result = subprocess.run(
+        [
+            "bash",
+            str(ROOT / "scripts" / "start-worktree-session.sh"),
+            "--no-readme",
+            str(repo),
+            slug,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert _git("rev-parse", "HEAD", cwd=outside).stdout == outside_head
+    assert _git("status", "--porcelain=v1", "--untracked-files=all", cwd=outside).stdout == outside_status
+    assert not (outside / ".limen-workstream").exists()
+
+
+def test_launcher_rejects_physical_canonical_leaf_nested_under_matching_checkout(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "physical-nonroot-repo"
+    repo.mkdir()
+    _git("init", "-q", "-b", "main", cwd=repo)
+    _git("config", "user.email", "test@example.invalid", cwd=repo)
+    _git("config", "user.name", "Test User", cwd=repo)
+    (repo / "README.md").write_text("fixture\n", encoding="utf-8")
+    _git("add", "README.md", cwd=repo)
+    _git("commit", "-qm", "init", cwd=repo)
+
+    slug = "physical-nonroot"
+    canonical = _worktree(repo, slug)
+    canonical.parent.parent.mkdir(parents=True)
+    _git(
+        "worktree",
+        "add",
+        "-q",
+        "-b",
+        f"work/{slug}",
+        str(canonical.parent),
+        "HEAD",
+        cwd=repo,
+    )
+    canonical.mkdir()
+    sentinel = canonical / "sentinel.txt"
+    sentinel.write_text("do not reuse a nested directory\n", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(ROOT / "scripts" / "start-worktree-session.sh"),
+            "--no-readme",
+            str(repo),
+            slug,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "not the resolved Git top-level" in result.stderr
+    assert sentinel.read_text(encoding="utf-8") == "do not reuse a nested directory\n"
+    assert not (canonical / ".limen-workstream").exists()
 
 
 def test_autonomous_jules_workstream_uses_remote_cloud_transport(tmp_path: Path, monkeypatch, capfd) -> None:

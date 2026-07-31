@@ -568,6 +568,64 @@ def test_capacity_census_uses_current_live_meter_over_stale_board_spend(
     assert "opencode" in auto
 
 
+def test_capacity_census_derives_limen_root_from_workspace_root(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "Custom Workspace"
+    limen_root = workspace / "library" / "engine" / "organvm" / "limen"
+    (limen_root / "logs").mkdir(parents=True)
+    (limen_root / "logs" / "usage.json").write_text(
+        json.dumps(
+            {
+                "generated": "2026-07-10T07:24:23+00:00",
+                "vendors": {
+                    "jules": {
+                        "signal": "dispatch-count",
+                        "unit": "runs",
+                        "possible": 100,
+                        "consumed": 89,
+                        "remaining": 11,
+                        "health": "throttle",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("LIMEN_ROOT", raising=False)
+    monkeypatch.setenv("WORKSPACE_ROOT", str(workspace))
+    monkeypatch.setattr(
+        "limen.capacity.agent_status",
+        lambda agent: {
+            "agent": agent,
+            "kind": "cloud-cli",
+            "reachable": True,
+            "detail": "test binary",
+            "command": ["test"],
+        },
+    )
+    board = {
+        "portal": {
+            "budget": {
+                "daily": 600,
+                "per_agent": {"jules": 100},
+                "track": {
+                    "date": "2026-07-10",
+                    "spent": 244,
+                    "per_agent": {"jules": 122},
+                },
+            }
+        }
+    }
+
+    jules = next(row for row in capacity_census(board) if row["agent"] == "jules")
+
+    assert jules["spent"] == 89
+    assert jules["remaining"] == 11
+    assert "live usage meter" in jules["detail"]
+
+
 def test_capacity_census_dict_board_shape() -> None:
     board = {
         "portal": {

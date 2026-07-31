@@ -23,6 +23,7 @@ from limen.worktree_roots import (
     _legacy_dispatch_roots,
     _path_list,
     _registered_repo_roots,
+    canonical_runtime_worktree_root,
     dispatch_clone_cache_root,
     iter_worktree_targets,
 )
@@ -363,6 +364,77 @@ def test_iter_worktree_targets_dispatch_root_children(tmp_path, monkeypatch):
     targets = iter_worktree_targets(tmp_path)
     names = {t.path.name for t in targets}
     assert "active-task" in names
+
+
+def test_iter_worktree_targets_enumerates_canonical_units_and_separate_legacy_root(
+    tmp_path,
+    monkeypatch,
+):
+    workspace = tmp_path / "Workspace"
+    canonical = workspace / "runtime" / "worktrees"
+    namespace = canonical / "owner--repo--digest"
+    unit = namespace / "bounded-task"
+    unit.mkdir(parents=True)
+    legacy = tmp_path / "Scratch" / "limen-worktrees"
+    legacy_unit = legacy / "legacy-task"
+    legacy_unit.mkdir(parents=True)
+    monkeypatch.setenv("WORKSPACE_ROOT", str(workspace))
+    monkeypatch.setenv("LIMEN_WORKTREE_ROOT", str(legacy))
+    monkeypatch.setenv("LIMEN_RECLAIM_CLAUDE_WT", "0")
+    monkeypatch.setenv("LIMEN_RECLAIM_AGY_SCRATCH", "0")
+    monkeypatch.setenv("LIMEN_RECLAIM_REPO_LOCAL_WT", "0")
+    monkeypatch.setenv("LIMEN_RECLAIM_REGISTERED_WT", "0")
+
+    targets = iter_worktree_targets(tmp_path)
+
+    assert canonical_runtime_worktree_root() == canonical
+    assert sum(target.path == unit for target in targets) == 1
+    canonical_target = next(target for target in targets if target.path == unit)
+    assert canonical_target.source.startswith("canonical-runtime-worktree:")
+    assert canonical_target.min_age_h == 168.0
+    assert not any(target.path == namespace for target in targets)
+    assert any(target.path == legacy_unit and target.source == "dispatch-root" for target in targets)
+
+    monkeypatch.setenv("LIMEN_WORKTREE_ROOT", str(canonical))
+    monkeypatch.setenv("LIMEN_RECLAIM_LEGACY_DISPATCH_WT", "1")
+    monkeypatch.setenv("LIMEN_RECLAIM_LEGACY_WORKTREE_ROOTS", str(canonical))
+    canonical_only = iter_worktree_targets(tmp_path)
+    assert sum(target.path == unit for target in canonical_only) == 1
+    assert not any(target.path == namespace for target in canonical_only)
+
+
+@pytest.mark.parametrize("symlink_level", ["workspace", "runtime", "worktrees"])
+def test_canonical_runtime_inventory_rejects_every_ancestor_symlink(
+    tmp_path,
+    monkeypatch,
+    symlink_level,
+):
+    workspace = tmp_path / "Workspace"
+    outside = tmp_path / "outside"
+    (outside / "runtime" / "worktrees" / "owner--repo--digest" / "escaped").mkdir(parents=True)
+    if symlink_level == "workspace":
+        workspace.symlink_to(outside, target_is_directory=True)
+    elif symlink_level == "runtime":
+        workspace.mkdir()
+        (workspace / "runtime").symlink_to(outside / "runtime", target_is_directory=True)
+    else:
+        (workspace / "runtime").mkdir(parents=True)
+        (workspace / "runtime" / "worktrees").symlink_to(
+            outside / "runtime" / "worktrees",
+            target_is_directory=True,
+        )
+    dispatch = tmp_path / "dispatch"
+    dispatch.mkdir()
+    monkeypatch.setenv("WORKSPACE_ROOT", str(workspace))
+    monkeypatch.setenv("LIMEN_WORKTREE_ROOT", str(dispatch))
+    monkeypatch.setenv("LIMEN_RECLAIM_CLAUDE_WT", "0")
+    monkeypatch.setenv("LIMEN_RECLAIM_AGY_SCRATCH", "0")
+    monkeypatch.setenv("LIMEN_RECLAIM_REPO_LOCAL_WT", "0")
+    monkeypatch.setenv("LIMEN_RECLAIM_REGISTERED_WT", "0")
+
+    assert iter_worktree_targets(tmp_path) == []
+    with pytest.raises(WorktreeInventoryError, match="must be a physical directory"):
+        iter_worktree_targets(tmp_path, strict=True)
 
 
 def test_iter_worktree_targets_workspace_checkouts_are_explicitly_armed(tmp_path, monkeypatch):

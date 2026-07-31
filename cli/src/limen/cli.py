@@ -67,6 +67,45 @@ main.add_command(conduct_group)
 main.add_command(fanout_group)
 
 
+@main.group("worktree")
+def worktree_group() -> None:
+    """Inspect and reclaim disposable worktree lifecycle units."""
+
+
+@worktree_group.command(
+    "reap",
+    context_settings={
+        "ignore_unknown_options": True,
+        "allow_extra_args": True,
+        "help_option_names": [],
+    },
+)
+@click.argument("reaper_args", nargs=-1, type=click.UNPROCESSED)
+def worktree_reap(reaper_args: tuple[str, ...]) -> None:
+    """Delegate unchanged arguments to the bounded worktree reaper."""
+
+    root = resolve_limen_repo_root()
+    script = root / "scripts" / "reclaim-worktrees.py"
+    if not script.is_file():
+        raise click.ClickException(f"worktree reaper is missing: {script}")
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script), *reaper_args],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise click.ClickException(f"could not launch worktree reaper: {exc}") from exc
+    if result.stdout:
+        click.echo(result.stdout, nl=False)
+    if result.stderr:
+        click.echo(result.stderr, nl=False, err=True)
+    if result.returncode:
+        raise click.exceptions.Exit(result.returncode)
+
+
 def _host_owner() -> tuple[str, int]:
     pid = os.getppid()
     label = os.environ.get("LIMEN_HOST_ADMISSION_OWNER") or os.environ.get("LIMEN_SESSION_ID")
