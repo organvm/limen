@@ -24,6 +24,7 @@ ENVDIR="$ROOT/env"
 BK="$CONT/backup"
 STATE="$CONT/state/deploy.json"
 PLIST="$HOME/Library/LaunchAgents/com.limen.heartbeat.plist"
+CANONICAL_PLIST="$CONT/launchd/com.limen.heartbeat.plist"
 LOCKD="$ROOT/logs/.saturate.lock.d"
 LABEL="com.limen.heartbeat"
 GUI="gui/$(id -u)"
@@ -85,10 +86,10 @@ ledger step S1
 # ---------------------------------------------------------------- Step 2: container machinery (additive)
 say "2  CONTAINER machinery (in-repo, no OS slot touched)"
 mkdir -p "$CONT"/{launchd,claude,state,backup}; chmod 700 "$BK"
-# canonical byte-identical plist copy
-if [ ! -f "$CONT/launchd/$LABEL.plist" ] || ! cmp -s "$PLIST" "$CONT/launchd/$LABEL.plist"; then
-  cp -p "$PLIST" "$CONT/launchd/$LABEL.plist"; fi
-plutil -lint "$CONT/launchd/$LABEL.plist" >/dev/null || die "canonical plist failed plutil -lint"
+# The committed canonical plist is authoritative. Never import a stale deployed
+# plist into Git; Step 8 performs the only allowed canonical -> deployed copy.
+[ -f "$CANONICAL_PLIST" ] || die "committed canonical plist missing: $CANONICAL_PLIST"
+plutil -lint "$CANONICAL_PLIST" >/dev/null || die "canonical plist failed plutil -lint"
 # merged claude settings = user settings + allow-rules rescued (read-only) from the misplaced Archive4T copy
 A4T="/Volumes/Archive4T/.claude/settings.json"
 python3 - "$HOME/.claude/settings.json" "$A4T" "$CONT/claude/settings.json" <<'PY'
@@ -167,10 +168,10 @@ ledger step S7-ledgered
 say "8  PLIST content-rewrite IN PLACE (the one near-irreversible touch)"
 printf '   This overwrites the loaded launchd plist with a BYTE-IDENTICAL canonical copy.\n'
 printf '   Press ENTER to proceed, Ctrl-C to stop (rollback.sh undoes everything above).\n'; read -r _ || true
-cmp -s "$PLIST" "$CONT/launchd/$LABEL.plist" || warn "live plist differs from canonical — installing canonical"
+cmp -s "$PLIST" "$CANONICAL_PLIST" || warn "live plist differs from canonical — installing canonical"
 [ -e "$BK/$LABEL.plist.premigrate" ] || cp -p "$PLIST" "$BK/$LABEL.plist.premigrate"
 ledger slot plist "{\"pre\":\"real\",\"bak\":\"$BK/$LABEL.plist.premigrate\",\"bak_sha\":\"$(sha "$BK/$LABEL.plist.premigrate")\"}"
-cp "$CONT/launchd/$LABEL.plist" "$PLIST"
+cp "$CANONICAL_PLIST" "$PLIST"
 plutil -lint "$PLIST" >/dev/null || die "installed plist failed lint — run rollback.sh"
 ledger step S8-plist
 ok "plist installed (real file, byte-identical paths)"

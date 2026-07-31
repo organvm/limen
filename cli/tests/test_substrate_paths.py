@@ -27,6 +27,34 @@ def test_old_executable_paths_fail(tmp_path: Path) -> None:
     ]
 
 
+def test_constructed_legacy_defaults_fail(tmp_path: Path) -> None:
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "constructed.py").write_text(
+        "\n".join(
+            [
+                'first = f"{HOME}/Workspace/limen"',
+                'second = os.path.join(HOME, "Workspace/limen")',
+                'third = os.path.join(HOME, "Workspace", "limen")',
+                'fourth = Path(HOME) / "Workspace" / "limen"',
+                'fifth = HOME + "/Workspace/limen"',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    findings = find_legacy_references(tmp_path)
+
+    assert [(item["path"], item["line"]) for item in findings] == [
+        ("scripts/constructed.py", 1),
+        ("scripts/constructed.py", 2),
+        ("scripts/constructed.py", 3),
+        ("scripts/constructed.py", 4),
+        ("scripts/constructed.py", 5),
+    ]
+
+
 def test_historical_docs_and_tests_are_not_executable_consumers(tmp_path: Path) -> None:
     for directory in ("docs", "scripts/tests"):
         path = tmp_path / directory

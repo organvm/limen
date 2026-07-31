@@ -50,9 +50,15 @@ exit 0
     return bin_dir
 
 
-def _run_install(tmp_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
+def _run_install(
+    tmp_path: Path,
+    *args: str,
+    zshenv: str | None = None,
+) -> subprocess.CompletedProcess[str]:
     home = tmp_path / "home"
     home.mkdir()
+    if zshenv is not None:
+        (home / ".zshenv").write_text(zshenv, encoding="utf-8")
     fake_bin = _fake_path(tmp_path)
     env = {
         **os.environ,
@@ -91,3 +97,29 @@ def test_install_host_mutation_is_explicit_opt_in(tmp_path):
     assert (home / ".zshenv").exists()
     assert (home / ".local" / "bin" / "limen").exists()
     assert "LIMEN_ROOT" in (home / ".zshenv").read_text(encoding="utf-8")
+
+
+def test_install_migrates_its_exact_legacy_limen_root(tmp_path):
+    result = _run_install(
+        tmp_path,
+        "--host-mutation",
+        zshenv='export LIMEN_ROOT="$HOME/limen"\n',
+    )
+    text = (tmp_path / "home" / ".zshenv").read_text(encoding="utf-8")
+
+    assert result.returncode == 0, result.stderr
+    assert 'export LIMEN_ROOT="$HOME/limen"' not in text
+    assert text.count('export WORKSPACE_ROOT="$HOME/Workspace"') == 1
+    assert text.count('export LIMEN_ROOT="$WORKSPACE_ROOT/library/engine/organvm/limen"') == 1
+    assert "migrated installer-owned legacy LIMEN_ROOT" in result.stdout
+
+
+def test_install_preserves_user_owned_limen_root_override(tmp_path):
+    custom = 'export LIMEN_ROOT="/srv/operator-owned/limen"\n'
+    result = _run_install(tmp_path, "--host-mutation", zshenv=custom)
+    text = (tmp_path / "home" / ".zshenv").read_text(encoding="utf-8")
+
+    assert result.returncode == 0, result.stderr
+    assert custom in text
+    assert 'export LIMEN_ROOT="$WORKSPACE_ROOT/library/engine/organvm/limen"' not in text
+    assert "LIMEN_ROOT already set" in result.stdout

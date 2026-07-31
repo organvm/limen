@@ -125,7 +125,8 @@ def _float_env(name: str, default: float) -> float:
 MAX_REMOVE = _int_env("LIMEN_RECLAIM_MAX", 50)
 EVERY_MIN = _float_env("LIMEN_RECLAIM_EVERY_MIN", 30)
 GENERATED_RECLAIM_MAX = _int_env("LIMEN_RECLAIM_GENERATED_MAX", 80)
-LIMEN_ROOT = Path(os.environ.get("LIMEN_ROOT", f"{HOME}/Workspace/limen"))
+WORKSPACE_ROOT = Path(os.environ.get("WORKSPACE_ROOT", str(Path(HOME) / "Workspace")))
+LIMEN_ROOT = Path(os.environ.get("LIMEN_ROOT", str(WORKSPACE_ROOT / "library" / "engine" / "organvm" / "limen")))
 AGY_SCRATCH_ROOT = Path(os.environ.get("LIMEN_AGY_SCRATCH_ROOT", f"{HOME}/.gemini/antigravity-cli/scratch"))
 AGY_ROOT = AGY_SCRATCH_ROOT.expanduser().parent
 LOG = LIMEN_ROOT / "logs" / "reclaim-worktrees.jsonl"

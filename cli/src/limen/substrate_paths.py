@@ -51,6 +51,12 @@ _LEGACY_PATTERNS = (
     re.compile(r"(?:~|\$HOME|/Users/[^/]+)" + r"/Workspace/" + r"domus-genoma(?:/|\b)"),
     re.compile(r"(?:~|\$HOME|/Users/[^/]+)" + r"/Workspace/" + r"4444J99/portvs(?:/|\b)"),
     re.compile(r"Path\.home\(\)\s*/\s*['\"]Workspace['\"]\s*/\s*['\"]" + r"limen" + r"['\"]"),
+    re.compile(r"Path\((?:HOME|home)\)\s*/\s*['\"]Workspace['\"]\s*/\s*['\"]" + r"limen" + r"['\"]"),
+    re.compile(r"\{(?:HOME|home)\}" + r"/Workspace/" + r"limen(?:/|\b)"),
+    re.compile(
+        r"os\.path\.join\(\s*(?:HOME|home)\s*,\s*['\"]Workspace" + r"(?:/limen['\"]|['\"]\s*,\s*['\"]limen['\"])"
+    ),
+    re.compile(r"(?:HOME|home)\s*\+\s*['\"]" + r"/Workspace/limen" + r"(?:/|['\"])"),
 )
 
 

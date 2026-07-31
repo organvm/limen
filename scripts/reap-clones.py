@@ -67,8 +67,11 @@ from reap_acceptance import (
 )
 
 HOME = os.environ.get("HOME", str(Path.home()))
-WORKSPACE = Path(os.environ.get("LIMEN_WORKSPACE", f"{HOME}/Workspace"))
-LIMEN_ROOT = Path(os.environ.get("LIMEN_ROOT", f"{HOME}/Workspace/limen")).resolve()
+WORKSPACE_ROOT = Path(os.environ.get("WORKSPACE_ROOT", str(Path(HOME) / "Workspace"))).resolve()
+WORKSPACE = Path(os.environ.get("LIMEN_WORKSPACE", str(WORKSPACE_ROOT)))
+LIMEN_ROOT = Path(
+    os.environ.get("LIMEN_ROOT", str(WORKSPACE_ROOT / "library" / "engine" / "organvm" / "limen"))
+).resolve()
 sys.path.insert(0, str(LIMEN_ROOT / "cli" / "src"))
 from limen.resource_envelope import current_required_free_gib  # noqa: E402
 

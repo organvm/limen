@@ -30,10 +30,14 @@ import sys
 import time
 
 HOME = os.path.expanduser("~")
+WORKSPACE_ROOT = os.environ.get("WORKSPACE_ROOT", os.path.join(HOME, "Workspace"))
 ARCHIVE = os.environ.get("LIMEN_ARCHIVE_ROOT", "/Volumes/Archive4T")
 PRESERVE_DST = os.path.join(ARCHIVE, "personal-sliver-backup")
 APPLY = os.environ.get("LIMEN_LIB_APPLY", "0") == "1"
-ROOT = os.environ.get("LIMEN_ROOT", os.path.join(HOME, "Workspace/limen"))
+ROOT = os.environ.get(
+    "LIMEN_ROOT",
+    os.path.join(WORKSPACE_ROOT, "library", "engine", "organvm", "limen"),
+)
 REGISTRY = os.path.join(ROOT, "logs", "library-levers.json")
 # Beat-safe reclaim: bounded per pass + single-runner lock so a wedged file (or a concurrent beat /
 # manual copy) can never block the heartbeat or the whole 34G migration.
@@ -47,7 +51,7 @@ UNIT_MIN_BYTES = 50 * 2**20
 # on unmount, single-runner lock, additive-only rsync — plus a per-entry timeout so one wedged
 # repo can't hang the beat (the copy resumes next pass; rsync is additive so a killed transfer
 # just completes later).
-WORKSPACE = os.environ.get("LIMEN_WORKSPACE_ROOT", os.path.join(HOME, "Workspace"))
+WORKSPACE = os.environ.get("LIMEN_WORKSPACE_ROOT", WORKSPACE_ROOT)
 WORKSPACE_DST = os.path.join(ARCHIVE, "workspace-backup")
 WORKSPACE_LOCK = os.path.join(ROOT, "logs", ".workspace-preserve.lock")
 WORKSPACE_UNIT_TIMEOUT_SEC = int(os.environ.get("LIMEN_WORKSPACE_UNIT_TIMEOUT_SEC", "600"))

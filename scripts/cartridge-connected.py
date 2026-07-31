@@ -30,12 +30,24 @@ from __future__ import annotations
 
 import argparse
 import os
+from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 import sys
 
 DEFAULT_CARTRIDGE = "organvm/domus-genoma"
+
+
+def canonical_domus_root() -> Path:
+    workspace = Path(os.environ.get("WORKSPACE_ROOT", str(Path.home() / "Workspace"))).expanduser()
+    return Path(
+        os.environ.get(
+            "DOMUS_ROOT",
+            str(workspace / "library" / "engine" / "organvm" / "domus-genoma"),
+        )
+    ).expanduser()
 
 
 def _run(cmd: list[str]) -> str | None:
@@ -111,7 +123,7 @@ def main() -> int:
     print("    The cartridge is UNPLUGGED: chezmoi is managing a scratch/wrong source, so")
     print("    chezmoi verify/status/health are all meaninglessly green. Re-point without")
     print("    broad apply after the cartridge is current:")
-    print("      chezmoi init --source \"$DOMUS_ROOT\" --data --promptDefaults")
+    print(f"      chezmoi init --source {shlex.quote(str(canonical_domus_root()))} --data --promptDefaults")
     print("    Then run a targeted diff before any apply.")
     return 1
 

@@ -81,7 +81,10 @@ from reap_acceptance import (  # noqa: E402
 )
 
 HOME = os.environ.get("HOME", str(Path.home()))
-LIMEN_ROOT = Path(os.environ.get("LIMEN_ROOT", f"{HOME}/Workspace/limen")).resolve()
+WORKSPACE_ROOT = Path(os.environ.get("WORKSPACE_ROOT", str(Path(HOME) / "Workspace"))).resolve()
+LIMEN_ROOT = Path(
+    os.environ.get("LIMEN_ROOT", str(WORKSPACE_ROOT / "library" / "engine" / "organvm" / "limen"))
+).resolve()
 LOG = LIMEN_ROOT / "logs" / "reap-branches.jsonl"
 STATE = LIMEN_ROOT / "logs" / "reap-branches-state.json"
 MARKER = LIMEN_ROOT / "logs" / ".reap-branches-last"

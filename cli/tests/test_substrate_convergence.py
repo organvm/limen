@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 import yaml
 
-from limen.substrate_convergence import ManifestError, audit
+import limen.substrate_convergence as convergence
+from limen.substrate_convergence import ManifestError, audit, load_active_cwds
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -105,7 +109,7 @@ def _fixture(
         if row["kind"] == "repository":
             remote_key = str(row["remote"])
             if remote_key not in seeded_remotes:
-                _seed_repo(path, remote)
+                _seed_repo(path, Path(remote_key))
                 seeded_remotes.add(remote_key)
             else:
                 path.mkdir(parents=True, exist_ok=True)
@@ -114,7 +118,20 @@ def _fixture(
             path.write_text("{}\n", encoding="utf-8")
         else:
             path.mkdir(parents=True, exist_ok=True)
-    (manifest_dir / "inventory.json").write_text('{"sealed": true}\n', encoding="utf-8")
+    (manifest_dir / "inventory.json").write_text(
+        json.dumps(
+            {
+                "sealed_inventories": [
+                    {
+                        "label": "life",
+                        "sealed": True,
+                    }
+                ]
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     (manifest_dir / "receipts.json").write_text(
         json.dumps(
             {
@@ -256,13 +273,96 @@ def test_dirty_and_unpushed_repository_cannot_converge(tmp_path: Path) -> None:
     _git(repo, "add", "dirty.txt")
     _git(repo, "commit", "-qm", "not pushed")
     report = audit(manifest, workspace_root=workspace, active_cwds=[])
-    assert {"repository_unpreserved"} <= _codes(report)
+    assert {"repository_unpreserved", "repository_unpreserved_branches"} <= _codes(report)
+
+
+def test_deleted_live_remote_ref_revokes_local_custody(tmp_path: Path) -> None:
+    manifest, workspace, remote = _fixture(tmp_path)
+    _git(remote, "update-ref", "-d", "refs/heads/main")
+
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+
+    assert {
+        "repository_custody_missing",
+        "repository_unpreserved",
+        "repository_unpreserved_branches",
+    } <= _codes(report)
+
+
+def test_unreachable_live_remote_is_unmeasured_not_cached_green(tmp_path: Path) -> None:
+    manifest, workspace, remote = _fixture(tmp_path)
+    remote.rename(tmp_path / "remote-offline.git")
+
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+
+    assert "repository_unmeasured" in _codes(report)
+    assert report["counts"]["unmeasured"] == 1
+
+
+def test_unpushed_non_current_branch_blocks_convergence(tmp_path: Path) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    repo = workspace / "library" / "engine" / "organvm" / "limen"
+    _git(repo, "switch", "-qc", "local-only")
+    (repo / "branch-only.txt").write_text("unique branch state\n", encoding="utf-8")
+    _git(repo, "add", "branch-only.txt")
+    _git(repo, "commit", "-qm", "local branch state")
+    _git(repo, "switch", "-q", "main")
+
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+
+    assert "repository_unpreserved_branches" in _codes(report)
+    assert "repository_unpreserved" not in _codes(report)
+
+
+def test_uncustodied_stash_blocks_convergence(tmp_path: Path) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    repo = workspace / "library" / "engine" / "organvm" / "limen"
+    (repo / "README.md").write_text("stashed fixture\n", encoding="utf-8")
+    _git(repo, "stash", "push", "-qm", "private stash")
+
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+
+    assert "repository_uncustodied_stashes" in _codes(report)
 
 
 def test_private_root_requires_dual_copy_restoration_receipt(tmp_path: Path) -> None:
     manifest, workspace, _ = _fixture(tmp_path, valid_custody=False)
     report = audit(manifest, workspace_root=workspace, active_cwds=[])
     assert "private_restoration_unverified" in _codes(report)
+
+
+@pytest.mark.parametrize(
+    "inventory",
+    [
+        {"sealed_inventories": [{"label": "other", "sealed": True}]},
+        {"sealed_inventories": [{"label": "life", "sealed": False}]},
+        {"sealed": True},
+    ],
+)
+def test_private_inventory_requires_matching_sealed_evidence(
+    tmp_path: Path,
+    inventory: dict[str, object],
+) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    inventory_path = manifest.parent / "inventory.json"
+    inventory_path.write_text(json.dumps(inventory), encoding="utf-8")
+
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+    custody = report["private_custody"][0]
+
+    assert "private_inventory_unverified" in _codes(report)
+    assert custody["inventory_available"] is True
+    assert custody["sealed_inventory_verified"] is False
+    assert custody["custody_verified"] is False
+
+
+def test_malformed_private_inventory_fails_closed(tmp_path: Path) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    (manifest.parent / "inventory.json").write_text("{not-json", encoding="utf-8")
+
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+
+    assert "private_inventory_unverified" in _codes(report)
 
 
 def test_private_reference_resolves_through_declared_legacy_repo_during_migration(
@@ -276,6 +376,12 @@ def test_private_reference_resolves_through_declared_legacy_repo_during_migratio
     custody.write_text(
         json.dumps(
             {
+                "sealed_inventories": [
+                    {
+                        "label": "life",
+                        "sealed": True,
+                    }
+                ],
                 "receipts": [
                     {
                         "label": "life",
@@ -283,7 +389,7 @@ def test_private_reference_resolves_through_declared_legacy_repo_during_migratio
                         "copy_count": 2,
                         "independent_physical_devices": True,
                     }
-                ]
+                ],
             }
         ),
         encoding="utf-8",
@@ -316,6 +422,174 @@ def test_active_compatibility_path_blocks_removal(tmp_path: Path) -> None:
         now=datetime(2026, 7, 30, tzinfo=UTC),
     )
     assert {"compatibility_link_unresolved", "active_legacy_path"} <= _codes(report)
+
+
+def test_canonical_cwd_does_not_count_as_legacy_symlink_consumer(tmp_path: Path) -> None:
+    link = {
+        "path": "limen",
+        "target": "library/engine/organvm/limen",
+        "owner_ref": "organvm/limen",
+        "expires_at": "2026-08-15T00:00:00Z",
+    }
+    manifest, workspace, _ = _fixture(tmp_path, compatibility_links=[link])
+    canonical = workspace / "library" / "engine" / "organvm" / "limen"
+    (workspace / "limen").symlink_to(canonical)
+
+    report = audit(
+        manifest,
+        workspace_root=workspace,
+        active_cwds=[canonical / "scripts"],
+        now=datetime(2026, 7, 30, tzinfo=UTC),
+    )
+
+    assert "compatibility_link_unresolved" in _codes(report)
+    assert "active_legacy_path" not in _codes(report)
+
+
+def test_workspace_root_symlink_is_rejected_before_resolution(tmp_path: Path) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    alias = tmp_path / "Workspace-alias"
+    alias.symlink_to(workspace, target_is_directory=True)
+
+    report = audit(manifest, workspace_root=alias, active_cwds=[])
+
+    assert "workspace_symlink" in _codes(report)
+
+
+@pytest.mark.parametrize(
+    "missing",
+    [
+        "max_scan_entries",
+        "max_violations",
+        "max_unmeasured",
+        "max_compatibility_links",
+    ],
+)
+def test_every_limit_field_is_required(tmp_path: Path, missing: str) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    data = yaml.safe_load(manifest.read_text(encoding="utf-8"))
+    del data["limits"][missing]
+    manifest.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ManifestError, match="limits missing required field"):
+        audit(manifest, workspace_root=workspace, active_cwds=[])
+
+
+def test_recursive_repositories_share_one_scan_budget(tmp_path: Path) -> None:
+    primary_remote = tmp_path / "remote.git"
+    secondary_remote = tmp_path / "secondary.git"
+    rows = _base_rows(primary_remote)
+    rows.extend(
+        [
+            {
+                "path": "library/storefront",
+                "kind": "structural",
+                "owner_ref": "portvs",
+                "residency": "structural",
+            },
+            {
+                "path": "library/storefront/second",
+                "kind": "repository",
+                "owner_ref": "organvm/second",
+                "residency": "laptop",
+                "remote": str(secondary_remote),
+                "custody_ref": "refs/remotes/origin/main",
+            },
+        ]
+    )
+    manifest, workspace, _ = _fixture(tmp_path, rows=rows)
+    for relative in (
+        Path("library/engine/organvm/limen"),
+        Path("library/storefront/second"),
+    ):
+        repo = workspace / relative
+        for index in range(8):
+            (repo / f"fixture-{index}.txt").write_text(f"{index}\n", encoding="utf-8")
+        _git(repo, "add", *[f"fixture-{index}.txt" for index in range(8)])
+        _git(repo, "commit", "-qm", "expand scan fixture")
+        _git(repo, "push", "origin", "main")
+    data = yaml.safe_load(manifest.read_text(encoding="utf-8"))
+    data["limits"]["max_scan_entries"] = 28
+    manifest.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+
+    assert report["scan_truncated"] is True
+    assert "unmeasured_state" in _codes(report)
+
+
+def test_expired_ephemeral_units_require_reaper_action(tmp_path: Path) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    unit = workspace / "runtime" / "worktrees" / "expired"
+    unit.mkdir()
+    old = datetime(2026, 7, 1, tzinfo=UTC).timestamp()
+    os.utime(unit, (old, old))
+
+    report = audit(
+        manifest,
+        workspace_root=workspace,
+        active_cwds=[],
+        now=datetime(2026, 7, 30, tzinfo=UTC),
+    )
+
+    assert "ephemeral_entries_expired" in _codes(report)
+    assert report["ephemeral_roots"][0]["expired_entry_count"] == 1
+    assert report["ephemeral_roots"][0]["reaper"] == "limen worktree reap"
+
+
+def test_relative_active_cwd_fixture_is_rejected(tmp_path: Path) -> None:
+    fixture = tmp_path / "active-cwds.json"
+    fixture.write_text('["relative/worktree"]\n', encoding="utf-8")
+
+    with pytest.raises(ManifestError, match="must be absolute"):
+        load_active_cwds(fixture)
+
+
+@pytest.mark.parametrize("failure", ["missing", "nonzero"])
+def test_failed_lsof_becomes_bounded_unmeasured_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    real_run = subprocess.run
+
+    def fake_run(command: list[str], *args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if command and command[0] == "lsof":
+            if failure == "missing":
+                raise FileNotFoundError("fixture has no lsof")
+            return subprocess.CompletedProcess(command, 2, "", "fixture lsof failure")
+        return real_run(command, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(convergence.subprocess, "run", fake_run)
+    report = audit(manifest, workspace_root=workspace, active_cwds=None)
+
+    assert "unmeasured_state" in _codes(report)
+    assert report["counts"]["unmeasured"] == 1
+    assert any("active CWD discovery failed closed" in row["message"] for row in report["violations"])
+
+
+def test_default_manifest_uses_workspace_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    script = Path(__file__).resolve().parents[2] / "scripts" / "substrate-convergence.py"
+    spec = importlib.util.spec_from_file_location("substrate_convergence_script", script)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    monkeypatch.delenv("PORTVS_WORKSPACE_MANIFEST", raising=False)
+    monkeypatch.delenv("PORTVS_ROOT", raising=False)
+    monkeypatch.setenv("WORKSPACE_ROOT", str(tmp_path / "custom-workspace"))
+
+    assert module.default_manifest() == (
+        tmp_path
+        / "custom-workspace"
+        / "library"
+        / "engine"
+        / "organvm"
+        / "portvs"
+        / "governance"
+        / "workspace-manifest.yaml"
+    )
 
 
 def test_same_manifest_and_root_are_independent_of_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

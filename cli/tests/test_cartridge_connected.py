@@ -83,6 +83,23 @@ def test_main_disconnected_dummy(monkeypatch, tmp_path):
     assert m.main() == 1
 
 
+def test_disconnected_recovery_command_derives_canonical_domus_root(
+    monkeypatch,
+    tmp_path,
+    capsys,
+):
+    m = _cc()
+    workspace = tmp_path / "portable-workspace"
+    monkeypatch.setenv("WORKSPACE_ROOT", str(workspace))
+    monkeypatch.delenv("DOMUS_ROOT", raising=False)
+    _wire(m, monkeypatch, source=str(tmp_path), remote_origin="/tmp/dummy-remote.git")
+
+    assert m.main() == 1
+    assert (
+        f"chezmoi init --source {workspace}/library/engine/organvm/domus-genoma --data --promptDefaults"
+    ) in capsys.readouterr().out
+
+
 def test_main_no_remote_is_disconnection(monkeypatch, tmp_path):
     m = _cc()
     _wire(m, monkeypatch, source=str(tmp_path), remote_origin=None, remotes=None)

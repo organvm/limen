@@ -27,16 +27,8 @@ def default_manifest() -> Path:
         return Path(value).expanduser()
     if value := os.environ.get("PORTVS_ROOT"):
         return Path(value).expanduser() / "governance" / "workspace-manifest.yaml"
-    return (
-        Path.home()
-        / "Workspace"
-        / "library"
-        / "engine"
-        / "organvm"
-        / "portvs"
-        / "governance"
-        / "workspace-manifest.yaml"
-    )
+    workspace_root = Path(os.environ.get("WORKSPACE_ROOT", str(Path.home() / "Workspace"))).expanduser()
+    return workspace_root / "library" / "engine" / "organvm" / "portvs" / "governance" / "workspace-manifest.yaml"
 
 
 def main() -> int:

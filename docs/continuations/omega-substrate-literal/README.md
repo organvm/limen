@@ -52,11 +52,15 @@ surface, and Limen independently audits both physical residency and custody.
 From the Limen continuation worktree:
 
 ```bash
-python3 scripts/substrate-convergence.py --json
+python3 scripts/substrate-convergence.py --manifest "$HOME/Workspace/4444J99/portvs/.worktrees/omega-substrate-literal/governance/workspace-manifest.yaml" --json
 python3 scripts/check-substrate-paths.py --json
 bash "$HOME/Workspace/4444J99/portvs/.worktrees/omega-substrate-literal/jack.sh" --plan --json
 python3 "$HOME/Workspace/domus-genoma/.worktrees/omega-substrate-literal/dot_local/bin/executable_domus-home-guard.tmpl" --check --json
 ```
+
+Use the explicit PORTVS worktree manifest above until organvm/portvs#6 places
+the manifest at its canonical `PORTVS_ROOT`; the command's built-in fallback is
+deliberately canonical and must not silently fall back to the legacy checkout.
 
 Re-derive active CWDs, live remotes, dirty/unpushed state, custody receipts,
 available storage, and provider headroom before every routing batch. Completed

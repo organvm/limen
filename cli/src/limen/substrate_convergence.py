@@ -28,11 +28,22 @@ KINDS = frozenset({"structural", "repository", "private", "ephemeral", "index"})
 RESIDENCIES = frozenset({"structural", "laptop", "private", "ephemeral", "remote-index"})
 OPAQUE_KINDS = frozenset({"private", "ephemeral"})
 DIRECTORY_KINDS = frozenset({"structural", "repository", "private", "ephemeral"})
-DEFAULT_MAX_SCAN_ENTRIES = 250_000
+LIMIT_KEYS = (
+    "max_scan_entries",
+    "max_violations",
+    "max_unmeasured",
+    "max_compatibility_links",
+)
+GIT_TIMEOUT_SECONDS = 60
+LSOF_TIMEOUT_SECONDS = 15
 
 
 class ManifestError(ValueError):
     """The workspace manifest is missing, malformed, or unsafe."""
+
+
+class ActiveCwdDiscoveryError(RuntimeError):
+    """Live process CWDs could not be measured safely."""
 
 
 @dataclass(frozen=True)
@@ -52,6 +63,26 @@ class Violation:
 
     def as_dict(self) -> dict[str, str]:
         return {"code": self.code, "path": self.path, "message": self.message}
+
+
+@dataclass
+class ScanBudget:
+    """One shared budget for every structural, repository, and runtime scan."""
+
+    limit: int
+    consumed: int = 0
+
+    def consume(self, count: int = 1) -> bool:
+        if count < 0:
+            raise ValueError("scan budget debit cannot be negative")
+        if self.consumed + count > self.limit:
+            return False
+        self.consumed += count
+        return True
+
+    @property
+    def remaining(self) -> int:
+        return self.limit - self.consumed
 
 
 def _nonempty_string(value: object) -> bool:
@@ -91,6 +122,12 @@ def load_manifest(path: Path) -> tuple[dict[str, Any], list[Row], bytes]:
         raise ManifestError("workspace manifest root must be a mapping")
     if data.get("schema") != SCHEMA:
         raise ManifestError(f"workspace manifest schema must be {SCHEMA!r}")
+    limits = data.get("limits")
+    if not isinstance(limits, dict):
+        raise ManifestError("limits must be a mapping")
+    missing_limits = [key for key in LIMIT_KEYS if key not in limits]
+    if missing_limits:
+        raise ManifestError(f"limits missing required field(s): {', '.join(missing_limits)}")
     raw_rows = data.get("rows")
     if not isinstance(raw_rows, list) or not raw_rows:
         raise ManifestError("workspace manifest rows must be a non-empty list")
@@ -206,7 +243,10 @@ def resolve_workspace_root(data: Mapping[str, Any], override: Path | None = None
         root = Path(os.path.expandvars(str(configured))).expanduser()
     if not root.is_absolute():
         raise ManifestError(f"workspace root must be absolute: {root}")
-    return root.resolve(strict=False)
+    # Preserve the lexical root until the physical-directory check has run.
+    # ``resolve`` here would erase the evidence that Workspace itself is a
+    # symlink and make the workspace_symlink verdict unreachable.
+    return Path(os.path.abspath(root))
 
 
 def canonical_remote(value: str) -> str:
@@ -227,20 +267,33 @@ def canonical_remote(value: str) -> str:
         return f"https://github.com/{path.lower()}"
     if text.startswith("file://"):
         return str(Path(parsed.path).resolve(strict=False))
-    path = Path(text).expanduser()
-    if path.is_absolute():
-        return str(path.resolve(strict=False))
+    candidate_path = Path(text).expanduser()
+    if candidate_path.is_absolute():
+        return str(candidate_path.resolve(strict=False))
     raise ManifestError(f"unsupported repository remote: {value!r}")
 
 
-def _run_git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", "-C", str(repo), *args],
-        capture_output=True,
-        text=True,
-        check=False,
-        env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
-    )
+def _run_git(
+    repo: Path,
+    *args: str,
+    timeout: int = GIT_TIMEOUT_SECONDS,
+) -> subprocess.CompletedProcess[str]:
+    command = ["git", "-C", str(repo), *args]
+    try:
+        return subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
+            env={
+                **os.environ,
+                "GIT_OPTIONAL_LOCKS": "0",
+                "GIT_TERMINAL_PROMPT": "0",
+            },
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return subprocess.CompletedProcess(command, 1, "", str(exc))
 
 
 def _is_within(path: Path, root: Path) -> bool:
@@ -287,15 +340,22 @@ def _discover_tree(
     rows: Sequence[Row],
     *,
     max_scan_entries: int,
-) -> tuple[list[Violation], list[str], bool]:
+    now: datetime,
+) -> tuple[list[Violation], list[str], list[dict[str, Any]], bool]:
     violations: list[Violation] = []
     repositories: list[str] = []
-    measured = 0
+    ephemeral_roots: list[dict[str, Any]] = []
     truncated = False
+    budget = ScanBudget(max_scan_entries)
     expected_children = _expected_direct_children(rows)
 
     if not root.is_dir():
-        return [Violation("workspace_missing", ".", f"Workspace root is absent: {root}")], repositories, False
+        return (
+            [Violation("workspace_missing", ".", f"Workspace root is absent: {root}")],
+            repositories,
+            ephemeral_roots,
+            False,
+        )
     if root.is_symlink():
         violations.append(Violation("workspace_symlink", ".", "Workspace root must be a physical directory"))
 
@@ -306,24 +366,35 @@ def _discover_tree(
             continue
         expected = expected_children.get(parent_rel, set())
         try:
-            actual_entries = list(parent.iterdir())
+            actual_entries = parent.iterdir()
         except OSError as exc:
             violations.append(Violation("unmeasured_state", parent_rel or ".", f"cannot list directory: {exc}"))
             continue
-        measured += len(actual_entries)
-        if measured > max_scan_entries:
-            truncated = True
-            break
-        for child in actual_entries:
-            if child.name not in expected:
-                rel = child.relative_to(root).as_posix()
-                violations.append(
-                    Violation(
-                        "undeclared_entry",
-                        rel,
-                        "entry has no Workspace manifest row",
+        try:
+            for child in actual_entries:
+                if not budget.consume():
+                    violations.append(
+                        Violation(
+                            "unmeasured_state",
+                            parent_rel or ".",
+                            f"shared scan budget exhausted after {budget.consumed} entries",
+                        )
                     )
-                )
+                    truncated = True
+                    break
+                if child.name not in expected:
+                    rel = child.relative_to(root).as_posix()
+                    violations.append(
+                        Violation(
+                            "undeclared_entry",
+                            rel,
+                            "entry has no Workspace manifest row",
+                        )
+                    )
+        except OSError as exc:
+            violations.append(Violation("unmeasured_state", parent_rel or ".", f"cannot list directory: {exc}"))
+        if truncated:
+            break
 
     for row in rows:
         candidate = root / row.path
@@ -347,21 +418,24 @@ def _discover_tree(
             nested, nested_truncated = _discover_nested_repositories(
                 candidate,
                 row.path,
-                max_scan_entries=max_scan_entries - measured,
+                budget=budget,
             )
             violations.extend(nested)
             if nested_truncated:
                 truncated = True
-
-    if truncated:
-        violations.append(
-            Violation(
-                "unmeasured_state",
-                ".",
-                f"structural scan exceeded max_scan_entries={max_scan_entries}",
+        elif row.kind == "ephemeral":
+            ephemeral_violations, receipt, ephemeral_truncated = _audit_ephemeral_root(
+                candidate,
+                row,
+                now=now,
+                budget=budget,
             )
-        )
-    return violations, sorted(repositories), truncated
+            violations.extend(ephemeral_violations)
+            ephemeral_roots.append(receipt)
+            if ephemeral_truncated:
+                truncated = True
+
+    return violations, sorted(repositories), ephemeral_roots, truncated
 
 
 def _registered_submodules(repo: Path) -> set[Path]:
@@ -383,7 +457,7 @@ def _discover_nested_repositories(
     repo: Path,
     manifest_path: str,
     *,
-    max_scan_entries: int,
+    budget: ScanBudget,
 ) -> tuple[list[Violation], bool]:
     """Find competing checkouts inside a declared repository.
 
@@ -392,35 +466,34 @@ def _discover_nested_repositories(
     homes and must move to ``runtime/worktrees``.
     """
 
-    if max_scan_entries <= 0:
+    if budget.remaining <= 0:
         return [
             Violation(
                 "unmeasured_state",
                 manifest_path,
-                "no scan budget remained for recursive repository discovery",
+                "shared scan budget left no entries for recursive repository discovery",
             )
         ], True
     registered_submodules = _registered_submodules(repo)
     violations: list[Violation] = []
-    measured = 0
     for dirpath, dirnames, filenames in os.walk(repo, followlinks=False):
         current = Path(dirpath)
-        measured += len(dirnames) + len(filenames)
-        if measured > max_scan_entries:
+        if current == repo and ".git" in dirnames:
+            dirnames.remove(".git")
+        debit = len(dirnames) + len(filenames)
+        if not budget.consume(debit):
             return (
                 violations
                 + [
                     Violation(
                         "unmeasured_state",
                         manifest_path,
-                        f"recursive repository scan exceeded remaining entry budget {max_scan_entries}",
+                        f"recursive repository scan exhausted the shared budget after {budget.consumed} entries",
                     )
                 ],
                 True,
             )
         if current == repo:
-            if ".git" in dirnames:
-                dirnames.remove(".git")
             continue
         has_git = ".git" in dirnames or ".git" in filenames
         if has_git:
@@ -441,6 +514,74 @@ def _discover_nested_repositories(
     return violations, False
 
 
+def _audit_ephemeral_root(
+    root: Path,
+    row: Row,
+    *,
+    now: datetime,
+    budget: ScanBudget,
+) -> tuple[list[Violation], dict[str, Any], bool]:
+    """Measure top-level lifecycle units and emit a bounded reaper receipt."""
+
+    expires_after = int(row.raw["expires_after"])
+    reaper = str(row.raw["reaper"])
+    entry_count = 0
+    expired_names: list[str] = []
+    oldest_age_seconds = 0
+    violations: list[Violation] = []
+    truncated = False
+    try:
+        entries = root.iterdir()
+        for entry in entries:
+            if not budget.consume():
+                violations.append(
+                    Violation(
+                        "unmeasured_state",
+                        row.path,
+                        f"ephemeral scan exhausted the shared budget after {budget.consumed} entries",
+                    )
+                )
+                truncated = True
+                break
+            entry_count += 1
+            try:
+                age_seconds = max(0, int(now.timestamp() - entry.lstat().st_mtime))
+            except OSError as exc:
+                violations.append(
+                    Violation(
+                        "unmeasured_state",
+                        f"{row.path}/{entry.name}",
+                        f"cannot stat ephemeral lifecycle unit: {exc}",
+                    )
+                )
+                continue
+            oldest_age_seconds = max(oldest_age_seconds, age_seconds)
+            if age_seconds > expires_after:
+                expired_names.append(entry.name)
+    except OSError as exc:
+        violations.append(Violation("unmeasured_state", row.path, f"cannot list ephemeral root: {exc}"))
+
+    if expired_names:
+        sample = ", ".join(sorted(expired_names)[:5])
+        violations.append(
+            Violation(
+                "ephemeral_entries_expired",
+                row.path,
+                f"{len(expired_names)} lifecycle unit(s) exceed expires_after={expires_after}; "
+                f"reaper={reaper!r}; sample={sample}",
+            )
+        )
+    receipt = {
+        "path": row.path,
+        "reaper": reaper,
+        "expires_after": expires_after,
+        "entry_count": entry_count,
+        "expired_entry_count": len(expired_names),
+        "oldest_age_seconds": oldest_age_seconds,
+    }
+    return violations, receipt, truncated
+
+
 def _audit_repository(repo: Path, row: Row) -> list[Violation]:
     violations: list[Violation] = []
     if not (repo / ".git").exists():
@@ -450,6 +591,7 @@ def _audit_repository(repo: Path, row: Row) -> list[Violation]:
         violations.append(Violation("repository_wrong_root", row.path, "path is not the Git worktree root"))
         return violations
 
+    live_remote_verified = False
     origin = _run_git(repo, "remote", "get-url", "origin")
     if origin.returncode != 0:
         violations.append(Violation("repository_remote_missing", row.path, "origin remote is unavailable"))
@@ -465,13 +607,43 @@ def _audit_repository(repo: Path, row: Row) -> list[Violation]:
                         f"origin is {actual_remote}, manifest requires {expected_remote}",
                     )
                 )
+            else:
+                fetch = _run_git(
+                    repo,
+                    "fetch",
+                    "--prune",
+                    "--no-tags",
+                    "origin",
+                    "+refs/heads/*:refs/remotes/origin/*",
+                )
+                if fetch.returncode != 0:
+                    violations.append(
+                        Violation(
+                            "repository_unmeasured",
+                            row.path,
+                            "live origin fetch failed; custody and preservation cannot be accepted",
+                        )
+                    )
+                else:
+                    live_remote_verified = True
         except ManifestError as exc:
             violations.append(Violation("repository_remote_invalid", row.path, str(exc)))
 
     custody_ref = str(row.raw["custody_ref"])
-    custody = _run_git(repo, "rev-parse", "--verify", "--quiet", f"{custody_ref}^{{commit}}")
-    if custody.returncode != 0:
-        violations.append(Violation("repository_custody_missing", row.path, f"custody ref is absent: {custody_ref}"))
+    if not custody_ref.startswith("refs/remotes/origin/"):
+        violations.append(
+            Violation(
+                "repository_custody_invalid",
+                row.path,
+                "custody_ref must name the freshly fetched refs/remotes/origin namespace",
+            )
+        )
+    elif live_remote_verified:
+        custody = _run_git(repo, "rev-parse", "--verify", "--quiet", f"{custody_ref}^{{commit}}")
+        if custody.returncode != 0:
+            violations.append(
+                Violation("repository_custody_missing", row.path, f"live custody ref is absent: {custody_ref}")
+            )
 
     status = _run_git(repo, "status", "--porcelain=v1", "--untracked-files=all")
     if status.returncode != 0:
@@ -479,16 +651,118 @@ def _audit_repository(repo: Path, row: Row) -> list[Violation]:
     elif status.stdout.strip():
         violations.append(Violation("repository_dirty", row.path, "repository has tracked or untracked changes"))
 
-    contains = _run_git(repo, "for-each-ref", "--format=%(refname)", "--contains", "HEAD", "refs/remotes")
-    if contains.returncode != 0 or not contains.stdout.strip():
-        violations.append(
-            Violation(
-                "repository_unpreserved",
-                row.path,
-                "exact HEAD is not reachable from any local remote-tracking ref",
-            )
+    if live_remote_verified:
+        remote_refs_result = _run_git(
+            repo,
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/remotes/origin",
         )
+        if remote_refs_result.returncode != 0:
+            violations.append(
+                Violation("repository_unmeasured", row.path, "cannot enumerate freshly fetched origin refs")
+            )
+        else:
+            remote_refs = [ref for ref in remote_refs_result.stdout.splitlines() if ref and not ref.endswith("/HEAD")]
+            head_contains = _run_git(
+                repo,
+                "for-each-ref",
+                "--format=%(refname)",
+                "--contains",
+                "HEAD",
+                "refs/remotes/origin",
+            )
+            if head_contains.returncode != 0 or not any(
+                ref and not ref.endswith("/HEAD") for ref in head_contains.stdout.splitlines()
+            ):
+                violations.append(
+                    Violation(
+                        "repository_unpreserved",
+                        row.path,
+                        "exact HEAD is not reachable from any freshly fetched live origin ref",
+                    )
+                )
+            violations.extend(_audit_local_branch_custody(repo, row.path, remote_refs))
+            violations.extend(_audit_stash_custody(repo, row.path, remote_refs))
     return violations
+
+
+def _unreachable_commit_count(repo: Path, commitish: str, remote_refs: Sequence[str]) -> int | None:
+    args = ["rev-list", "--count", commitish]
+    if remote_refs:
+        args.extend(["--not", *remote_refs])
+    result = _run_git(repo, *args)
+    if result.returncode != 0:
+        return None
+    try:
+        return int(result.stdout.strip())
+    except ValueError:
+        return None
+
+
+def _audit_local_branch_custody(
+    repo: Path,
+    manifest_path: str,
+    remote_refs: Sequence[str],
+) -> list[Violation]:
+    branches = _run_git(repo, "for-each-ref", "--format=%(refname)", "refs/heads")
+    if branches.returncode != 0:
+        return [Violation("repository_unmeasured", manifest_path, "cannot enumerate local branches")]
+    unpreserved: list[tuple[str, int]] = []
+    for ref in branches.stdout.splitlines():
+        if not ref:
+            continue
+        count = _unreachable_commit_count(repo, ref, remote_refs)
+        if count is None:
+            return [
+                Violation(
+                    "repository_unmeasured",
+                    manifest_path,
+                    f"cannot measure local branch custody for {ref.removeprefix('refs/heads/')}",
+                )
+            ]
+        if count:
+            unpreserved.append((ref.removeprefix("refs/heads/"), count))
+    if not unpreserved:
+        return []
+    summary = ", ".join(f"{name}={count}" for name, count in sorted(unpreserved)[:10])
+    return [
+        Violation(
+            "repository_unpreserved_branches",
+            manifest_path,
+            f"{len(unpreserved)} local branch(es) contain commits absent from live origin refs: {summary}",
+        )
+    ]
+
+
+def _audit_stash_custody(
+    repo: Path,
+    manifest_path: str,
+    remote_refs: Sequence[str],
+) -> list[Violation]:
+    stash_ref = _run_git(repo, "rev-parse", "--verify", "--quiet", "refs/stash")
+    if stash_ref.returncode != 0:
+        return []
+    reflog = _run_git(repo, "reflog", "show", "--format=%H", "refs/stash")
+    if reflog.returncode != 0:
+        return [Violation("repository_unmeasured", manifest_path, "cannot enumerate stash custody")]
+    stash_commits = sorted({commit for commit in reflog.stdout.splitlines() if commit})
+    uncustodied = 0
+    for commit in stash_commits:
+        count = _unreachable_commit_count(repo, commit, remote_refs)
+        if count is None:
+            return [Violation("repository_unmeasured", manifest_path, "cannot measure stash custody")]
+        if count:
+            uncustodied += 1
+    if not uncustodied:
+        return []
+    return [
+        Violation(
+            "repository_uncustodied_stashes",
+            manifest_path,
+            f"{uncustodied} stash snapshot(s) are not reachable from freshly fetched live origin refs",
+        )
+    ]
 
 
 def _resolve_reference(
@@ -537,7 +811,11 @@ def _resolve_reference(
     return path.resolve(strict=False), fragment if separator else None
 
 
-def _read_receipt_rows(path: Path) -> list[Mapping[str, Any]]:
+def _read_receipt_rows(
+    path: Path,
+    *,
+    collection_keys: Sequence[str] = ("receipts",),
+) -> list[Mapping[str, Any]]:
     if not path.is_file():
         return []
     try:
@@ -556,9 +834,10 @@ def _read_receipt_rows(path: Path) -> list[Mapping[str, Any]]:
     if isinstance(value, list):
         return [row for row in value if isinstance(row, dict)]
     if isinstance(value, dict):
-        nested = value.get("receipts")
-        if isinstance(nested, list):
-            return [row for row in nested if isinstance(row, dict)]
+        for key in collection_keys:
+            nested = value.get(key)
+            if isinstance(nested, list):
+                return [row for row in nested if isinstance(row, dict)]
         return [value]
     return []
 
@@ -566,10 +845,14 @@ def _read_receipt_rows(path: Path) -> list[Mapping[str, Any]]:
 def _copy_count(value: object) -> int:
     if isinstance(value, bool):
         return 0
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return 0
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return 0
+    return 0
 
 
 def _audit_private_custody(
@@ -582,7 +865,7 @@ def _audit_private_custody(
     for row in rows:
         if row.kind != "private":
             continue
-        inventory, _ = _resolve_reference(
+        inventory, inventory_fragment = _resolve_reference(
             str(row.raw["sealed_inventory_ref"]),
             manifest_path=manifest_path,
             workspace_root=workspace_root,
@@ -594,11 +877,36 @@ def _audit_private_custody(
             workspace_root=workspace_root,
             rows=rows,
         )
-        if not inventory.is_file():
+        label = str(row.raw["custody_label"])
+        inventory_available = inventory.is_file()
+        inventory_rows = _read_receipt_rows(
+            inventory,
+            collection_keys=("sealed_inventories", "inventories"),
+        )
+        inventory_label_matches = inventory_fragment in {None, label}
+        sealed_inventory = next(
+            (
+                candidate
+                for candidate in inventory_rows
+                if str(candidate.get("label", candidate.get("custody_label", ""))) == label
+                and candidate.get("sealed") is True
+            ),
+            None,
+        )
+        inventory_verified = inventory_label_matches and sealed_inventory is not None
+        if not inventory_available:
             violations.append(
                 Violation("private_inventory_missing", row.path, "sealed inventory reference is unavailable")
             )
-        label = fragment or str(row.raw["custody_label"])
+        elif not inventory_verified:
+            violations.append(
+                Violation(
+                    "private_inventory_unverified",
+                    row.path,
+                    "sealed inventory has no matching custody_label entry with sealed=true",
+                )
+            )
+        receipt_label_matches = fragment in {None, label}
         candidates = [
             candidate for candidate in _read_receipt_rows(receipt_path) if str(candidate.get("label", "")) == label
         ]
@@ -612,16 +920,19 @@ def _audit_private_custody(
             ),
             None,
         )
+        restoration_verified = receipt_label_matches and valid is not None
         receipts.append(
             {
                 "path": row.path,
                 "custody_label": label,
-                "inventory_available": inventory.is_file(),
+                "inventory_available": inventory_available,
+                "sealed_inventory_verified": inventory_verified,
                 "restoration_receipt_available": receipt_path.is_file(),
-                "restoration_verified": valid is not None,
+                "restoration_verified": restoration_verified,
+                "custody_verified": inventory_verified and restoration_verified,
             }
         )
-        if valid is None:
+        if not restoration_verified:
             violations.append(
                 Violation(
                     "private_restoration_unverified",
@@ -650,9 +961,10 @@ def _compatibility_violations(
         expires = datetime.fromisoformat(str(raw["expires_at"]).replace("Z", "+00:00"))
         if expires.tzinfo is None:
             expires = expires.replace(tzinfo=UTC)
-        active = sorted(
-            str(cwd) for cwd in active_cwds if _is_within(cwd.resolve(strict=False), path.resolve(strict=False))
-        )
+        # Compare lexical paths. Resolving the compatibility symlink makes its
+        # prefix indistinguishable from the canonical target and falsely
+        # classifies canonical consumers as legacy users.
+        active = sorted(str(cwd) for cwd in active_cwds if _is_within(cwd, path))
         present = path.exists() or path.is_symlink()
         correct = path.is_symlink() and path.resolve(strict=False) == target.resolve(strict=False)
         report.append(
@@ -689,18 +1001,35 @@ def _compatibility_violations(
 
 
 def collect_active_cwds() -> list[Path]:
-    proc = subprocess.run(
-        ["lsof", "-a", "-d", "cwd", "-F", "n"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if proc.returncode not in {0, 1}:
-        return []
-    return sorted(
-        {Path(line[1:]).resolve(strict=False) for line in proc.stdout.splitlines() if line.startswith("n/")},
-        key=str,
-    )
+    command = ["lsof", "-a", "-d", "cwd", "-F", "n"]
+    try:
+        proc = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=LSOF_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ActiveCwdDiscoveryError(f"lsof unavailable: {exc}") from exc
+    if proc.returncode != 0:
+        raise ActiveCwdDiscoveryError(f"lsof exited {proc.returncode}")
+    raw_paths = [Path(line[1:]) for line in proc.stdout.splitlines() if line.startswith("n/")]
+    if not raw_paths:
+        raise ActiveCwdDiscoveryError("lsof returned no absolute CWD records")
+    return _normalize_active_cwds(raw_paths)
+
+
+def _normalize_active_cwds(values: Sequence[Path]) -> list[Path]:
+    result: set[Path] = set()
+    for item in values:
+        expanded = item.expanduser()
+        if not expanded.is_absolute():
+            raise ManifestError("active CWD entries must be absolute")
+        # abspath/normpath removes lexical "." and ".." without dereferencing a
+        # compatibility link. That lexical prefix is the dependency evidence.
+        result.add(Path(os.path.abspath(expanded)))
+    return sorted(result, key=str)
 
 
 def load_active_cwds(path: Path) -> list[Path]:
@@ -710,10 +1039,10 @@ def load_active_cwds(path: Path) -> list[Path]:
         raise ManifestError(f"active CWD fixture is invalid: {path}: {exc}") from exc
     if not isinstance(value, list) or not all(_nonempty_string(item) for item in value):
         raise ManifestError("active CWD fixture must be a JSON array of absolute paths")
-    result = [Path(str(item)).expanduser().resolve(strict=False) for item in value]
-    if any(not item.is_absolute() for item in result):
+    raw_paths = [Path(str(item)).expanduser() for item in value]
+    if any(not item.is_absolute() for item in raw_paths):
         raise ManifestError("active CWD fixture entries must be absolute")
-    return result
+    return _normalize_active_cwds(raw_paths)
 
 
 def audit(
@@ -725,15 +1054,15 @@ def audit(
 ) -> dict[str, Any]:
     data, rows, manifest_bytes = load_manifest(manifest_path)
     root = resolve_workspace_root(data, workspace_root)
-    limits = data.get("limits") or {}
+    limits = data["limits"]
     if not isinstance(limits, dict):
         raise ManifestError("limits must be a mapping")
-    max_scan_entries = limits.get("max_scan_entries", DEFAULT_MAX_SCAN_ENTRIES)
+    max_scan_entries = limits["max_scan_entries"]
     if not isinstance(max_scan_entries, int) or isinstance(max_scan_entries, bool) or max_scan_entries <= 0:
         raise ManifestError("limits.max_scan_entries must be a positive integer")
-    max_violations = limits.get("max_violations", 0)
-    max_unmeasured = limits.get("max_unmeasured", 0)
-    max_compatibility_links = limits.get("max_compatibility_links", 0)
+    max_violations = limits["max_violations"]
+    max_unmeasured = limits["max_unmeasured"]
+    max_compatibility_links = limits["max_compatibility_links"]
     for key, value in (
         ("max_violations", max_violations),
         ("max_unmeasured", max_unmeasured),
@@ -742,18 +1071,36 @@ def audit(
         if not isinstance(value, int) or isinstance(value, bool) or value < 0:
             raise ManifestError(f"limits.{key} must be a non-negative integer")
 
-    violations, repositories, truncated = _discover_tree(
+    audit_now = now or datetime.now(UTC)
+    if audit_now.tzinfo is None:
+        audit_now = audit_now.replace(tzinfo=UTC)
+    violations, repositories, ephemeral_roots, truncated = _discover_tree(
         root,
         rows,
         max_scan_entries=max_scan_entries,
+        now=audit_now,
     )
     custody_violations, custody = _audit_private_custody(manifest_path, root, rows)
     violations.extend(custody_violations)
+    if active_cwds is None:
+        try:
+            measured_cwds = collect_active_cwds()
+        except ActiveCwdDiscoveryError as exc:
+            measured_cwds = []
+            violations.append(
+                Violation(
+                    "unmeasured_state",
+                    ".",
+                    f"active CWD discovery failed closed: {exc}",
+                )
+            )
+    else:
+        measured_cwds = _normalize_active_cwds(list(active_cwds))
     compat_violations, compatibility = _compatibility_violations(
         data,
         root,
-        now=now or datetime.now(UTC),
-        active_cwds=list(active_cwds) if active_cwds is not None else collect_active_cwds(),
+        now=audit_now,
+        active_cwds=measured_cwds,
     )
     violations.extend(compat_violations)
 
@@ -800,6 +1147,7 @@ def audit(
         },
         "scan_truncated": truncated,
         "repositories": repositories,
+        "ephemeral_roots": ephemeral_roots,
         "private_custody": custody,
         "compatibility_links": compatibility,
         "violations": [item.as_dict() for item in ordered],

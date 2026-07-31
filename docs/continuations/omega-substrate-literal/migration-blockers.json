@@ -17,7 +17,7 @@
       "owner": "Limen active-session and compatibility-link court",
       "failed_predicate": "Every legacy repository path has zero active CWD consumers.",
       "evidence": "live-substrate-report.json",
-      "next_command": "python3 scripts/substrate-convergence.py --json",
+      "next_command": "python3 scripts/substrate-convergence.py --manifest \"$HOME/Workspace/4444J99/portvs/.worktrees/omega-substrate-literal/governance/workspace-manifest.yaml\" --json",
       "blocks": [
         "repository rehome",
         "compatibility-link removal"
@@ -28,7 +28,7 @@
       "owner": "institutio/governance/private-substrate-custody.json",
       "failed_predicate": "Each private root has two independent copies and one verified restoration receipt.",
       "evidence": "All four custody records remain pending with zero verified copies.",
-      "next_command": "python3 scripts/substrate-convergence.py --json",
+      "next_command": "python3 scripts/substrate-convergence.py --manifest \"$HOME/Workspace/4444J99/portvs/.worktrees/omega-substrate-literal/governance/workspace-manifest.yaml\" --json",
       "blocks": [
         "private payload routing"
       ]
@@ -58,7 +58,7 @@
       "owner": "Limen Omega trial receipts",
       "failed_predicate": "Two storage readings and the eight-hour unchanged-convergence trial are complete.",
       "evidence": "The observation window has not started because structural and custody gates remain red.",
-      "next_command": "python3 scripts/substrate-convergence.py --json",
+      "next_command": "python3 scripts/substrate-convergence.py --manifest \"$HOME/Workspace/4444J99/portvs/.worktrees/omega-substrate-literal/governance/workspace-manifest.yaml\" --json",
       "blocks": [
         "Omega recording"
       ]
