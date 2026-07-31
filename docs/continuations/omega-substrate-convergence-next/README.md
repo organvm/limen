@@ -17,7 +17,19 @@ remote custody receipt.
 ## Launch
 
 ```bash
-bash /Users/4jp/Workspace/limen/.worktrees/omega-substrate-convergence-next/.limen-workstream/kickstart.sh
+workspace_root="${WORKSPACE_ROOT:-$HOME/Workspace}"
+canonical_limen_root="${LIMEN_ROOT:-$workspace_root/library/engine/organvm/limen}"
+canonical_capsule="$canonical_limen_root/.worktrees/omega-substrate-convergence-next"
+legacy_capsule="$workspace_root/limen/.worktrees/omega-substrate-convergence-next"
+if [[ -x "$canonical_capsule/.limen-workstream/kickstart.sh" ]]; then
+  capsule_root="$canonical_capsule"
+elif [[ -x "$legacy_capsule/.limen-workstream/kickstart.sh" ]]; then
+  capsule_root="$legacy_capsule"
+else
+  printf 'Omega successor capsule is unavailable at canonical and migration paths\n' >&2
+  exit 1
+fi
+cd "$capsule_root" && bash .limen-workstream/kickstart.sh
 ```
 
 Before launching, run `bash

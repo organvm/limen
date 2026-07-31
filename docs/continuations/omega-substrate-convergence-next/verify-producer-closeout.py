@@ -164,6 +164,41 @@ def verify_private_capsule(successor: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def verify_launch_preflight() -> dict[str, str]:
+    required_fragments = (
+        'workspace_root="${WORKSPACE_ROOT:-$HOME/Workspace}"',
+        'canonical_limen_root="${LIMEN_ROOT:-$workspace_root/library/engine/organvm/limen}"',
+        'canonical_capsule="$canonical_limen_root/.worktrees/omega-substrate-convergence-next"',
+        'legacy_capsule="$workspace_root/limen/.worktrees/omega-substrate-convergence-next"',
+    )
+    for document in (HERE / "README.md", HERE / "RELAY.md"):
+        body = document.read_text(encoding="utf-8")
+        missing = [fragment for fragment in required_fragments if fragment not in body]
+        if missing:
+            raise CloseoutError(f"{document.name}: successor launch derivation is incomplete")
+
+    workspace_root = Path(os.environ.get("WORKSPACE_ROOT", str(Path.home() / "Workspace"))).resolve()
+    canonical_limen_root = Path(
+        os.environ.get(
+            "LIMEN_ROOT",
+            str(workspace_root / "library" / "engine" / "organvm" / "limen"),
+        )
+    ).resolve()
+    candidates = (
+        ("canonical", canonical_limen_root / ".worktrees" / "omega-substrate-convergence-next"),
+        ("migration", workspace_root / "limen" / ".worktrees" / "omega-substrate-convergence-next"),
+    )
+    for label, capsule in candidates:
+        kickstart = capsule / ".limen-workstream" / "kickstart.sh"
+        if not kickstart.is_file() or not os.access(kickstart, os.X_OK):
+            continue
+        if capsule.resolve() != ROOT.resolve():
+            raise CloseoutError(f"{label} launch candidate selects a different successor checkout")
+        run(["bash", "-n", str(kickstart)])
+        return {"selected_route": label, "kickstart": "syntax-valid"}
+    raise CloseoutError("successor launch preflight found no executable capsule")
+
+
 def verify_private_session_receipt(contract: dict[str, Any]) -> dict[str, Any]:
     common_dir = Path(run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]))
     private_receipt = (
@@ -200,6 +235,7 @@ def main() -> int:
 
         owners = [verify_owner(row) for row in contract["owners"]]
         capsule = verify_private_capsule(successor)
+        launch = verify_launch_preflight()
         protected = verify_private_session_receipt(contract)
         for relative in (
             "README.md",
@@ -222,6 +258,7 @@ def main() -> int:
                     "successor_head": local_head,
                     "owners": owners,
                     "capsule": capsule,
+                    "launch_preflight": launch,
                     "protected_session_receipt": protected,
                 },
                 indent=2,
