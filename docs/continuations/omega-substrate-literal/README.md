@@ -12,12 +12,13 @@ surface, and Limen independently audits both physical residency and custody.
 ## Current evidence
 
 - Limen live court:
-  [`live-substrate-report.json`](live-substrate-report.json)
+  [`live-substrate-report.json`](live-substrate-report.json), owned by
+  [organvm/limen#1705](https://github.com/organvm/limen/pull/1705)
 - PORTVS additive bootstrap report:
-  `organvm/portvs` branch `feat/omega-substrate-literal`,
+  [organvm/portvs#6](https://github.com/organvm/portvs/pull/6),
   `docs/continuations/omega-substrate-literal/live-bootstrap-report.json`
 - Domus exact Home report:
-  `organvm/domus-genoma` branch `feat/omega-substrate-literal`,
+  [organvm/domus-genoma#361](https://github.com/organvm/domus-genoma/pull/361),
   `docs/continuations/omega-substrate-literal/live-home-report.json`
 - Protected Claude lineage: private receipt
   `.limen-private/session-corpus/omega-substrate-literal/protected-sessions.json`
