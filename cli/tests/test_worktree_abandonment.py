@@ -115,11 +115,24 @@ def test_registered_worktree_scan_fails_closed_on_unresolvable_path(
         abandonment._registered_worktree_paths(tmp_path)
 
 
-def test_quarantine_atomically_preserves_bytes(tmp_path: Path) -> None:
+def _xdg_quarantine(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    name: str = "quarantine",
+) -> Path:
+    data_home = tmp_path / "xdg-data"
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+    return data_home / "limen" / name
+
+
+def test_quarantine_atomically_preserves_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     source = tmp_path / "creation-root" / "candidate"
     source.mkdir(parents=True)
     (source / "private.txt").write_text("preserve\n", encoding="utf-8")
-    quarantine = tmp_path / "quarantine"
+    quarantine = _xdg_quarantine(tmp_path, monkeypatch)
 
     result = abandonment.quarantine_path(
         source,
@@ -134,6 +147,12 @@ def test_quarantine_atomically_preserves_bytes(tmp_path: Path) -> None:
     assert not source.exists()
     assert (destination / "private.txt").read_text(encoding="utf-8") == "preserve\n"
     assert result["state"] == "completed"
+    assert result["result"]["restoration_pointer"] == {
+        "from": str(destination),
+        "to": str(source),
+        "method": "same-filesystem-atomic-rename",
+    }
+    assert Path(result["receipt_path"]).is_file()
 
 
 def test_quarantine_cross_filesystem_denial_preserves_source(
@@ -142,7 +161,7 @@ def test_quarantine_cross_filesystem_denial_preserves_source(
 ) -> None:
     source = tmp_path / "source"
     source.mkdir()
-    quarantine = tmp_path / "quarantine"
+    quarantine = _xdg_quarantine(tmp_path, monkeypatch)
     monkeypatch.setattr(abandonment, "_same_filesystem", lambda _source, _root: False)
 
     with pytest.raises(abandonment.WorktreeAbandonmentError) as caught:
@@ -165,12 +184,13 @@ def test_quarantine_rename_failure_is_typed_and_preserves_source(
 ) -> None:
     source = tmp_path / "source"
     source.mkdir()
+    quarantine = _xdg_quarantine(tmp_path, monkeypatch)
     monkeypatch.setattr(os, "rename", lambda _source, _destination: (_ for _ in ()).throw(OSError("boom")))
 
     with pytest.raises(abandonment.WorktreeAbandonmentError) as caught:
         abandonment.quarantine_path(
             source,
-            tmp_path / "quarantine",
+            quarantine,
             reason="test",
             receipt_root=tmp_path / "receipts",
             owner_probe=lambda _path: None,
@@ -187,23 +207,29 @@ def test_quarantine_defaults_to_fail_closed_owner_probe(
 ) -> None:
     source = tmp_path / "source"
     source.mkdir()
+    quarantine = _xdg_quarantine(tmp_path, monkeypatch)
     monkeypatch.setattr(abandonment, "_default_cwd_owner_probe", lambda _path: 4242)
 
     with pytest.raises(abandonment.WorktreeAbandonmentError, match="active-process-cwd:4242"):
         abandonment.quarantine_path(
             source,
-            tmp_path / "quarantine",
+            quarantine,
             reason="test",
             receipt_root=tmp_path / "receipts",
         )
 
     assert source.exists()
-    assert not (tmp_path / "quarantine").exists()
+    assert not quarantine.exists()
 
 
-def test_quarantine_nesting_denial_has_no_preflight_directory_side_effect(tmp_path: Path) -> None:
-    source = tmp_path / "source"
-    source.mkdir()
+def test_quarantine_nesting_denial_has_no_preflight_directory_side_effect(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_home = tmp_path / "xdg-data"
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+    source = data_home / "limen" / "source"
+    source.mkdir(parents=True)
     quarantine = source / "nested" / "quarantine"
 
     with pytest.raises(abandonment.WorktreeAbandonmentError, match="nesting"):
@@ -217,6 +243,98 @@ def test_quarantine_nesting_denial_has_no_preflight_directory_side_effect(tmp_pa
 
     assert source.exists()
     assert not quarantine.exists()
+
+
+def test_quarantine_rejects_symlink_directory_chain_and_retains_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    physical = tmp_path / "physical-data"
+    physical.mkdir()
+    data_home = tmp_path / "xdg-data"
+    data_home.symlink_to(physical, target_is_directory=True)
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+
+    with pytest.raises(abandonment.WorktreeAbandonmentError, match="directory-symlink") as caught:
+        abandonment.quarantine_path(
+            source,
+            data_home / "limen" / "quarantine",
+            reason="test",
+            receipt_root=tmp_path / "receipts",
+            owner_probe=lambda _path: None,
+        )
+
+    assert source.exists()
+    assert caught.value.receipt["state"] == "crashed"
+    assert caught.value.receipt_path.is_file()
+
+
+def test_quarantine_rejects_relative_xdg_data_home(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    monkeypatch.setenv("XDG_DATA_HOME", "relative/data")
+
+    with pytest.raises(abandonment.WorktreeAbandonmentError, match="xdg-data-home-must-be-absolute"):
+        abandonment.quarantine_path(
+            source,
+            tmp_path / "absolute-quarantine",
+            reason="test",
+            receipt_root=tmp_path / "receipts",
+            owner_probe=lambda _path: None,
+        )
+
+    assert source.exists()
+
+
+def test_quarantine_rejects_override_outside_xdg_inventory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
+
+    with pytest.raises(abandonment.WorktreeAbandonmentError, match="inside-xdg-limen"):
+        abandonment.quarantine_path(
+            source,
+            tmp_path / "undeclared-quarantine",
+            reason="test",
+            receipt_root=tmp_path / "receipts",
+            owner_probe=lambda _path: None,
+        )
+
+    assert source.exists()
+
+
+def test_quarantine_rejects_physical_workspace_alias_containment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    physical_workspace = tmp_path / "physical-workspace"
+    physical_workspace.mkdir()
+    workspace_alias = tmp_path / "Workspace"
+    workspace_alias.symlink_to(physical_workspace, target_is_directory=True)
+    data_home = physical_workspace / "xdg-data"
+    monkeypatch.setenv("WORKSPACE_ROOT", str(workspace_alias))
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+    source = tmp_path / "source"
+    source.mkdir()
+
+    with pytest.raises(abandonment.WorktreeAbandonmentError, match="outside-workspace"):
+        abandonment.quarantine_path(
+            source,
+            data_home / "limen" / "quarantine",
+            reason="test",
+            receipt_root=tmp_path / "receipts",
+            owner_probe=lambda _path: None,
+        )
+
+    assert source.exists()
 
 
 def test_custody_purge_requires_exact_identity_and_removes_only_isolated_tree(tmp_path: Path) -> None:

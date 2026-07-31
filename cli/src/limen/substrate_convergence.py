@@ -16,6 +16,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import stat
 import subprocess
 import time
 from typing import Any, Iterable, Mapping, Sequence
@@ -211,30 +212,86 @@ class CustodyLedgerReader:
         return _CustodyLedgerSource(available=True, kind="json", value=value)
 
     def _source(self, path: Path) -> tuple[Path, _CustodyLedgerSource]:
-        resolved = path.expanduser().resolve(strict=False)
-        cached = self._sources.get(resolved)
+        normalized = Path(os.path.abspath(path.expanduser()))
+        cached = self._sources.get(normalized)
         if cached is not None:
-            return resolved, cached
+            return normalized, cached
         if error := self._deadline_error():
-            source = self._source_error(resolved, error, available=False)
-            self._sources[resolved] = source
-            return resolved, source
+            source = self._source_error(normalized, error, available=False)
+            self._sources[normalized] = source
+            return normalized, source
+
         try:
-            with resolved.open("rb") as handle:
-                source = (
-                    self._read_jsonl(resolved, handle)
-                    if resolved.suffix.lower() == ".jsonl"
-                    else self._read_json(resolved, handle)
-                )
+            before = normalized.lstat()
         except FileNotFoundError:
             source = _CustodyLedgerSource(available=False)
+            self._sources[normalized] = source
+            return normalized, source
         except OSError as exc:
             source = self._source_error(
-                resolved,
+                normalized,
+                f"custody ledger lstat failed: {type(exc).__name__}",
+            )
+            self._sources[normalized] = source
+            return normalized, source
+        if stat.S_ISLNK(before.st_mode):
+            source = self._source_error(normalized, "custody ledger source is a symlink")
+            self._sources[normalized] = source
+            return normalized, source
+        if not stat.S_ISREG(before.st_mode):
+            source = self._source_error(normalized, "custody ledger source is not a regular file")
+            self._sources[normalized] = source
+            return normalized, source
+
+        descriptor: int | None = None
+        try:
+            flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NONBLOCK", 0)
+            flags |= getattr(os, "O_NOFOLLOW", 0)
+            descriptor = os.open(normalized, flags)
+            opened = os.fstat(descriptor)
+            after_open = normalized.lstat()
+            before_identity = (before.st_dev, before.st_ino)
+            if (
+                not stat.S_ISREG(opened.st_mode)
+                or stat.S_ISLNK(after_open.st_mode)
+                or not stat.S_ISREG(after_open.st_mode)
+                or (opened.st_dev, opened.st_ino) != before_identity
+                or (after_open.st_dev, after_open.st_ino) != before_identity
+            ):
+                raise OSError("custody ledger source identity changed during open")
+            with os.fdopen(descriptor, "rb") as handle:
+                descriptor = None
+                source = (
+                    self._read_jsonl(normalized, handle)
+                    if normalized.suffix.lower() == ".jsonl"
+                    else self._read_json(normalized, handle)
+                )
+                after_read = os.fstat(handle.fileno())
+                if (
+                    after_read.st_dev,
+                    after_read.st_ino,
+                    after_read.st_size,
+                    after_read.st_mtime_ns,
+                ) != (
+                    opened.st_dev,
+                    opened.st_ino,
+                    opened.st_size,
+                    opened.st_mtime_ns,
+                ):
+                    source = self._source_error(
+                        normalized,
+                        "custody ledger source changed during inspection",
+                    )
+        except OSError as exc:
+            source = self._source_error(
+                normalized,
                 f"custody ledger read failed: {type(exc).__name__}",
             )
-        self._sources[resolved] = source
-        return resolved, source
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+        self._sources[normalized] = source
+        return normalized, source
 
     def read_rows(
         self,
@@ -1203,7 +1260,7 @@ def _resolve_reference(
         path = Path(path_text)
         if not path.is_absolute():
             path = manifest_path.parent / path
-    return path.resolve(strict=False), fragment if separator else None
+    return Path(os.path.abspath(path.expanduser())), fragment if separator else None
 
 
 def _copy_count(value: object) -> int:

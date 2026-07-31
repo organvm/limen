@@ -50,14 +50,15 @@ Env: LIMEN_WORKTREE_ROOT, LIMEN_RECLAIM_MIN_AGE_H (6), LIMEN_RECLAIM_CANONICAL_A
      LIMEN_RECLAIM_WORKSPACE_ROOTS, LIMEN_RECLAIM_WORKSPACE_CHECKOUTS,
      LIMEN_RECLAIM_WORKSPACE_CHECKOUT_AGE_H, LIMEN_RECLAIM_MAX (50), LIMEN_RECLAIM_EVERY_MIN (30),
      LIMEN_RECLAIM_ORPHANS (0 — observable-first arm for the dead-gitdir orphan sweep),
-     LIMEN_ORPHAN_QUARANTINE (same-volume off-worktree target for preserved orphans),
-     LIMEN_ABANDONMENT_QUARANTINE (same-volume target for clones/residue/generated payloads),
+     XDG_DATA_HOME (~/.local/share; persistent owner root for recoverable quarantines),
+     LIMEN_ORPHAN_QUARANTINE (XDG-contained target for preserved orphans),
+     LIMEN_ABANDONMENT_QUARANTINE (XDG-contained target for clones/residue/generated payloads),
      LIMEN_WORKTREE_ABANDONMENT_RECEIPTS (private typed receipt root).
 
 Dead-gitdir orphan sweep (LIMEN_RECLAIM_ORPHANS=1): a checkout under a THROWAWAY root whose `.git`
 pointer targets a superproject gitdir that no longer exists (prune-race debris — `git worktree prune`
-fired while its volume was unmounted) is, past min-age, PRESERVED — MOVED into an off-worktree
-quarantine (LIMEN_ORPHAN_QUARANTINE), never deleted. Because git is dead on the checkout the sweep
+fired while its volume was unmounted) is, past min-age, PRESERVED — MOVED into persistent XDG
+application data (LIMEN_ORPHAN_QUARANTINE), never deleted. Because git is dead on the checkout the sweep
 cannot prove it walked its lifecycle, so it must not destroy it; the reversible move resolves the debt
 while losing nothing. Deleting a quarantined orphan is a SEPARATE proof-gated step. Default OFF.
 """
@@ -98,12 +99,12 @@ from limen.worktree_abandonment import (
     purge_custody_proven_path,
     purge_remote_proven_path,
     quarantine_path,
+    validated_quarantine_root,
+    xdg_data_home,
 )
 from limen.worktree_debt import is_generated_log_shell
 from limen.worktree_receipts import matching_worktree_receipt
 from limen.worktree_roots import (
-    canonical_runtime_worktree_root,
-    is_canonical_runtime_unit,
     iter_worktree_targets,
 )
 from reap_acceptance import (
@@ -247,24 +248,12 @@ def has_generated_payload(d: Path) -> bool:
 
 
 def abandonment_quarantine_root(source_root: Path) -> Path:
-    """Choose an off-scan, same-volume default unless the host injects one."""
+    """Choose the persistent XDG-owned quarantine; the move boundary enforces same-device."""
     if ABANDONMENT_QUARANTINE:
         candidate = Path(ABANDONMENT_QUARANTINE).expanduser()
-    elif is_canonical_runtime_unit(source_root):
-        candidate = canonical_runtime_worktree_root().parent / "_limen-worktree-abandonment"
     else:
-        creation_root = source_root.parent
-        if creation_root.name == ".worktrees":
-            candidate = creation_root.parent.parent / "_limen-worktree-abandonment"
-        elif creation_root.name == "worktrees" and creation_root.parent.name == ".claude":
-            candidate = creation_root.parent.parent.parent / "_limen-worktree-abandonment"
-        else:
-            candidate = creation_root.parent / "_limen-worktree-abandonment"
-    canonical_root = canonical_runtime_worktree_root().resolve(strict=False)
-    candidate_resolved = candidate.resolve(strict=False)
-    if candidate_resolved == canonical_root or candidate_resolved.is_relative_to(canonical_root):
-        raise ValueError("quarantine-must-be-outside-canonical-worktree-inventory")
-    return candidate
+        candidate = xdg_data_home() / "limen" / "worktree-abandonment"
+    return validated_quarantine_root(candidate, workspace_root=WORKSPACE_ROOT)
 
 
 def idle_enough(target, now: float) -> bool:
@@ -674,9 +663,10 @@ STANDING_ACCEPTANCE_REASONS = {"clean+merged+idle", "receipt-remote-merged+clean
 # this autonomous sweep. Confined to THROWAWAY roots, past min-age, only when armed.
 ORPHAN_SWEEP = os.environ.get("LIMEN_RECLAIM_ORPHANS", "1") != "0"
 ORPHAN_REASON = "orphan-dead-gitdir+throwaway+idle"
-# Off-worktree quarantine root (a MOVE target, not a delete). Default: a sibling of the worktree
-# root on the same volume (an instant rename, off the worktree-scan path). An override must stay on
-# that same volume; cross-device copy fallback is denied. NEVER place it under a worktree root.
+# Persistent quarantine root (a MOVE target, not a delete). The default lives in XDG application
+# data, outside disposable Workspace runtime. Overrides remain confined to the same XDG-owned Limen
+# inventory. The atomic move boundary separately requires the source and destination to share a
+# device; cross-device copy fallback is denied.
 ORPHAN_QUARANTINE = os.environ.get("LIMEN_ORPHAN_QUARANTINE", "")
 ORPHAN_QUARANTINE_LOG = LIMEN_ROOT / "logs" / "orphan-quarantine.jsonl"
 ABANDONMENT_RECEIPTS = Path(
@@ -737,24 +727,12 @@ def orphan_branch_on_origin(name: str) -> bool:
 
 
 def orphan_quarantine_root(source_root: Path | None = None) -> Path:
-    """Where preserved orphans are MOVED to. Explicit override wins; else a sibling of the worktree
-    root (same volume ⇒ instant rename, and OUTSIDE the worktree-scan path so it clears the debt)."""
+    """Where preserved orphans are MOVED: persistent XDG data outside disposable Workspace."""
     if ORPHAN_QUARANTINE:
         candidate = Path(ORPHAN_QUARANTINE).expanduser()
-    elif source_root is not None and is_canonical_runtime_unit(source_root):
-        candidate = canonical_runtime_worktree_root().parent / "_limen-orphan-quarantine"
     else:
-        try:
-            from limen.worktree_roots import effective_worktree_root
-
-            candidate = effective_worktree_root().parent / "_limen-orphan-quarantine"
-        except Exception:
-            candidate = Path(HOME) / "Workspace" / "_limen-orphan-quarantine"
-    canonical_root = canonical_runtime_worktree_root().resolve(strict=False)
-    candidate_resolved = candidate.resolve(strict=False)
-    if candidate_resolved == canonical_root or candidate_resolved.is_relative_to(canonical_root):
-        raise ValueError("quarantine-must-be-outside-canonical-worktree-inventory")
-    return candidate
+        candidate = xdg_data_home() / "limen" / "orphan-quarantine"
+    return validated_quarantine_root(candidate, workspace_root=WORKSPACE_ROOT)
 
 
 def quarantine_orphan(d: Path, stamp: str) -> tuple[bool, str]:

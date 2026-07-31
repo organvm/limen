@@ -7,8 +7,10 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import socket
 import subprocess
 import sys
+import tempfile
 
 import pytest
 import yaml
@@ -306,6 +308,41 @@ def test_canonical_runtime_worktree_is_measured_without_nested_repository_violat
     assert report["ok"] is True, report
 
 
+def test_xdg_quarantine_defaults_leave_workspace_court_byte_identical(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    unit = workspace / "runtime" / "worktrees" / "organvm--limen--fixture" / "bounded-fix"
+    unit.mkdir(parents=True)
+    _git(unit, "init", "-q")
+    data_home = tmp_path / "xdg-data"
+    monkeypatch.setenv("WORKSPACE_ROOT", str(workspace))
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+
+    script = Path(__file__).resolve().parents[2] / "scripts" / "reclaim-worktrees.py"
+    module_name = "reclaim_worktrees_substrate_court"
+    spec = importlib.util.spec_from_file_location(module_name, script)
+    reclaim = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = reclaim
+    assert spec and spec.loader
+    spec.loader.exec_module(reclaim)
+
+    now = datetime(2026, 7, 30, tzinfo=UTC)
+    before = audit(manifest, workspace_root=workspace, active_cwds=[], now=now)
+    abandonment = reclaim.abandonment_quarantine_root(unit)
+    orphan = reclaim.orphan_quarantine_root(unit)
+    abandonment.mkdir(parents=True)
+    orphan.mkdir(parents=True)
+    after = audit(manifest, workspace_root=workspace, active_cwds=[], now=now)
+
+    assert abandonment == data_home / "limen" / "worktree-abandonment"
+    assert orphan == data_home / "limen" / "orphan-quarantine"
+    assert not abandonment.is_relative_to(workspace)
+    assert not orphan.is_relative_to(workspace)
+    assert json.dumps(after, sort_keys=True) == json.dumps(before, sort_keys=True)
+
+
 @pytest.mark.parametrize("symlink_level", ["namespace", "unit"])
 def test_runtime_worktree_symlink_is_a_bounded_physical_containment_violation(
     tmp_path: Path,
@@ -587,13 +624,13 @@ def test_shared_private_custody_source_is_opened_once_across_rows(
     (workspace / "private" / "finance").mkdir()
     manifest.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     monkeypatch.setattr(convergence, "CUSTODY_LEDGER_MAX_ROWS", 4)
-    real_open = Path.open
+    real_open = os.open
     real_read_text = Path.read_text
     open_count = 0
 
-    def counting_open(path: Path, *args: object, **kwargs: object):
+    def counting_open(path: os.PathLike[str] | str, *args: object, **kwargs: object):
         nonlocal open_count
-        if path.resolve(strict=False) == shared.resolve(strict=False):
+        if Path(path).resolve(strict=False) == shared.resolve(strict=False):
             open_count += 1
         return real_open(path, *args, **kwargs)
 
@@ -602,7 +639,7 @@ def test_shared_private_custody_source_is_opened_once_across_rows(
             raise AssertionError("custody source must use the bounded binary reader")
         return real_read_text(path, *args, **kwargs)
 
-    monkeypatch.setattr(Path, "open", counting_open)
+    monkeypatch.setattr(os, "open", counting_open)
     monkeypatch.setattr(Path, "read_text", guarded_read_text)
 
     report = audit(manifest, workspace_root=workspace, active_cwds=[])
@@ -739,20 +776,84 @@ def test_private_custody_inspection_failure_is_unmeasured(
     if failure == "invalid-utf8":
         inventory.write_bytes(b"\xff\xfe")
     else:
-        real_open = Path.open
+        real_open = os.open
 
-        def denied_open(path: Path, *args: object, **kwargs: object):
-            if path.resolve(strict=False) == inventory:
+        def denied_open(path: os.PathLike[str] | str, *args: object, **kwargs: object):
+            if Path(path).resolve(strict=False) == inventory:
                 raise PermissionError("fixture denial")
             return real_open(path, *args, **kwargs)
 
-        monkeypatch.setattr(Path, "open", denied_open)
+        monkeypatch.setattr(os, "open", denied_open)
 
     report = audit(manifest, workspace_root=workspace, active_cwds=[])
 
     assert "unmeasured_state" in _codes(report)
     assert report["counts"]["unmeasured"] >= 1
     assert report["private_custody"][0]["custody_verified"] is False
+
+
+def test_custody_reader_rejects_special_files_without_opening_them(tmp_path: Path) -> None:
+    regular = tmp_path / "regular.json"
+    regular.write_text("{}\n", encoding="utf-8")
+    symlink = tmp_path / "symlink.json"
+    symlink.symlink_to(regular)
+    fifo = tmp_path / "fifo.jsonl"
+    os.mkfifo(fifo)
+    directory = tmp_path / "directory.json"
+    directory.mkdir()
+    with tempfile.TemporaryDirectory(prefix="limen-custody-socket-") as socket_dir:
+        socket_path = Path(socket_dir) / "ledger.socket"
+        unix_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        unix_socket.bind(str(socket_path))
+        try:
+            for special in (symlink, fifo, directory, socket_path, Path("/dev/null")):
+                result = convergence.CustodyLedgerReader(deadline_seconds=0.1).read_rows(special)
+                assert result.available is True
+                assert result.rows == ()
+                assert result.inspection_error is not None
+                assert (
+                    "source is a symlink" in result.inspection_error
+                    or "source is not a regular file" in result.inspection_error
+                )
+        finally:
+            unix_socket.close()
+
+
+def test_custody_reader_fifo_probe_is_subprocess_bounded_and_reaped(tmp_path: Path) -> None:
+    fifo = tmp_path / "blocked.jsonl"
+    os.mkfifo(fifo)
+    cli_src = Path(__file__).resolve().parents[1] / "src"
+    script = "\n".join(
+        (
+            "import json, sys",
+            "from pathlib import Path",
+            "from limen.substrate_convergence import CustodyLedgerReader",
+            "result = CustodyLedgerReader(deadline_seconds=0.1).read_rows(Path(sys.argv[1]))",
+            "print(json.dumps({'available': result.available, 'error': result.inspection_error}))",
+        )
+    )
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(filter(None, (str(cli_src), env.get("PYTHONPATH", ""))))
+    process = subprocess.Popen(
+        [sys.executable, "-c", script, str(fifo)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=2)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.communicate()
+        pytest.fail("custody FIFO inspection exceeded its bounded subprocess deadline")
+
+    assert process.returncode == 0, stderr
+    payload = json.loads(stdout)
+    assert payload["available"] is True
+    assert "not a regular file" in payload["error"]
+    with pytest.raises(ProcessLookupError):
+        os.kill(process.pid, 0)
 
 
 def test_private_reference_resolves_through_declared_legacy_repo_during_migration(

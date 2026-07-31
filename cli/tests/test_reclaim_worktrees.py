@@ -25,6 +25,16 @@ def load_reclaim_worktrees():
     return module
 
 
+def xdg_quarantine(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+) -> Path:
+    data_home = tmp_path / "xdg-data"
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+    return data_home / "limen" / name
+
+
 def acceptance_event(root: Path, action: str = "remove-worktree", reason: str = "clean+merged+idle") -> dict:
     return {
         "accepted_at": "2026-07-06T06:00:00Z",
@@ -600,7 +610,7 @@ def test_reclaim_generated_payloads_cleans_inactive_ignored_dirs(tmp_path: Path,
     )
     (repo / "node_modules").mkdir()
     (repo / "node_modules" / "dep.txt").write_text("generated\n", encoding="utf-8")
-    quarantine = tmp_path / "quarantine"
+    quarantine = xdg_quarantine(tmp_path, monkeypatch, "generated")
 
     monkeypatch.setattr(reclaim, "active_async_task_prefixes", lambda: set())
     monkeypatch.setattr(reclaim, "ABANDONMENT_QUARANTINE", str(quarantine))
@@ -660,13 +670,14 @@ def test_reclaim_generated_payloads_preserves_tracked_generated_name(
     )
 
     monkeypatch.setattr(reclaim, "active_async_task_prefixes", lambda: set())
-    monkeypatch.setattr(reclaim, "ABANDONMENT_QUARANTINE", str(tmp_path / "quarantine"))
+    quarantine = xdg_quarantine(tmp_path, monkeypatch, "generated")
+    monkeypatch.setattr(reclaim, "ABANDONMENT_QUARANTINE", str(quarantine))
     target = type("Target", (), {"path": repo, "min_age_h": 0})()
     result = reclaim.reclaim_generated_payloads([target])
 
     assert result["cleaned"] == [{"root": "repo", "detail": "quarantined:0"}]
     assert (repo / "dist" / "bundle.js").read_text(encoding="utf-8") == "tracked\n"
-    assert not (tmp_path / "quarantine").exists()
+    assert not quarantine.exists()
 
 
 def test_reclaim_root_apply_does_not_run_generated_cleanup(
@@ -1233,7 +1244,7 @@ def test_quarantine_orphan_moves_and_never_deletes(tmp_path: Path, monkeypatch) 
     # work that never walked its lifecycle". After the sweep the source is gone but every byte, walked
     # or not, survives in quarantine, and a receipt records where it went.
     reclaim = load_reclaim_worktrees()
-    qroot = tmp_path / "quarantine"
+    qroot = xdg_quarantine(tmp_path, monkeypatch, "orphans")
     monkeypatch.setattr(reclaim, "ORPHAN_QUARANTINE", str(qroot))
     monkeypatch.setattr(reclaim, "ORPHAN_QUARANTINE_LOG", tmp_path / "orphan-quarantine.jsonl")
     orphan = _dead_gitdir_orphan(tmp_path, "wt-unwalked")
@@ -1251,7 +1262,7 @@ def test_quarantine_orphan_moves_and_never_deletes(tmp_path: Path, monkeypatch) 
     assert receipt["recoverable"] == "moved-not-deleted" and receipt["to"] == dest
 
 
-def test_canonical_quarantine_roots_are_same_volume_siblings_outside_inventory(
+def test_canonical_quarantine_roots_are_persistent_xdg_data_outside_workspace(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -1260,19 +1271,21 @@ def test_canonical_quarantine_roots_are_same_volume_siblings_outside_inventory(
     unit = canonical_root / "owner--repo--digest" / "same-slug"
     unit.mkdir(parents=True)
     monkeypatch.setenv("WORKSPACE_ROOT", str(workspace))
+    data_home = tmp_path / "xdg-data"
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
     reclaim = load_reclaim_worktrees()
     monkeypatch.setattr(reclaim, "ABANDONMENT_QUARANTINE", "")
     monkeypatch.setattr(reclaim, "ORPHAN_QUARANTINE", "")
 
     abandonment = reclaim.abandonment_quarantine_root(unit)
     orphan = reclaim.orphan_quarantine_root(unit)
-    abandonment.mkdir()
-    orphan.mkdir()
+    abandonment.mkdir(parents=True)
+    orphan.mkdir(parents=True)
 
-    assert abandonment == workspace / "runtime" / "_limen-worktree-abandonment"
-    assert orphan == workspace / "runtime" / "_limen-orphan-quarantine"
-    assert not abandonment.is_relative_to(canonical_root)
-    assert not orphan.is_relative_to(canonical_root)
+    assert abandonment == data_home / "limen" / "worktree-abandonment"
+    assert orphan == data_home / "limen" / "orphan-quarantine"
+    assert not abandonment.is_relative_to(workspace)
+    assert not orphan.is_relative_to(workspace)
     assert abandonment.stat().st_dev == unit.stat().st_dev == orphan.stat().st_dev
     assert list(canonical_root.glob("*/*")) == [unit]
 
@@ -1288,10 +1301,11 @@ def test_quarantine_override_inside_canonical_inventory_is_denied(
     unit = canonical_root / "owner--repo--digest" / "same-slug"
     unit.mkdir(parents=True)
     monkeypatch.setenv("WORKSPACE_ROOT", str(workspace))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
     reclaim = load_reclaim_worktrees()
     monkeypatch.setattr(reclaim, variable, str(canonical_root / "_unsafe"))
 
-    with pytest.raises(ValueError, match="quarantine-must-be-outside"):
+    with pytest.raises(ValueError, match="quarantine-root"):
         if variable == "ABANDONMENT_QUARANTINE":
             reclaim.abandonment_quarantine_root(unit)
         else:
@@ -1301,8 +1315,11 @@ def test_quarantine_override_inside_canonical_inventory_is_denied(
 def test_quarantine_orphan_refuses_when_destination_unwritable(tmp_path: Path, monkeypatch) -> None:
     # Fail-closed: if quarantine can't be prepared, the orphan is LEFT in place, never half-removed.
     reclaim = load_reclaim_worktrees()
-    monkeypatch.setattr(reclaim, "ORPHAN_QUARANTINE", str(tmp_path / "afile" / "under"))
-    (tmp_path / "afile").write_text("not a dir\n", encoding="utf-8")  # mkdir under a file → OSError
+    data_home = tmp_path / "xdg-data"
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_home))
+    (data_home / "limen").mkdir(parents=True)
+    (data_home / "limen" / "afile").write_text("not a dir\n", encoding="utf-8")
+    monkeypatch.setattr(reclaim, "ORPHAN_QUARANTINE", str(data_home / "limen" / "afile" / "under"))
     orphan = _dead_gitdir_orphan(tmp_path, "wt-keep")
     ok, reason = reclaim.quarantine_orphan(orphan, "20260715T000000Z")
     assert ok is False
