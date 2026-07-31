@@ -2,6 +2,7 @@
   "compatibility_links": [
     {
       "active_cwd_count": 15,
+      "ambiguous_cwd_count": 0,
       "correct": false,
       "expired": false,
       "path": "limen",
@@ -9,7 +10,8 @@
       "target": "library/engine/organvm/limen"
     },
     {
-      "active_cwd_count": 1,
+      "active_cwd_count": 0,
+      "ambiguous_cwd_count": 0,
       "correct": false,
       "expired": false,
       "path": "domus-genoma",
@@ -18,6 +20,7 @@
     },
     {
       "active_cwd_count": 0,
+      "ambiguous_cwd_count": 0,
       "correct": false,
       "expired": false,
       "path": "4444J99/portvs",
@@ -29,9 +32,9 @@
     "compatibility_links": 3,
     "manifest_rows": 42,
     "private_roots": 4,
-    "repositories": 0,
+    "repositories": 1,
     "unmeasured": 0,
-    "violations": 78
+    "violations": 77
   },
   "ephemeral_roots": [
     {
@@ -91,7 +94,9 @@
       "sealed_inventory_verified": false
     }
   ],
-  "repositories": [],
+  "repositories": [
+    "library/engine/organvm/limen"
+  ],
   "scan_truncated": false,
   "schema": "limen.substrate_convergence_report.v1",
   "violations": [
@@ -102,7 +107,7 @@
     },
     {
       "code": "residue_cap_breached",
-      "message": "violations=76 exceeds max_violations=0",
+      "message": "violations=75 exceeds max_violations=0",
       "path": "."
     },
     {
@@ -301,11 +306,6 @@
       "path": "composition-projects"
     },
     {
-      "code": "active_legacy_path",
-      "message": "1 active process cwd(s) still depend on this compatibility path",
-      "path": "domus-genoma"
-    },
-    {
       "code": "compatibility_link_mismatch",
       "message": "link must resolve to library/engine/organvm/domus-genoma",
       "path": "domus-genoma"
@@ -331,8 +331,8 @@
       "path": "library/engine/organvm/domus-genoma"
     },
     {
-      "code": "declared_entry_missing",
-      "message": "declared repository is absent",
+      "code": "repository_missing_git",
+      "message": "declared repository is not a Git worktree",
       "path": "library/engine/organvm/limen"
     },
     {

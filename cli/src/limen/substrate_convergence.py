@@ -965,6 +965,17 @@ def _compatibility_violations(
         # prefix indistinguishable from the canonical target and falsely
         # classifies canonical consumers as legacy users.
         active = sorted(str(cwd) for cwd in active_cwds if _is_within(cwd, path))
+        # Once the doorway itself is a symlink, the kernel retains only the
+        # physical cwd inode. Tools such as macOS lsof therefore report the
+        # canonical target for both direct consumers and processes that entered
+        # through the legacy doorway. Do not call those consumers legacy, but
+        # also do not silently accept removal while their lexical entry path is
+        # unknowable.
+        ambiguous = sorted(
+            str(cwd)
+            for cwd in active_cwds
+            if path.is_symlink() and _is_within(cwd, target) and not _is_within(cwd, path)
+        )
         present = path.exists() or path.is_symlink()
         correct = path.is_symlink() and path.resolve(strict=False) == target.resolve(strict=False)
         report.append(
@@ -975,6 +986,7 @@ def _compatibility_violations(
                 "correct": correct,
                 "expired": now.astimezone(UTC) >= expires.astimezone(UTC),
                 "active_cwd_count": len(active),
+                "ambiguous_cwd_count": len(ambiguous),
             }
         )
         if path.exists() or path.is_symlink():
@@ -993,6 +1005,15 @@ def _compatibility_violations(
                     "active_legacy_path",
                     rel,
                     f"{len(active)} active process cwd(s) still depend on this compatibility path",
+                )
+            )
+        if ambiguous:
+            violations.append(
+                Violation(
+                    "unmeasured_state",
+                    rel,
+                    f"{len(ambiguous)} canonical-target cwd(s) have no observable lexical entry path; "
+                    "compatibility removal must wait until they close",
                 )
             )
         if now.astimezone(UTC) >= expires.astimezone(UTC):

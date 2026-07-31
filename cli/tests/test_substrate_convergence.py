@@ -424,7 +424,7 @@ def test_active_compatibility_path_blocks_removal(tmp_path: Path) -> None:
     assert {"compatibility_link_unresolved", "active_legacy_path"} <= _codes(report)
 
 
-def test_canonical_cwd_does_not_count_as_legacy_symlink_consumer(tmp_path: Path) -> None:
+def test_canonical_cwd_is_ambiguous_not_legacy_for_symlink_doorway(tmp_path: Path) -> None:
     link = {
         "path": "limen",
         "target": "library/engine/organvm/limen",
@@ -444,6 +444,35 @@ def test_canonical_cwd_does_not_count_as_legacy_symlink_consumer(tmp_path: Path)
 
     assert "compatibility_link_unresolved" in _codes(report)
     assert "active_legacy_path" not in _codes(report)
+    assert "unmeasured_state" in _codes(report)
+    link_report = report["compatibility_links"][0]
+    assert link_report["active_cwd_count"] == 0
+    assert link_report["ambiguous_cwd_count"] == 1
+
+
+def test_physical_legacy_directory_cwd_remains_measurable(tmp_path: Path) -> None:
+    link = {
+        "path": "limen",
+        "target": "library/engine/organvm/limen",
+        "owner_ref": "organvm/limen",
+        "expires_at": "2026-08-15T00:00:00Z",
+    }
+    manifest, workspace, _ = _fixture(tmp_path, compatibility_links=[link])
+    legacy = workspace / "limen"
+    legacy.mkdir()
+
+    report = audit(
+        manifest,
+        workspace_root=workspace,
+        active_cwds=[legacy / "scripts"],
+        now=datetime(2026, 7, 30, tzinfo=UTC),
+    )
+
+    assert "active_legacy_path" in _codes(report)
+    assert "unmeasured_state" not in _codes(report)
+    link_report = report["compatibility_links"][0]
+    assert link_report["active_cwd_count"] == 1
+    assert link_report["ambiguous_cwd_count"] == 0
 
 
 def test_workspace_root_symlink_is_rejected_before_resolution(tmp_path: Path) -> None:
