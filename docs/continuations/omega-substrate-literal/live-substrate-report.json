@@ -1,7 +1,7 @@
 {
   "compatibility_links": [
     {
-      "active_cwd_count": 15,
+      "active_cwd_count": 14,
       "ambiguous_cwd_count": 0,
       "correct": false,
       "expired": false,
@@ -367,7 +367,7 @@
     },
     {
       "code": "active_legacy_path",
-      "message": "15 active process cwd(s) still depend on this compatibility path",
+      "message": "14 active process cwd(s) still depend on this compatibility path",
       "path": "limen"
     },
     {
@@ -486,5 +486,11 @@
       "path": "vision-board-restore"
     }
   ],
-  "workspace_root": "$WORKSPACE_ROOT"
+  "workspace_root": "$WORKSPACE_ROOT",
+  "workspace_root_identity": {
+    "device": 16777230,
+    "inode": 328407439,
+    "lexical_sha256": "6a038fbe7c51d2d92294fcfe9cb4a99f81bc72223cde93d80dd596f46a3aa97f"
+  },
+  "workspace_root_is_canonical_live": true
 }

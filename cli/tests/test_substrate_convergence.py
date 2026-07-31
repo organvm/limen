@@ -325,6 +325,62 @@ def test_uncustodied_stash_blocks_convergence(tmp_path: Path) -> None:
     assert "repository_uncustodied_stashes" in _codes(report)
 
 
+def test_stash_inspection_error_is_unmeasured(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    real_run_git = convergence._run_git
+
+    def failing_stash_probe(
+        repo: Path,
+        *args: str,
+        timeout: float = convergence.GIT_TIMEOUT_SECONDS,
+    ) -> subprocess.CompletedProcess[str]:
+        if args == ("rev-parse", "--verify", "--quiet", "refs/stash"):
+            return subprocess.CompletedProcess(["git"], 128, "", "fatal: cannot inspect refs/stash")
+        return real_run_git(repo, *args, timeout=timeout)
+
+    monkeypatch.setattr(convergence, "_run_git", failing_stash_probe)
+
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+
+    assert "repository_unmeasured" in _codes(report)
+    assert any("cannot inspect refs/stash" in row["message"] for row in report["violations"])
+
+
+@pytest.mark.parametrize(
+    ("ignored_path", "expected_code"),
+    [
+        (".env", "repository_uncustodied_ignored"),
+        ("node_modules/cache/index.bin", None),
+    ],
+)
+def test_ignored_repository_entries_require_loss_free_evidence(
+    tmp_path: Path,
+    ignored_path: str,
+    expected_code: str | None,
+) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    repo = workspace / "library" / "engine" / "organvm" / "limen"
+    top = ignored_path.split("/", 1)[0]
+    (repo / ".gitignore").write_text(f"/{top}/\n" if "/" in ignored_path else f"/{top}\n", encoding="utf-8")
+    _git(repo, "add", ".gitignore")
+    _git(repo, "commit", "-qm", "declare ignored fixture")
+    _git(repo, "push", "origin", "main")
+    ignored = repo / ignored_path
+    ignored.parent.mkdir(parents=True, exist_ok=True)
+    ignored.write_text("local ignored payload\n", encoding="utf-8")
+
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+
+    if expected_code is None:
+        assert "repository_uncustodied_ignored" not in _codes(report)
+        assert report["ok"] is True, report
+    else:
+        assert expected_code in _codes(report)
+
+
 def test_private_root_requires_dual_copy_restoration_receipt(tmp_path: Path) -> None:
     manifest, workspace, _ = _fixture(tmp_path, valid_custody=False)
     report = audit(manifest, workspace_root=workspace, active_cwds=[])
@@ -422,6 +478,62 @@ def test_active_compatibility_path_blocks_removal(tmp_path: Path) -> None:
         now=datetime(2026, 7, 30, tzinfo=UTC),
     )
     assert {"compatibility_link_unresolved", "active_legacy_path"} <= _codes(report)
+
+
+def test_absent_compatibility_link_does_not_expire(tmp_path: Path) -> None:
+    link = {
+        "path": "limen",
+        "target": "library/engine/organvm/limen",
+        "owner_ref": "organvm/limen",
+        "expires_at": "2026-07-01T00:00:00Z",
+    }
+    manifest, workspace, _ = _fixture(tmp_path, compatibility_links=[link])
+
+    report = audit(
+        manifest,
+        workspace_root=workspace,
+        active_cwds=[],
+        now=datetime(2026, 7, 30, tzinfo=UTC),
+    )
+
+    assert "compatibility_link_expired" not in _codes(report)
+    assert report["ok"] is True, report
+
+
+def test_manifest_rejects_multi_link_compatibility_cycle(tmp_path: Path) -> None:
+    links = [
+        {"path": "a", "target": "b", "owner_ref": "a", "expires_at": "2026-08-15T00:00:00Z"},
+        {"path": "b", "target": "a", "owner_ref": "b", "expires_at": "2026-08-15T00:00:00Z"},
+    ]
+    manifest, workspace, _ = _fixture(tmp_path, compatibility_links=links)
+
+    with pytest.raises(ManifestError, match="compatibility link graph contains a cycle"):
+        audit(manifest, workspace_root=workspace, active_cwds=[])
+
+
+def test_filesystem_compatibility_symlink_loop_fails_bounded(tmp_path: Path) -> None:
+    links = [
+        {
+            "path": "a",
+            "target": "library/engine/organvm/limen",
+            "owner_ref": "a",
+            "expires_at": "2026-08-15T00:00:00Z",
+        },
+        {
+            "path": "b",
+            "target": "library/engine/organvm/limen",
+            "owner_ref": "b",
+            "expires_at": "2026-08-15T00:00:00Z",
+        },
+    ]
+    manifest, workspace, _ = _fixture(tmp_path, compatibility_links=links)
+    (workspace / "a").symlink_to("b")
+    (workspace / "b").symlink_to("a")
+
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+
+    assert "unmeasured_state" in _codes(report)
+    assert all(row["present"] is True for row in report["compatibility_links"])
 
 
 def test_canonical_cwd_is_ambiguous_not_legacy_for_symlink_doorway(tmp_path: Path) -> None:
@@ -547,6 +659,58 @@ def test_recursive_repositories_share_one_scan_budget(tmp_path: Path) -> None:
     assert "unmeasured_state" in _codes(report)
 
 
+def test_repository_fetches_share_one_wall_clock_deadline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    primary_remote = tmp_path / "remote.git"
+    secondary_remote = tmp_path / "secondary.git"
+    rows = _base_rows(primary_remote)
+    rows.extend(
+        [
+            {
+                "path": "library/storefront",
+                "kind": "structural",
+                "owner_ref": "portvs",
+                "residency": "structural",
+            },
+            {
+                "path": "library/storefront/second",
+                "kind": "repository",
+                "owner_ref": "organvm/second",
+                "residency": "laptop",
+                "remote": str(secondary_remote),
+                "custody_ref": "refs/remotes/origin/main",
+            },
+        ]
+    )
+    manifest, workspace, _ = _fixture(tmp_path, rows=rows)
+    clock = [0.0]
+    fetches: list[float] = []
+    real_run_git = convergence._run_git
+
+    def bounded_run_git(
+        repo: Path,
+        *args: str,
+        timeout: float = convergence.GIT_TIMEOUT_SECONDS,
+    ) -> subprocess.CompletedProcess[str]:
+        if args and args[0] == "fetch":
+            fetches.append(timeout)
+            result = real_run_git(repo, *args, timeout=timeout)
+            clock[0] = convergence.REPOSITORY_FETCH_BUDGET_SECONDS + 1
+            return result
+        return real_run_git(repo, *args, timeout=timeout)
+
+    monkeypatch.setattr(convergence, "_monotonic", lambda: clock[0])
+    monkeypatch.setattr(convergence, "_run_git", bounded_run_git)
+
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+
+    assert len(fetches) == 1
+    assert fetches[0] <= convergence.GIT_TIMEOUT_SECONDS
+    assert any("aggregate repository fetch deadline exhausted" in row["message"] for row in report["violations"])
+
+
 def test_expired_ephemeral_units_require_reaper_action(tmp_path: Path) -> None:
     manifest, workspace, _ = _fixture(tmp_path)
     unit = workspace / "runtime" / "worktrees" / "expired"
@@ -619,6 +783,35 @@ def test_default_manifest_uses_workspace_root(tmp_path: Path, monkeypatch: pytes
         / "governance"
         / "workspace-manifest.yaml"
     )
+
+
+def test_receipt_retains_fixture_root_and_binds_canonical_redaction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    script = Path(__file__).resolve().parents[2] / "scripts" / "substrate-convergence.py"
+    spec = importlib.util.spec_from_file_location("substrate_convergence_receipt_script", script)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    manifest, workspace, _ = _fixture(tmp_path)
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+
+    monkeypatch.setenv("WORKSPACE_ROOT", str(tmp_path / "different-live-root"))
+    fixture_receipt = module.prepare_receipt_report(report)
+    assert fixture_receipt["workspace_root"] == str(workspace)
+    assert fixture_receipt["workspace_root_is_canonical_live"] is False
+
+    monkeypatch.setenv("WORKSPACE_ROOT", str(workspace))
+    live_receipt = module.prepare_receipt_report(report)
+    assert live_receipt["workspace_root"] == "$WORKSPACE_ROOT"
+    assert live_receipt["workspace_root_is_canonical_live"] is True
+
+    tampered = dict(report)
+    tampered["workspace_root"] = str(tmp_path / "forged-root")
+    with pytest.raises(ManifestError, match="identity does not match"):
+        module.prepare_receipt_report(tampered)
 
 
 def test_same_manifest_and_root_are_independent_of_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

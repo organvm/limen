@@ -16,10 +16,30 @@ import time
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+REPO = SCRIPTS.parent
 _spec = importlib.util.spec_from_file_location("reap_clones", SCRIPTS / "reap-clones.py")
 reap = importlib.util.module_from_spec(_spec)
 sys.modules["reap_clones"] = reap  # dataclass needs the module discoverable during exec
 _spec.loader.exec_module(reap)
+
+
+def test_help_imports_checkout_modules_before_canonical_cutover():
+    """The bridge checkout remains directly executable while canonical LIMEN_ROOT is empty."""
+
+    env = os.environ.copy()
+    for name in ("PYTHONPATH", "LIMEN_ROOT", "WORKSPACE_ROOT"):
+        env.pop(name, None)
+    result = subprocess.run(
+        [sys.executable, str(SCRIPTS / "reap-clones.py"), "--help"],
+        cwd=REPO,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Reap pure pushed-mirror clones" in result.stdout
 
 
 # ---------------------------------------------------------------- git helpers

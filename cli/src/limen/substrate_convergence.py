@@ -9,17 +9,20 @@ sealed inventory named by the manifest.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
 import subprocess
+import time
 from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import urlparse
 
 import yaml
+
+from limen.repository_ignored import ignored_entry_is_regenerable, ignored_entries_from_porcelain
 
 
 SCHEMA = "portvs.workspace_manifest.v1"
@@ -35,7 +38,9 @@ LIMIT_KEYS = (
     "max_compatibility_links",
 )
 GIT_TIMEOUT_SECONDS = 60
+REPOSITORY_FETCH_BUDGET_SECONDS = 120.0
 LSOF_TIMEOUT_SECONDS = 15
+_monotonic = time.monotonic
 
 
 class ManifestError(ValueError):
@@ -83,6 +88,22 @@ class ScanBudget:
     @property
     def remaining(self) -> int:
         return self.limit - self.consumed
+
+
+@dataclass
+class RepositoryFetchBudget:
+    """One aggregate wall-clock deadline shared by every declared origin fetch."""
+
+    limit_seconds: float
+    started_at: float = field(default_factory=lambda: _monotonic())
+    exhausted: bool = False
+
+    def timeout(self) -> float | None:
+        remaining = self.limit_seconds - (_monotonic() - self.started_at)
+        if remaining <= 0:
+            self.exhausted = True
+            return None
+        return min(float(GIT_TIMEOUT_SECONDS), remaining)
 
 
 def _nonempty_string(value: object) -> bool:
@@ -216,6 +237,7 @@ def _validate_compatibility_rows(data: Mapping[str, Any]) -> None:
     if not isinstance(links, list):
         raise ManifestError("migration.compatibility_links must be a list")
     seen: set[str] = set()
+    targets: dict[str, str] = {}
     for index, row in enumerate(links):
         if not isinstance(row, dict):
             raise ManifestError(f"migration.compatibility_links[{index}] must be a mapping")
@@ -225,12 +247,35 @@ def _validate_compatibility_rows(data: Mapping[str, Any]) -> None:
         if path in seen:
             raise ManifestError(f"duplicate compatibility link path: {path}")
         seen.add(path)
+        targets[path] = target
         try:
             datetime.fromisoformat(str(row["expires_at"]).replace("Z", "+00:00"))
         except ValueError as exc:
             raise ManifestError(f"{path}: expires_at must be an ISO-8601 timestamp") from exc
         if path == target or target.startswith(path + "/"):
             raise ManifestError(f"{path}: compatibility link target would form a cycle")
+
+    dependencies = {
+        path: {candidate for candidate in targets if target == candidate or target.startswith(candidate + "/")}
+        for path, target in targets.items()
+    }
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(path: str, chain: tuple[str, ...]) -> None:
+        if path in visiting:
+            cycle = " -> ".join((*chain, path))
+            raise ManifestError(f"compatibility link graph contains a cycle: {cycle}")
+        if path in visited:
+            return
+        visiting.add(path)
+        for dependency in sorted(dependencies[path]):
+            visit(dependency, (*chain, path))
+        visiting.remove(path)
+        visited.add(path)
+
+    for path in sorted(targets):
+        visit(path, ())
 
 
 def resolve_workspace_root(data: Mapping[str, Any], override: Path | None = None) -> Path:
@@ -276,7 +321,7 @@ def canonical_remote(value: str) -> str:
 def _run_git(
     repo: Path,
     *args: str,
-    timeout: int = GIT_TIMEOUT_SECONDS,
+    timeout: float = GIT_TIMEOUT_SECONDS,
 ) -> subprocess.CompletedProcess[str]:
     command = ["git", "-C", str(repo), *args]
     try:
@@ -304,6 +349,31 @@ def _is_within(path: Path, root: Path) -> bool:
         return False
 
 
+def _resolve_bounded(path: Path, *, max_symlinks: int = 64) -> Path:
+    """Resolve a path without allowing a filesystem symlink loop to hang or escape measurement."""
+
+    current = Path(os.path.abspath(path))
+    seen: set[Path] = set()
+    for _ in range(max_symlinks):
+        parts = current.parts
+        cursor = Path(parts[0])
+        for index, part in enumerate(parts[1:], start=1):
+            cursor /= part
+            if not cursor.is_symlink():
+                continue
+            lexical = Path(os.path.abspath(cursor))
+            if lexical in seen:
+                raise RuntimeError(f"symlink loop detected at {lexical}")
+            seen.add(lexical)
+            raw_target = Path(os.readlink(cursor))
+            target = raw_target if raw_target.is_absolute() else cursor.parent / raw_target
+            current = Path(os.path.abspath(target.joinpath(*parts[index + 1 :])))
+            break
+        else:
+            return current
+    raise RuntimeError(f"symlink resolution exceeded {max_symlinks} links")
+
+
 def _check_symlink_chain(root: Path, relative: str) -> Violation | None:
     cursor = root
     for part in PurePosixPath(relative).parts:
@@ -311,7 +381,14 @@ def _check_symlink_chain(root: Path, relative: str) -> Violation | None:
         if not cursor.exists() and not cursor.is_symlink():
             return None
         if cursor.is_symlink():
-            target = cursor.resolve(strict=False)
+            try:
+                target = _resolve_bounded(cursor)
+            except (OSError, RuntimeError) as exc:
+                return Violation(
+                    "unmeasured_state",
+                    relative,
+                    f"cannot resolve symlink component {cursor}: {exc}",
+                )
             if not _is_within(target, root):
                 return Violation(
                     "symlink_escape",
@@ -347,6 +424,7 @@ def _discover_tree(
     ephemeral_roots: list[dict[str, Any]] = []
     truncated = False
     budget = ScanBudget(max_scan_entries)
+    fetch_budget = RepositoryFetchBudget(REPOSITORY_FETCH_BUDGET_SECONDS)
     expected_children = _expected_direct_children(rows)
 
     if not root.is_dir():
@@ -414,7 +492,7 @@ def _discover_tree(
 
         if row.kind == "repository":
             repositories.append(row.path)
-            violations.extend(_audit_repository(candidate, row))
+            violations.extend(_audit_repository(candidate, row, fetch_budget=fetch_budget))
             nested, nested_truncated = _discover_nested_repositories(
                 candidate,
                 row.path,
@@ -582,7 +660,12 @@ def _audit_ephemeral_root(
     return violations, receipt, truncated
 
 
-def _audit_repository(repo: Path, row: Row) -> list[Violation]:
+def _audit_repository(
+    repo: Path,
+    row: Row,
+    *,
+    fetch_budget: RepositoryFetchBudget,
+) -> list[Violation]:
     violations: list[Violation] = []
     if not (repo / ".git").exists():
         return [Violation("repository_missing_git", row.path, "declared repository is not a Git worktree")]
@@ -608,24 +691,37 @@ def _audit_repository(repo: Path, row: Row) -> list[Violation]:
                     )
                 )
             else:
-                fetch = _run_git(
-                    repo,
-                    "fetch",
-                    "--prune",
-                    "--no-tags",
-                    "origin",
-                    "+refs/heads/*:refs/remotes/origin/*",
-                )
-                if fetch.returncode != 0:
+                fetch_timeout = fetch_budget.timeout()
+                if fetch_timeout is None:
                     violations.append(
                         Violation(
                             "repository_unmeasured",
                             row.path,
-                            "live origin fetch failed; custody and preservation cannot be accepted",
+                            "aggregate repository fetch deadline exhausted; "
+                            "custody and preservation cannot be accepted",
                         )
                     )
                 else:
-                    live_remote_verified = True
+                    fetch = _run_git(
+                        repo,
+                        "fetch",
+                        "--prune",
+                        "--no-tags",
+                        "origin",
+                        "+refs/heads/*:refs/remotes/origin/*",
+                        timeout=fetch_timeout,
+                    )
+                    if fetch.returncode != 0:
+                        violations.append(
+                            Violation(
+                                "repository_unmeasured",
+                                row.path,
+                                "live origin fetch failed within the aggregate deadline; "
+                                "custody and preservation cannot be accepted",
+                            )
+                        )
+                    else:
+                        live_remote_verified = True
         except ManifestError as exc:
             violations.append(Violation("repository_remote_invalid", row.path, str(exc)))
 
@@ -650,6 +746,30 @@ def _audit_repository(repo: Path, row: Row) -> list[Violation]:
         violations.append(Violation("repository_unmeasured", row.path, "git status failed"))
     elif status.stdout.strip():
         violations.append(Violation("repository_dirty", row.path, "repository has tracked or untracked changes"))
+
+    ignored_status = _run_git(
+        repo,
+        "status",
+        "--porcelain=v1",
+        "-z",
+        "--ignored=matching",
+        "--untracked-files=all",
+    )
+    if ignored_status.returncode != 0:
+        violations.append(Violation("repository_unmeasured", row.path, "cannot enumerate ignored entries"))
+    else:
+        ignored_entries = ignored_entries_from_porcelain(ignored_status.stdout)
+        uncustodied = sorted(path for path in ignored_entries if not ignored_entry_is_regenerable(path))
+        if uncustodied:
+            sample = ", ".join(uncustodied[:10])
+            violations.append(
+                Violation(
+                    "repository_uncustodied_ignored",
+                    row.path,
+                    f"{len(uncustodied)} ignored entry or subtree root(s) lack explicit "
+                    f"regenerable evidence or custody: {sample}",
+                )
+            )
 
     if live_remote_verified:
         remote_refs_result = _run_git(
@@ -741,8 +861,10 @@ def _audit_stash_custody(
     remote_refs: Sequence[str],
 ) -> list[Violation]:
     stash_ref = _run_git(repo, "rev-parse", "--verify", "--quiet", "refs/stash")
-    if stash_ref.returncode != 0:
+    if stash_ref.returncode == 1 and not stash_ref.stderr.strip():
         return []
+    if stash_ref.returncode != 0:
+        return [Violation("repository_unmeasured", manifest_path, "cannot inspect refs/stash")]
     reflog = _run_git(repo, "reflog", "show", "--format=%H", "refs/stash")
     if reflog.returncode != 0:
         return [Violation("repository_unmeasured", manifest_path, "cannot enumerate stash custody")]
@@ -977,7 +1099,13 @@ def _compatibility_violations(
             if path.is_symlink() and _is_within(cwd, target) and not _is_within(cwd, path)
         )
         present = path.exists() or path.is_symlink()
-        correct = path.is_symlink() and path.resolve(strict=False) == target.resolve(strict=False)
+        resolution_error: str | None = None
+        correct = False
+        if path.is_symlink():
+            try:
+                correct = _resolve_bounded(path) == _resolve_bounded(target)
+            except (OSError, RuntimeError) as exc:
+                resolution_error = str(exc)
         report.append(
             {
                 "path": rel,
@@ -999,6 +1127,14 @@ def _compatibility_violations(
             )
             if not correct:
                 violations.append(Violation("compatibility_link_mismatch", rel, f"link must resolve to {target_rel}"))
+            if resolution_error is not None:
+                violations.append(
+                    Violation(
+                        "unmeasured_state",
+                        rel,
+                        f"compatibility symlink resolution failed closed: {resolution_error}",
+                    )
+                )
         if active:
             violations.append(
                 Violation(
@@ -1016,7 +1152,7 @@ def _compatibility_violations(
                     "compatibility removal must wait until they close",
                 )
             )
-        if now.astimezone(UTC) >= expires.astimezone(UTC):
+        if present and now.astimezone(UTC) >= expires.astimezone(UTC):
             violations.append(Violation("compatibility_link_expired", rel, "compatibility link has expired"))
     return violations, report
 
@@ -1153,11 +1289,24 @@ def audit(
         )
 
     ordered = sorted(violations, key=lambda item: (item.path, item.code, item.message))
+    root_text = str(root)
+    try:
+        root_stat = root.stat()
+        root_device: int | None = root_stat.st_dev
+        root_inode: int | None = root_stat.st_ino
+    except OSError:
+        root_device = None
+        root_inode = None
     return {
         "schema": REPORT_SCHEMA,
         "ok": not ordered,
         "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
         "workspace_root": str(root),
+        "workspace_root_identity": {
+            "lexical_sha256": hashlib.sha256(root_text.encode("utf-8")).hexdigest(),
+            "device": root_device,
+            "inode": root_inode,
+        },
         "counts": {
             "manifest_rows": len(rows),
             "repositories": len(repositories),

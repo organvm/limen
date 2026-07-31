@@ -92,5 +92,17 @@ the current receipt set; do not rerun unchanged successful shards.
 ## Launch
 
 ```bash
-cd "$HOME/Workspace/limen/.worktrees/omega-substrate-literal" && bash .limen-workstream/kickstart.sh
+workspace_root="${WORKSPACE_ROOT:-$HOME/Workspace}"
+canonical_limen_root="${LIMEN_ROOT:-$workspace_root/library/engine/organvm/limen}"
+canonical_capsule="$canonical_limen_root/.worktrees/omega-substrate-literal"
+legacy_capsule="$workspace_root/limen/.worktrees/omega-substrate-literal"
+if [[ -x "$canonical_capsule/.limen-workstream/kickstart.sh" ]]; then
+  capsule_root="$canonical_capsule"
+elif [[ -x "$legacy_capsule/.limen-workstream/kickstart.sh" ]]; then
+  capsule_root="$legacy_capsule"
+else
+  printf 'Omega substrate capsule is unavailable at canonical and migration paths\n' >&2
+  exit 1
+fi
+cd "$capsule_root" && bash .limen-workstream/kickstart.sh
 ```
