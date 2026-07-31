@@ -4,6 +4,7 @@ import argparse
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -30,9 +31,19 @@ def _mint_lead(
     duration: int = 7 * 86400,
     deadline_epoch: float | None = None,
 ) -> Path:
+    if not (repo / ".git").exists():
+        subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+        subprocess.run(["git", "-C", str(repo), "config", "user.email", "test@example.invalid"], check=True)
+        subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test"], check=True)
+        (repo / "scripts").mkdir(exist_ok=True)
+        (repo / "scripts" / "start-worktree-session.sh").write_text("#!/bin/bash\n")
+        subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(repo), "commit", "-qm", "fixture"], check=True)
     lead = repo / ".worktrees" / slug
+    lead.parent.mkdir(exist_ok=True)
+    subprocess.run(["git", "-C", str(repo), "worktree", "add", "--detach", str(lead), "HEAD"], check=True)
     capsule = lead / ".limen-workstream"
-    capsule.mkdir(parents=True)
+    capsule.mkdir()
     runway: dict = {"duration_seconds": duration, "deadline_epoch": deadline_epoch}
     (capsule / "workstream.json").write_text(json.dumps({"schema": "limen.workstream.contract.v1", "runway": runway}))
     receipt_dir = lead / "docs" / "continuations" / slug
@@ -40,8 +51,6 @@ def _mint_lead(
     (receipt_dir / "workstream.json").write_text(
         json.dumps({"schema": "limen.workstream.receipt.v1", "slug": slug, "workstream": handle})
     )
-    (repo / "scripts").mkdir(exist_ok=True)
-    (repo / "scripts" / "start-worktree-session.sh").write_text("#!/bin/bash\n")
     return lead
 
 
@@ -94,7 +103,7 @@ def test_battle_cap_refused_with_live_list(tmp_path: Path, monkeypatch: pytest.M
     monkeypatch.setenv("LIMEN_LEAD_MAX_BATTLES", "2")
     lead = _mint_lead(tmp_path)
     for name in ("battle-one", "battle-two"):
-        receipt_dir = tmp_path / ".worktrees" / name / "docs" / "continuations" / name
+        receipt_dir = lead.parent / name / "docs" / "continuations" / name
         receipt_dir.mkdir(parents=True)
         (receipt_dir / "workstream.json").write_text(json.dumps({"workstream": "substrate"}))
     intent = tmp_path / "battle.md"

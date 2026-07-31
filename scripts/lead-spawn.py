@@ -117,6 +117,30 @@ def live_battles(repo_worktrees: Path, handle: str, lead_slug: str) -> list[str]
     return battles
 
 
+def repository_root(worktree: Path) -> Path:
+    """Derive the primary checkout from a linked worktree's shared Git directory."""
+
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(worktree),
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-common-dir",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SpawnError(f"cannot resolve repository identity for lead capsule {worktree}")
+    common = Path(result.stdout.strip()).resolve(strict=False)
+    if common.name != ".git" or not common.is_dir():
+        raise SpawnError("lead capsule does not share a primary non-bare Git checkout")
+    return common.parent
+
+
 def build_command(args: argparse.Namespace, *, now: float, cwd: Path) -> list[str]:
     lead_root = find_lead_root(cwd)
     receipt = read_receipt(lead_root)
@@ -131,7 +155,7 @@ def build_command(args: argparse.Namespace, *, now: float, cwd: Path) -> list[st
         raise SpawnError("lead runway exhausted — emit a successor instead of spawning")
 
     max_battles = int(_param("LIMEN_LEAD_MAX_BATTLES", "3"))
-    repo_root = lead_root.parent.parent  # <repo>/.worktrees/<lead-slug>
+    repo_root = repository_root(lead_root)
     open_battles = live_battles(lead_root.parent, handle, lead_root.name)
     if len(open_battles) >= max_battles:
         raise SpawnError(

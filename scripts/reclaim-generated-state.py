@@ -154,7 +154,13 @@ def is_ignored(root: Path, path: Path, *, timeout: int) -> bool:
         rel = path.relative_to(root)
     except ValueError:
         return False
-    proc = git(["check-ignore", "--quiet", "--", rel.as_posix()], root, timeout=timeout)
+    # Global developer excludes are not repository-owned regeneration proof
+    # and must never widen an autonomous deletion plan.
+    proc = git(
+        ["-c", f"core.excludesFile={os.devnull}", "check-ignore", "--quiet", "--", rel.as_posix()],
+        root,
+        timeout=timeout,
+    )
     return proc.returncode == 0
 
 
@@ -219,7 +225,9 @@ def clean_root(root: Path, *, apply: bool, timeout: int) -> dict[str, Any]:
             except OSError as exc:
                 failed.append(f"{path.relative_to(root).as_posix()}: {exc}")
     after_existing = [path for path in candidates if path.exists()]
-    after_kib = sum(value for value in (du_kib(path) for path in after_existing) if value is not None) if apply else before_kib
+    after_kib = (
+        sum(value for value in (du_kib(path) for path in after_existing) if value is not None) if apply else before_kib
+    )
     reclaimed_kib = max(before_kib - after_kib, 0) if apply else 0
     return {
         "root": str(root),
@@ -249,7 +257,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="print JSON")
     parser.add_argument("--root", action="append", type=Path, help="workspace root to scan; repeatable")
     parser.add_argument("--limit", type=int, default=int(os.environ.get("LIMEN_RECLAIM_GENERATED_STATE_LIMIT", "500")))
-    parser.add_argument("--timeout", type=int, default=int(os.environ.get("LIMEN_RECLAIM_GENERATED_STATE_TIMEOUT", "180")))
+    parser.add_argument(
+        "--timeout", type=int, default=int(os.environ.get("LIMEN_RECLAIM_GENERATED_STATE_TIMEOUT", "180"))
+    )
     args = parser.parse_args(argv)
 
     scan_roots = args.root or [WORKSPACE_ROOT]
@@ -259,7 +269,9 @@ def main(argv: list[str] | None = None) -> int:
     total_reclaimed_kib = sum(int(row.get("reclaimed_kib") or 0) for row in rows)
     total_reclaimable_kib = sum(int(row.get("reclaimable_kib") or 0) for row in rows)
     failed = [row for row in rows if not row.get("ok")]
-    changed = [row for row in rows if int(row.get("changed_line_count") or 0) > 0 or int(row.get("reclaimed_kib") or 0) > 0]
+    changed = [
+        row for row in rows if int(row.get("changed_line_count") or 0) > 0 or int(row.get("reclaimed_kib") or 0) > 0
+    ]
     payload = {
         "schema": "limen.reclaim_generated_state.v1",
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

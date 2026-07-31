@@ -380,7 +380,9 @@ def test_local_only_tag_is_never_reaped(tmp_path):
     (clone / "release.bin").write_text("release artifact v1.0\n")
     _git(clone, "add", "-A")
     _git(clone, "commit", "-qm", "release v1.0")
-    _git(clone, "tag", "v1.0-local")  # local only, never pushed
+    # A developer-global tag.gpgSign=true must not turn this lightweight
+    # fixture tag into an interactive annotated-tag editor session.
+    _git(clone, "-c", "tag.gpgSign=false", "tag", "v1.0-local")  # local only, never pushed
     _git(clone, "reset", "--hard", "HEAD~1")  # orphan the tagged commit off refs/heads
     v = _verdict(clone, age_days=99, pressure=True)
     assert v.reap is False

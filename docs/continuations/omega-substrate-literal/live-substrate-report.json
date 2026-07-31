@@ -34,13 +34,14 @@
     "private_roots": 4,
     "repositories": 1,
     "unmeasured": 0,
-    "violations": 77
+    "violations": 76
   },
   "ephemeral_roots": [
     {
       "entry_count": 0,
       "expired_entry_count": 0,
       "expires_after": 604800,
+      "namespace_count": 0,
       "oldest_age_seconds": 0,
       "path": "runtime/worktrees",
       "reaper": "limen worktree reap"
@@ -49,12 +50,13 @@
       "entry_count": 0,
       "expired_entry_count": 0,
       "expires_after": 86400,
+      "namespace_count": 0,
       "oldest_age_seconds": 0,
       "path": "runtime/scratch",
       "reaper": "limen reclaim --runtime"
     }
   ],
-  "manifest_sha256": "7824e42a1e41044e19080a1439dd56b7bcee3f8b6c646b1b635ca2afaa4255b4",
+  "manifest_sha256": "55e87b1d7343a037b58e36a9d709cd4f8354dada784a80ca680bafacb3250d09",
   "ok": false,
   "private_custody": [
     {
@@ -62,6 +64,7 @@
       "custody_verified": false,
       "inventory_available": false,
       "path": "private/life",
+      "restoration_identity_verified": false,
       "restoration_receipt_available": false,
       "restoration_verified": false,
       "sealed_inventory_verified": false
@@ -71,6 +74,7 @@
       "custody_verified": false,
       "inventory_available": false,
       "path": "private/finance",
+      "restoration_identity_verified": false,
       "restoration_receipt_available": false,
       "restoration_verified": false,
       "sealed_inventory_verified": false
@@ -80,6 +84,7 @@
       "custody_verified": false,
       "inventory_available": false,
       "path": "private/health",
+      "restoration_identity_verified": false,
       "restoration_receipt_available": false,
       "restoration_verified": false,
       "sealed_inventory_verified": false
@@ -89,6 +94,7 @@
       "custody_verified": false,
       "inventory_available": false,
       "path": "private/people",
+      "restoration_identity_verified": false,
       "restoration_receipt_available": false,
       "restoration_verified": false,
       "sealed_inventory_verified": false
@@ -100,11 +106,6 @@
   "scan_truncated": false,
   "schema": "limen.substrate_convergence_report.v1",
   "violations": [
-    {
-      "code": "compatibility_cap_breached",
-      "message": "compatibility_links=3 exceeds max_compatibility_links=0",
-      "path": "."
-    },
     {
       "code": "residue_cap_breached",
       "message": "violations=75 exceeds max_violations=0",
@@ -437,7 +438,7 @@
     },
     {
       "code": "private_restoration_unverified",
-      "message": "no matching two-copy, independent-device, restoration-passed receipt",
+      "message": "no matching two-copy restoration receipt is bound to the current sealed inventory and inventory/plan/content identity",
       "path": "private/finance"
     },
     {
@@ -447,7 +448,7 @@
     },
     {
       "code": "private_restoration_unverified",
-      "message": "no matching two-copy, independent-device, restoration-passed receipt",
+      "message": "no matching two-copy restoration receipt is bound to the current sealed inventory and inventory/plan/content identity",
       "path": "private/health"
     },
     {
@@ -457,7 +458,7 @@
     },
     {
       "code": "private_restoration_unverified",
-      "message": "no matching two-copy, independent-device, restoration-passed receipt",
+      "message": "no matching two-copy restoration receipt is bound to the current sealed inventory and inventory/plan/content identity",
       "path": "private/life"
     },
     {
@@ -467,7 +468,7 @@
     },
     {
       "code": "private_restoration_unverified",
-      "message": "no matching two-copy, independent-device, restoration-passed receipt",
+      "message": "no matching two-copy restoration receipt is bound to the current sealed inventory and inventory/plan/content identity",
       "path": "private/people"
     },
     {

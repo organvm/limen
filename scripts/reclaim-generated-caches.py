@@ -56,7 +56,16 @@ def directory_size(path: Path) -> int:
 
 def cache_is_ignored(path: Path, root: Path) -> bool:
     relative = path.relative_to(root)
-    return run(["git", "check-ignore", "-q", "--", str(relative)], cwd=root).returncode == 0
+    # A developer-global ignore file is not durable repository evidence that a
+    # cache is regenerable.  Only repository-owned ignore rules may authorize
+    # this destructive candidate classification.
+    return (
+        run(
+            ["git", "-c", f"core.excludesFile={os.devnull}", "check-ignore", "-q", "--", str(relative)],
+            cwd=root,
+        ).returncode
+        == 0
+    )
 
 
 def scan(workspace: Path, *, minimum_bytes: int = 1024 * 1024) -> list[dict[str, object]]:

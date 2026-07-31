@@ -20,6 +20,7 @@ from limen.substrate_convergence import (  # noqa: E402
     load_active_cwds,
     render_text,
 )
+from limen.worktree_layout import canonical_workspace_root  # noqa: E402
 
 
 def default_manifest() -> Path:
@@ -33,7 +34,7 @@ def default_manifest() -> Path:
 
 def canonical_live_workspace_root() -> Path:
     configured = os.environ.get("WORKSPACE_ROOT", str(Path.home() / "Workspace"))
-    return Path(os.path.abspath(os.path.expandvars(configured))).expanduser()
+    return canonical_workspace_root(configured)
 
 
 def prepare_receipt_report(report: dict[str, object]) -> dict[str, object]:

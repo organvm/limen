@@ -30,6 +30,7 @@ from limen.conduct.campaign_relay_process import _bounded_registration, _spawn_r
 from limen.conduct.campaign_relay_state import _read_relay, _replace_relay
 from limen.conduct.models import CampaignRelayReceiptV1
 from limen.workstream_contract import RECEIPT_MODULES, new_contract
+from limen.worktree_layout import runtime_worktree_path
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -59,7 +60,11 @@ def _git(root: Path, *args: str) -> str:
 
 
 @pytest.fixture
-def effector_repo(tmp_path: Path) -> tuple[Path, Path, Path, int]:
+def effector_repo(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[Path, Path, Path, int]:
+    monkeypatch.setenv("WORKSPACE_ROOT", str(tmp_path / "Workspace"))
     root = tmp_path / "repo"
     remote = tmp_path / "origin.git"
     binary_dir = tmp_path / "bin"
@@ -230,7 +235,7 @@ def test_full_relay_exec_proof_closes_while_keepalive_remains_live(
     os.kill(launch.receipt.launch_pid, 0)
     status = json.loads(
         (
-            root / ".worktrees" / launch.receipt.successor_slug / ".limen-workstream" / "conduct-keepalive.json"
+            runtime_worktree_path(root, launch.receipt.successor_slug) / ".limen-workstream" / "conduct-keepalive.json"
         ).read_text(encoding="utf-8")
     )
     os.kill(int(status["keepalive_pid"]), 0)
@@ -281,7 +286,7 @@ def test_full_relay_exec_proof_closes_while_keepalive_remains_live(
     else:
         pytest.fail("fixture provider did not exit naturally")
 
-    worktree = root / ".worktrees" / launch.receipt.successor_slug
+    worktree = runtime_worktree_path(root, launch.receipt.successor_slug)
     (worktree / "provider-result.txt").write_text("descendant\n", encoding="utf-8")
     _git(worktree, "add", "provider-result.txt")
     _git(worktree, "commit", "-qm", "provider descendant")
@@ -756,6 +761,7 @@ def test_startup_output_ceiling_crossed_before_selected_ack_fails_closed(
     observed_digests: list[relay_process._BoundedStreamDigest] = []
     registrations: list[bool] = []
     ack_observation = tmp_path / "ack-observation.txt"
+    output_release = tmp_path / "output-release"
     original_digest = relay_process._BoundedStreamDigest
 
     class ObservableDigest(original_digest):
@@ -765,6 +771,7 @@ def test_startup_output_ceiling_crossed_before_selected_ack_fails_closed(
 
     def register(**kwargs):
         registrations.append(kwargs["accepting_work"])
+        output_release.write_text("release\n", encoding="utf-8")
         assert observed_digests[0].wait_for_output_ceiling(timeout=2)
         raw = json.dumps(
             {
@@ -777,12 +784,21 @@ def test_startup_output_ceiling_crossed_before_selected_ack_fails_closed(
         return hashlib.sha256(raw).hexdigest(), len(raw)
 
     def spawn(_command, **kwargs):
-        successor = root / ".worktrees" / reservation.receipt.successor_slug
-        successor.parent.mkdir(exist_ok=True)
-        _git(root, "worktree", "add", "--detach", str(successor), "HEAD")
+        successor = runtime_worktree_path(root, reservation.receipt.successor_slug)
+        successor.parent.mkdir(parents=True, exist_ok=True)
+        _git(
+            root,
+            "worktree",
+            "add",
+            "-b",
+            reservation.receipt.successor_branch,
+            str(successor),
+            "HEAD",
+        )
         child_source = f"""
 import json
 import os
+import time
 from pathlib import Path
 
 control_fd = {kwargs["control_descriptor"]}
@@ -799,6 +815,8 @@ event = {{
 payload = (json.dumps(event, sort_keys=True, separators=(",", ":")) + "\\n").encode()
 while payload:
     payload = payload[os.write(control_fd, payload):]
+while not Path(os.environ["OUTPUT_RELEASE"]).exists():
+    time.sleep(0.001)
 payload = b"x" * {relay_process._STARTUP_OUTPUT_CEILING + 8192}
 while payload:
     payload = payload[os.write(1, payload):]
@@ -807,7 +825,11 @@ Path(os.environ["ACK_OBSERVATION"]).write_text(ack.hex() if ack else "closed", e
 os.close(control_fd)
 os.close(exec_fd)
 """
-        env = {**kwargs["env"], "ACK_OBSERVATION": str(ack_observation)}
+        env = {
+            **kwargs["env"],
+            "ACK_OBSERVATION": str(ack_observation),
+            "OUTPUT_RELEASE": str(output_release),
+        }
         return subprocess.Popen(
             [sys.executable, "-c", child_source],
             cwd=root,
@@ -906,7 +928,7 @@ def test_ready_publication_failure_rolls_broker_back_to_dormant(
     assert launch.receipt.terminal_code == "relay_ready_publication_failed"
     assert launch.receipt.activation_response_sha256 is None
     assert registrations == [False, True, False]
-    marker = root / ".worktrees" / launch.receipt.successor_slug / ".limen-workstream" / "relay-activated"
+    marker = runtime_worktree_path(root, launch.receipt.successor_slug) / ".limen-workstream" / "relay-activated"
     assert not marker.exists()
     assert not _git(
         root,
@@ -1291,7 +1313,7 @@ def test_uncertain_accepted_ready_push_preserves_activation_until_recovery(
     assert uncertain.receipt.terminal_code == "relay_ready_publication_uncertain"
     assert uncertain.receipt.activation_response_sha256 is not None
     assert registrations == [False, True]
-    marker = root / ".worktrees" / uncertain.receipt.successor_slug / ".limen-workstream" / "relay-activated"
+    marker = runtime_worktree_path(root, uncertain.receipt.successor_slug) / ".limen-workstream" / "relay-activated"
     assert marker.read_text(encoding="utf-8") == f"{uncertain.receipt.relay_id}\n"
     assert _git(
         root,
@@ -1523,10 +1545,18 @@ def test_linked_worktree_reconciliation_rolls_back_the_primary_successor_session
         predecessor,
         exact_remote_main=_git(root, "rev-parse", "HEAD"),
     )
-    successor = root / ".worktrees" / reservation.receipt.successor_slug
+    successor = runtime_worktree_path(root, reservation.receipt.successor_slug)
     observer = tmp_path / "observer"
-    successor.parent.mkdir(exist_ok=True)
-    _git(root, "worktree", "add", "--detach", str(successor), "HEAD")
+    successor.parent.mkdir(parents=True, exist_ok=True)
+    _git(
+        root,
+        "worktree",
+        "add",
+        "-b",
+        reservation.receipt.successor_branch,
+        str(successor),
+        "HEAD",
+    )
     _git(root, "worktree", "add", "--detach", str(observer), "HEAD")
     capsule_dir = successor / ".limen-workstream"
     capsule_dir.mkdir()

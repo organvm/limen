@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
+import re
 import subprocess
 import time
 from typing import Any, Iterable, Mapping, Sequence
@@ -41,6 +42,8 @@ GIT_TIMEOUT_SECONDS = 60
 REPOSITORY_FETCH_BUDGET_SECONDS = 120.0
 LSOF_TIMEOUT_SECONDS = 15
 _monotonic = time.monotonic
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_CUSTODY_IDENTITY_FIELDS = ("inventory_sha256", "plan_sha256", "content_sha256")
 
 
 class ManifestError(ValueError):
@@ -599,7 +602,12 @@ def _audit_ephemeral_root(
     now: datetime,
     budget: ScanBudget,
 ) -> tuple[list[Violation], dict[str, Any], bool]:
-    """Measure top-level lifecycle units and emit a bounded reaper receipt."""
+    """Measure lifecycle units and emit a bounded reaper receipt.
+
+    ``runtime/worktrees`` has one collision-resistant repository namespace
+    level.  Its worktree slugs, not the namespace directories, are the
+    lifecycle units whose expiry the reaper owns.
+    """
 
     expires_after = int(row.raw["expires_after"])
     reaper = str(row.raw["reaper"])
@@ -608,9 +616,10 @@ def _audit_ephemeral_root(
     oldest_age_seconds = 0
     violations: list[Violation] = []
     truncated = False
+    namespace_count = 0
+    units: list[tuple[str, Path]] = []
     try:
-        entries = root.iterdir()
-        for entry in entries:
+        for entry in root.iterdir():
             if not budget.consume():
                 violations.append(
                     Violation(
@@ -621,6 +630,34 @@ def _audit_ephemeral_root(
                 )
                 truncated = True
                 break
+            if row.path == "runtime/worktrees" and entry.is_dir() and not entry.is_symlink():
+                namespace_count += 1
+                try:
+                    for unit in entry.iterdir():
+                        if not budget.consume():
+                            violations.append(
+                                Violation(
+                                    "unmeasured_state",
+                                    f"{row.path}/{entry.name}",
+                                    f"ephemeral scan exhausted the shared budget after {budget.consumed} entries",
+                                )
+                            )
+                            truncated = True
+                            break
+                        units.append((f"{entry.name}/{unit.name}", unit))
+                except OSError as exc:
+                    violations.append(
+                        Violation(
+                            "unmeasured_state",
+                            f"{row.path}/{entry.name}",
+                            f"cannot list worktree namespace: {exc}",
+                        )
+                    )
+                if truncated:
+                    break
+            else:
+                units.append((entry.name, entry))
+        for unit_name, entry in units:
             entry_count += 1
             try:
                 age_seconds = max(0, int(now.timestamp() - entry.lstat().st_mtime))
@@ -628,14 +665,14 @@ def _audit_ephemeral_root(
                 violations.append(
                     Violation(
                         "unmeasured_state",
-                        f"{row.path}/{entry.name}",
+                        f"{row.path}/{unit_name}",
                         f"cannot stat ephemeral lifecycle unit: {exc}",
                     )
                 )
                 continue
             oldest_age_seconds = max(oldest_age_seconds, age_seconds)
             if age_seconds > expires_after:
-                expired_names.append(entry.name)
+                expired_names.append(unit_name)
     except OSError as exc:
         violations.append(Violation("unmeasured_state", row.path, f"cannot list ephemeral root: {exc}"))
 
@@ -653,6 +690,7 @@ def _audit_ephemeral_root(
         "path": row.path,
         "reaper": reaper,
         "expires_after": expires_after,
+        "namespace_count": namespace_count,
         "entry_count": entry_count,
         "expired_entry_count": len(expired_names),
         "oldest_age_seconds": oldest_age_seconds,
@@ -977,6 +1015,13 @@ def _copy_count(value: object) -> int:
     return 0
 
 
+def _valid_custody_identity(row: Mapping[str, Any]) -> bool:
+    return all(
+        isinstance(row.get(field), str) and _SHA256_RE.fullmatch(str(row[field])) is not None
+        for field in _CUSTODY_IDENTITY_FIELDS
+    )
+
+
 def _audit_private_custody(
     manifest_path: Path,
     workspace_root: Path,
@@ -1006,16 +1051,23 @@ def _audit_private_custody(
             collection_keys=("sealed_inventories", "inventories"),
         )
         inventory_label_matches = inventory_fragment in {None, label}
-        sealed_inventory = next(
-            (
-                candidate
-                for candidate in inventory_rows
-                if str(candidate.get("label", candidate.get("custody_label", ""))) == label
-                and candidate.get("sealed") is True
-            ),
-            None,
+        matching_inventories = [
+            candidate
+            for candidate in inventory_rows
+            if str(candidate.get("label", candidate.get("custody_label", ""))) == label
+            and candidate.get("sealed") is True
+        ]
+        # Inventories are append-only custody history.  The last matching seal is
+        # the current identity; an older receipt must not authorize a later seal.
+        sealed_inventory = matching_inventories[-1] if matching_inventories else None
+        inventory_verified = (
+            inventory_label_matches and sealed_inventory is not None and _valid_custody_identity(sealed_inventory)
         )
-        inventory_verified = inventory_label_matches and sealed_inventory is not None
+        sealed_identity = (
+            {field: str(sealed_inventory[field]) for field in _CUSTODY_IDENTITY_FIELDS}
+            if inventory_verified and sealed_inventory is not None
+            else None
+        )
         if not inventory_available:
             violations.append(
                 Violation("private_inventory_missing", row.path, "sealed inventory reference is unavailable")
@@ -1025,7 +1077,8 @@ def _audit_private_custody(
                 Violation(
                     "private_inventory_unverified",
                     row.path,
-                    "sealed inventory has no matching custody_label entry with sealed=true",
+                    "current sealed inventory lacks a matching label or lowercase SHA-256 "
+                    "inventory/plan/content identity",
                 )
             )
         receipt_label_matches = fragment in {None, label}
@@ -1039,6 +1092,9 @@ def _audit_private_custody(
                 if candidate.get("restoration_passed") is True
                 and _copy_count(candidate.get("copy_count", 0)) >= 2
                 and candidate.get("independent_physical_devices") is True
+                and _valid_custody_identity(candidate)
+                and sealed_identity is not None
+                and all(candidate.get(field) == sealed_identity[field] for field in _CUSTODY_IDENTITY_FIELDS)
             ),
             None,
         )
@@ -1050,6 +1106,7 @@ def _audit_private_custody(
                 "inventory_available": inventory_available,
                 "sealed_inventory_verified": inventory_verified,
                 "restoration_receipt_available": receipt_path.is_file(),
+                "restoration_identity_verified": valid is not None,
                 "restoration_verified": restoration_verified,
                 "custody_verified": inventory_verified and restoration_verified,
             }
@@ -1059,7 +1116,8 @@ def _audit_private_custody(
                 Violation(
                     "private_restoration_unverified",
                     row.path,
-                    "no matching two-copy, independent-device, restoration-passed receipt",
+                    "no matching two-copy restoration receipt is bound to the current "
+                    "sealed inventory and inventory/plan/content identity",
                 )
             )
     return violations, receipts

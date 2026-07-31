@@ -39,7 +39,11 @@ ok()   { echo "✓ $*"; }
 ok "artifacts present and executable"
 
 # 2. generators run, print digests, write cached fallbacks, exit 0
-pressure="$(LIMEN_ROOT="$ROOT" python3 "$PRESSURE_GEN" --write)" || fail "lifecycle pressure generator exited non-zero"
+# The production SessionEnd path is intentionally throttled and silent on a
+# fresh cache.  This predicate is proving render + write, so bypass that cache
+# rather than depending on whichever session last refreshed the machine.
+pressure="$(LIMEN_ROOT="$ROOT" python3 "$PRESSURE_GEN" --write --throttle 0)" \
+  || fail "lifecycle pressure generator exited non-zero"
 printf '%s' "$pressure" | grep -q "Lifecycle pressure" || fail "pressure generator printed no lifecycle pressure line"
 [ -f "logs/session-lifecycle-pressure.json" ] || fail "pressure generator did not write logs/session-lifecycle-pressure.json"
 [ -f "logs/session-lifecycle-pressure.md" ] || fail "pressure generator did not write logs/session-lifecycle-pressure.md"

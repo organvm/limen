@@ -53,13 +53,15 @@ Aliases:
   domus           $DOMUS_ROOT
 
 Creates or reuses:
-  <repo>/.worktrees/<slug> on branch <branch-prefix>/<slug> (default work/)
-  <repo>/.worktrees/<slug>/.limen-workstream/README.md as a thin prompt index
-  <repo>/.worktrees/<slug>/.limen-workstream/{manifest,workstream,intent,runtime,closeout}.md
-  <repo>/.worktrees/<slug>/docs/continuations/<slug>/workstream.json as a tracked redacted receipt
+  $WORKSPACE_ROOT/runtime/worktrees/<repo-key>/<slug> on branch
+    <branch-prefix>/<slug> (default work/)
+  .../<slug>/.limen-workstream/README.md as a thin prompt index
+  .../<slug>/.limen-workstream/{manifest,workstream,intent,runtime,closeout}.md
+  .../<slug>/docs/continuations/<slug>/workstream.json as a tracked redacted receipt
 
-The target repo's .git/info/exclude is updated so .worktrees/ and the private
-capsule never appear as Git noise. The receipt remains visible for commit and remote custody.
+The collision-resistant <repo-key> is stable for a repository's origin identity. The target
+repo's .git/info/exclude is updated only for the private capsule. The receipt remains visible
+for commit and remote custody.
 USAGE
 }
 
@@ -529,8 +531,19 @@ fi
 
 repo_arg="$1"
 raw_slug="$2"
+if [[ "$raw_slug" == "." || "$raw_slug" == ".." || "$raw_slug" == *"/"* || "$raw_slug" == *"\\"* ]]; then
+  echo "slug must be one safe path component: $raw_slug" >&2
+  exit 1
+fi
 
-workspace_root="${WORKSPACE_ROOT:-$HOME/Workspace}"
+workspace_root="$(
+  PYTHONPATH="$script_dir/../cli/src${PYTHONPATH:+:$PYTHONPATH}" \
+    python3 - <<'PY'
+from limen.worktree_layout import canonical_workspace_root
+
+print(canonical_workspace_root())
+PY
+)"
 portvs_root="${PORTVS_ROOT:-$workspace_root/library/engine/organvm/portvs}"
 limen_root="${LIMEN_ROOT:-$workspace_root/library/engine/organvm/limen}"
 domus_root="${DOMUS_ROOT:-$workspace_root/library/engine/organvm/domus-genoma}"
@@ -607,7 +620,17 @@ if [[ -n "$workstream" ]]; then
 fi
 
 branch="$branch_prefix/$slug"
-wt="$repo/.worktrees/$slug"
+wt="$(
+  PYTHONPATH="$script_dir/../cli/src${PYTHONPATH:+:$PYTHONPATH}" \
+    python3 - "$repo" "$slug" "$workspace_root" <<'PY'
+import sys
+from pathlib import Path
+
+from limen.worktree_layout import runtime_worktree_path
+
+print(runtime_worktree_path(Path(sys.argv[1]), sys.argv[2], workspace_root=Path(sys.argv[3])))
+PY
+)"
 
 if [[ -n "$campaign_relay" ]]; then
   if [[ -e "$wt" || -L "$wt" ]] \
@@ -621,12 +644,6 @@ git_info_dir="$(git -C "$repo" rev-parse --path-format=absolute --git-path info)
 mkdir -p "$git_info_dir"
 exclude_file="$git_info_dir/exclude"
 touch "$exclude_file"
-if ! grep -qxF ".worktrees/" "$exclude_file"; then
-  {
-    printf '\n'
-    printf '.worktrees/\n'
-  } >> "$exclude_file"
-fi
 if ! grep -qxF ".limen-workstream/" "$exclude_file"; then
   {
     printf '\n'
@@ -650,6 +667,16 @@ mkdir -p "$(dirname "$wt")"
 if [[ -d "$wt" ]]; then
   if ! git -C "$wt" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "path exists but is not a git worktree: $wt" >&2
+    exit 1
+  fi
+  repo_common="$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir)"
+  wt_common="$(git -C "$wt" rev-parse --path-format=absolute --git-common-dir)"
+  if [[ "$(cd "$repo_common" && pwd -P)" != "$(cd "$wt_common" && pwd -P)" ]]; then
+    echo "canonical worktree path belongs to a different repository: $wt" >&2
+    exit 1
+  fi
+  if [[ "$(git -C "$wt" branch --show-current)" != "$branch" ]]; then
+    echo "canonical worktree path is not on expected branch $branch: $wt" >&2
     exit 1
   fi
   created="reused"

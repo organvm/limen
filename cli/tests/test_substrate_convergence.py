@@ -17,6 +17,40 @@ import limen.substrate_convergence as convergence
 from limen.substrate_convergence import ManifestError, audit, load_active_cwds
 
 
+_INVENTORY_SHA256 = "1" * 64
+_PLAN_SHA256 = "2" * 64
+_CONTENT_SHA256 = "3" * 64
+
+
+def _sealed_inventory(
+    *,
+    content_sha256: str = _CONTENT_SHA256,
+) -> dict[str, object]:
+    return {
+        "label": "life",
+        "sealed": True,
+        "inventory_sha256": _INVENTORY_SHA256,
+        "plan_sha256": _PLAN_SHA256,
+        "content_sha256": content_sha256,
+    }
+
+
+def _restoration_receipt(
+    inventory: dict[str, object],
+    *,
+    restoration_passed: bool = True,
+) -> dict[str, object]:
+    return {
+        "label": "life",
+        "restoration_passed": restoration_passed,
+        "copy_count": 2 if restoration_passed else 1,
+        "independent_physical_devices": restoration_passed,
+        "inventory_sha256": inventory["inventory_sha256"],
+        "plan_sha256": inventory["plan_sha256"],
+        "content_sha256": inventory["content_sha256"],
+    }
+
+
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", "-C", str(repo), "-c", "user.name=Test", "-c", "user.email=test@example.invalid", *args],
@@ -118,30 +152,19 @@ def _fixture(
             path.write_text("{}\n", encoding="utf-8")
         else:
             path.mkdir(parents=True, exist_ok=True)
+    sealed_inventory = _sealed_inventory()
     (manifest_dir / "inventory.json").write_text(
-        json.dumps(
-            {
-                "sealed_inventories": [
-                    {
-                        "label": "life",
-                        "sealed": True,
-                    }
-                ]
-            }
-        )
-        + "\n",
+        json.dumps({"sealed_inventories": [sealed_inventory]}) + "\n",
         encoding="utf-8",
     )
     (manifest_dir / "receipts.json").write_text(
         json.dumps(
             {
                 "receipts": [
-                    {
-                        "label": "life",
-                        "restoration_passed": valid_custody,
-                        "copy_count": 2 if valid_custody else 1,
-                        "independent_physical_devices": valid_custody,
-                    }
+                    _restoration_receipt(
+                        sealed_inventory,
+                        restoration_passed=valid_custody,
+                    )
                 ]
             }
         )
@@ -264,6 +287,23 @@ def test_nested_unregistered_repository_fails(tmp_path: Path) -> None:
     _git(nested, "init", "-q")
     report = audit(manifest, workspace_root=workspace, active_cwds=[])
     assert "undeclared_nested_repository" in _codes(report)
+
+
+def test_canonical_runtime_worktree_is_measured_without_nested_repository_violation(
+    tmp_path: Path,
+) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    worktree = workspace / "runtime" / "worktrees" / "organvm--limen--fixture" / "bounded-fix"
+    worktree.mkdir(parents=True)
+    _git(worktree, "init", "-q")
+
+    report = audit(manifest, workspace_root=workspace, active_cwds=[])
+
+    assert "undeclared_nested_repository" not in _codes(report)
+    runtime_receipt = next(row for row in report["ephemeral_roots"] if row["path"] == "runtime/worktrees")
+    assert runtime_receipt["namespace_count"] == 1
+    assert runtime_receipt["entry_count"] == 1
+    assert report["ok"] is True, report
 
 
 def test_dirty_and_unpushed_repository_cannot_converge(tmp_path: Path) -> None:
@@ -428,24 +468,13 @@ def test_private_reference_resolves_through_declared_legacy_repo_during_migratio
     data = yaml.safe_load(manifest.read_text(encoding="utf-8"))
     repo_row = next(row for row in data["rows"] if row["kind"] == "repository")
     repo_row["legacy_paths"] = ["limen"]
+    sealed_inventory = _sealed_inventory()
     custody = workspace / repo_row["path"] / "custody.json"
     custody.write_text(
         json.dumps(
             {
-                "sealed_inventories": [
-                    {
-                        "label": "life",
-                        "sealed": True,
-                    }
-                ],
-                "receipts": [
-                    {
-                        "label": "life",
-                        "restoration_passed": True,
-                        "copy_count": 2,
-                        "independent_physical_devices": True,
-                    }
-                ],
+                "sealed_inventories": [sealed_inventory],
+                "receipts": [_restoration_receipt(sealed_inventory)],
             }
         ),
         encoding="utf-8",
@@ -460,6 +489,36 @@ def test_private_reference_resolves_through_declared_legacy_repo_during_migratio
     custody_row = next(row for row in report["private_custody"] if row["path"] == "private/life")
     assert custody_row["inventory_available"] is True
     assert custody_row["restoration_verified"] is True
+
+
+def test_private_receipt_selects_current_identity_and_reseal_invalidates_stale_receipts(
+    tmp_path: Path,
+) -> None:
+    manifest, workspace, _ = _fixture(tmp_path)
+    receipt_path = manifest.parent / "receipts.json"
+    receipt_data = json.loads(receipt_path.read_text(encoding="utf-8"))
+    stale_inventory = _sealed_inventory(content_sha256="4" * 64)
+    receipt_data["receipts"].insert(0, _restoration_receipt(stale_inventory))
+    receipt_path.write_text(json.dumps(receipt_data), encoding="utf-8")
+
+    current_report = audit(manifest, workspace_root=workspace, active_cwds=[])
+    assert current_report["ok"] is True, current_report
+    current_custody = current_report["private_custody"][0]
+    assert current_custody["restoration_identity_verified"] is True
+
+    resealed_inventory = _sealed_inventory(content_sha256="5" * 64)
+    inventory_path = manifest.parent / "inventory.json"
+    inventory_path.write_text(
+        json.dumps({"sealed_inventories": [_sealed_inventory(), resealed_inventory]}),
+        encoding="utf-8",
+    )
+    stale_report = audit(manifest, workspace_root=workspace, active_cwds=[])
+    stale_custody = stale_report["private_custody"][0]
+
+    assert "private_restoration_unverified" in _codes(stale_report)
+    assert stale_custody["sealed_inventory_verified"] is True
+    assert stale_custody["restoration_identity_verified"] is False
+    assert stale_custody["custody_verified"] is False
 
 
 def test_active_compatibility_path_blocks_removal(tmp_path: Path) -> None:
@@ -713,8 +772,8 @@ def test_repository_fetches_share_one_wall_clock_deadline(
 
 def test_expired_ephemeral_units_require_reaper_action(tmp_path: Path) -> None:
     manifest, workspace, _ = _fixture(tmp_path)
-    unit = workspace / "runtime" / "worktrees" / "expired"
-    unit.mkdir()
+    unit = workspace / "runtime" / "worktrees" / "fixture-repository" / "expired"
+    unit.mkdir(parents=True)
     old = datetime(2026, 7, 1, tzinfo=UTC).timestamp()
     os.utime(unit, (old, old))
 
@@ -812,6 +871,29 @@ def test_receipt_retains_fixture_root_and_binds_canonical_redaction(
     tampered["workspace_root"] = str(tmp_path / "forged-root")
     with pytest.raises(ManifestError, match="identity does not match"):
         module.prepare_receipt_report(tampered)
+
+
+def test_tilde_workspace_root_expands_before_abspath_and_redacts_from_arbitrary_cwd(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    script = Path(__file__).resolve().parents[2] / "scripts" / "substrate-convergence.py"
+    spec = importlib.util.spec_from_file_location("substrate_convergence_tilde_script", script)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    manifest, workspace, _ = _fixture(tmp_path)
+    elsewhere = tmp_path / "arbitrary" / "cwd"
+    elsewhere.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("WORKSPACE_ROOT", "~/Workspace")
+    monkeypatch.chdir(elsewhere)
+
+    assert module.canonical_live_workspace_root() == workspace
+    receipt = module.prepare_receipt_report(audit(manifest, workspace_root=workspace, active_cwds=[]))
+    assert receipt["workspace_root"] == "$WORKSPACE_ROOT"
+    assert receipt["workspace_root_is_canonical_live"] is True
 
 
 def test_same_manifest_and_root_are_independent_of_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
