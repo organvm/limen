@@ -13,10 +13,10 @@ The host is native Objective-C code owned by `domus-genoma`, installed at:
 
 Its bundle identifier is `org.organvm.domus.agent-host`. It uses inherited
 standard streams and terminal state, forwards signals, returns the foreground
-leader's exit status, and remains alive while the launched process group or
-tracked descendants remain alive. An inherited lifetime pipe also keeps the
-host alive across rapid detach/reparent sequences. It is an on-demand CLI; no
-LaunchAgent is installed.
+leader's exit status, and remains alive while recursively tracked descendants
+or inherited lifetime-pipe holders remain alive. Same-process-group pipeline
+siblings are deliberately excluded. It is an on-demand CLI; no LaunchAgent is
+installed.
 
 ## Interfaces
 
@@ -28,10 +28,13 @@ tcc-identity-audit [--json] [--strict]
 
 Every committed `com.limen.*` control-plane LaunchAgent, including the
 generated heartbeat, enters `DomusAgentHost.app` before Bash, Python, dispatch,
-or provider work. An inherited `DOMUS_AGENT_HOST_ACTIVE=1` marker is trusted
-only while its native lifetime descriptor remains open. Strict audits always
-query the installed host live; fixture-backed status is test-only and rejected
-by `--strict`.
+or provider work. The generated heartbeat also preserves its selected host path
+in `LIMEN_AGENT_HOST_BIN`, so descendants audit the same identity that owns the
+job. An inherited `DOMUS_AGENT_HOST_ACTIVE=1` marker is trusted
+only after the native host verifies that its lifetime descriptor is the
+expected pipe identity; a reused descriptor cannot bypass wrapping. Strict
+audits always query the installed host and LaunchServices live; fixture-backed
+status/inventories are test-only and rejected by `--strict`.
 
 `status --json` uses macOS Security APIs and reports the installed bundle path,
 bundle identifier, signature validity, designated requirement, CDHash, and
@@ -47,12 +50,14 @@ configuration may update without replacing the host.
 - `legacy_stale`: a managed, versioned client last changed before host deployment.
 - `versioned_leak`: a Claude version, Homebrew Cellar, Python framework, uv
   interpreter, or Limen runtime client changed after host deployment.
-- `unrelated`: counted but omitted from the client inventory.
+- `unrelated`: preserved explicitly in the inventory so before/after acceptance
+  deltas cannot hide a differently named new principal.
 
 Strict mode fails if managed automatic updates are disabled, the host is absent
-or invalidly signed, a post-deployment versioned client exists, TCC cannot be
-read, or a malformed Claude helper remains registered. The audit never edits
-TCC, unregisters an application, pins a tool, or changes an updater.
+or invalidly signed, its stable identity is absent from the readable TCC
+inventory, a post-deployment versioned client exists, TCC cannot be read, or a
+malformed Claude helper remains registered. The audit never edits TCC,
+unregisters an application, pins a tool, or changes an updater.
 
 ## One supported System Settings transaction
 

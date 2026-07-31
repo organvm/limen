@@ -45,6 +45,35 @@ def load_route_module():
     return module
 
 
+def _write_valid_stable_agent_host(path: Path) -> None:
+    payload = json.dumps(
+        {
+            "schema": "domus.agent_host_status.v1",
+            "ok": True,
+            "bundle_id": "org.organvm.domus.agent-host",
+            "stable_path": True,
+            "signature_valid": True,
+            "designated_requirement": 'cdhash H"' + "a" * 40 + '"',
+            "cdhash": "a" * 40,
+        }
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = status ] && [ "$2" = --json ]; then\n'
+        f"  printf '%s\\n' '{payload}'\n"
+        "  exit 0\n"
+        "fi\n"
+        'if [ "$1" = verify-lifetime ]; then\n'
+        '  [ -p "/dev/fd/${DOMUS_AGENT_HOST_LIFETIME_FD:?}" ] &&\n'
+        '    [ "${DOMUS_AGENT_HOST_LIFETIME_ID:-}" = "${FAKE_HOST_EXPECTED_ID:-}" ]\n'
+        "  exit\n"
+        "fi\n"
+        "exit 64\n"
+    )
+    path.chmod(0o755)
+
+
 @pytest.fixture(autouse=True)
 def _hermetic_dispatch_env(tmp_path: Path, monkeypatch) -> None:
     """Dispatch selection consults LIMEN_ROOT-relative registries (value-repos.json, worktree
@@ -114,6 +143,7 @@ def force_broker_unavailable(monkeypatch) -> None:
 
 def test_run_capture_propagates_native_host_lifetime_fd(monkeypatch) -> None:
     read_fd, write_fd = os.pipe()
+    lifetime = os.fstat(write_fd)
     captured: dict[str, object] = {}
 
     class Process:
@@ -134,7 +164,10 @@ def test_run_capture_propagates_native_host_lifetime_fd(monkeypatch) -> None:
         result = D._run_capture(
             ["/usr/bin/true"],
             timeout=7,
-            env={"DOMUS_AGENT_HOST_LIFETIME_FD": str(write_fd)},
+            env={
+                "DOMUS_AGENT_HOST_LIFETIME_FD": str(write_fd),
+                "DOMUS_AGENT_HOST_LIFETIME_ID": (f"{'0' * 16}:{lifetime.st_dev}:{lifetime.st_ino}"),
+            },
         )
     finally:
         os.close(read_fd)
@@ -1488,8 +1521,7 @@ def test_stable_agent_host_wraps_macos_provider_with_arbitrary_binary_path(
 ):
     monkeypatch.delenv("DOMUS_AGENT_HOST_ACTIVE", raising=False)
     host = tmp_path / "DomusAgentHost"
-    host.write_text("#!/bin/sh\n")
-    host.chmod(0o755)
+    _write_valid_stable_agent_host(host)
     command = ["/vendor/versions/release-omega/claude", "-p", "task"]
     wrapped = D._stable_agent_host_command(
         command,
@@ -1503,12 +1535,39 @@ def test_stable_agent_host_wraps_macos_provider_with_arbitrary_binary_path(
     assert wrapped == [str(host), "run", "--", *command]
 
 
+def test_stable_agent_host_rejects_executable_without_host_contract(
+    tmp_path: Path,
+    monkeypatch,
+):
+    monkeypatch.delenv("DOMUS_AGENT_HOST_ACTIVE", raising=False)
+    host = tmp_path / "not-domus-agent-host"
+    host.write_text("#!/bin/sh\nexit 0\n")
+    host.chmod(0o755)
+
+    with pytest.raises(
+        D.StableAgentHostError,
+        match="host contract is invalid",
+    ):
+        D._stable_agent_host_command(
+            ["claude"],
+            {
+                "LIMEN_AGENT_HOST_BIN": str(host),
+                "HOME": str(tmp_path),
+            },
+            platform_name="darwin",
+        )
+
+
 def test_stable_agent_host_does_not_nest_or_affect_non_macos(
     tmp_path: Path,
     monkeypatch,
 ):
     command = ["/vendor/python-release-omega", "task.py"]
+    host = tmp_path / "DomusAgentHost"
+    _write_valid_stable_agent_host(host)
     read_fd, write_fd = os.pipe()
+    lifetime = os.fstat(write_fd)
+    lifetime_identity = f"{'0' * 16}:{lifetime.st_dev}:{lifetime.st_ino}"
     try:
         assert (
             D._stable_agent_host_command(
@@ -1516,6 +1575,10 @@ def test_stable_agent_host_does_not_nest_or_affect_non_macos(
                 {
                     "DOMUS_AGENT_HOST_ACTIVE": "1",
                     "DOMUS_AGENT_HOST_LIFETIME_FD": str(write_fd),
+                    "DOMUS_AGENT_HOST_LIFETIME_ID": lifetime_identity,
+                    "FAKE_HOST_EXPECTED_ID": lifetime_identity,
+                    "LIMEN_AGENT_HOST_BIN": str(host),
+                    "HOME": str(tmp_path),
                 },
                 platform_name="darwin",
             )
@@ -1533,6 +1596,36 @@ def test_stable_agent_host_does_not_nest_or_affect_non_macos(
         )
         == command
     )
+
+
+def test_stable_agent_host_rejects_reused_lifetime_descriptor(tmp_path: Path):
+    host = tmp_path / "DomusAgentHost"
+    _write_valid_stable_agent_host(host)
+    first_read, first_write = os.pipe()
+    first_lifetime = os.fstat(first_write)
+    os.close(first_read)
+    os.close(first_write)
+    second_read, second_write = os.pipe()
+    try:
+        with pytest.raises(
+            D.StableAgentHostError,
+            match="lifetime identity is invalid",
+        ):
+            D._stable_agent_host_command(
+                ["claude"],
+                {
+                    "DOMUS_AGENT_HOST_ACTIVE": "1",
+                    "DOMUS_AGENT_HOST_LIFETIME_FD": str(second_write),
+                    "DOMUS_AGENT_HOST_LIFETIME_ID": (f"{'0' * 16}:{first_lifetime.st_dev}:{first_lifetime.st_ino}"),
+                    "FAKE_HOST_EXPECTED_ID": "native-pipe-identity-does-not-match",
+                    "LIMEN_AGENT_HOST_BIN": str(host),
+                    "HOME": str(tmp_path),
+                },
+                platform_name="darwin",
+            )
+    finally:
+        os.close(second_read)
+        os.close(second_write)
 
 
 def test_stable_agent_host_rejects_marker_without_live_lifetime_descriptor():
@@ -1570,9 +1663,7 @@ def test_stable_agent_host_expands_configured_home_path(
 ):
     monkeypatch.delenv("DOMUS_AGENT_HOST_ACTIVE", raising=False)
     host = tmp_path / "Applications/DomusAgentHost.app/Contents/MacOS/DomusAgentHost"
-    host.parent.mkdir(parents=True)
-    host.write_text("#!/bin/sh\n")
-    host.chmod(0o755)
+    _write_valid_stable_agent_host(host)
 
     wrapped = D._stable_agent_host_command(
         ["claude"],
