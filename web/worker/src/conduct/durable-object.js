@@ -49,6 +49,17 @@ function duration(env, name, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed * 1000 : fallback;
 }
 
+function runtimeIdentity(env) {
+  const gitSha = String(env.LIMEN_CONDUCT_RUNTIME_GIT_SHA || "").trim();
+  const deploymentId = String(env.CF_VERSION_METADATA?.id || "").trim();
+  if (!gitSha || !deploymentId) return null;
+  return {
+    schema_version: "limen.conduct_runtime_identity.v1",
+    git_sha: gitSha,
+    deployment_id: deploymentId,
+  };
+}
+
 async function parseBody(request) {
   const length = Number(request.headers.get("content-length") || 0);
   if (Number.isFinite(length) && length > 1024 * 1024) {
@@ -143,6 +154,7 @@ export class ConductKeeperDurableObject {
         adoptionAfterMs: duration(env, "LIMEN_CONDUCT_ADOPTION_AFTER_SECONDS", 10 * 60 * 1000),
         leaseTtlMs: duration(env, "LIMEN_CONDUCT_LEASE_TTL_SECONDS", 15 * 60 * 1000),
         capabilitySecret: String(env.LIMEN_CONDUCT_CAPABILITY_SECRET || ""),
+        runtimeIdentity: runtimeIdentity(env),
       },
     );
   }
@@ -165,7 +177,7 @@ export class ConductKeeperDurableObject {
     const path = new URL(request.url).pathname;
     if (path === "/api/conduct/capabilities" && request.method === "GET") {
       requireRole(principal, "observer");
-      return json(await this.service.call("capabilities"), 200, this.env);
+      return json(await this.service.call("capabilities", { principal }), 200, this.env);
     }
     if (path === "/api/conduct/sessions" && request.method === "POST") {
       requireRole(principal, "conductor", "executor");

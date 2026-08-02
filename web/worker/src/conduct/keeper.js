@@ -13,6 +13,7 @@ import {
 
 const ACTIVE_LEASE_STATES = new Set(["reserved", "active"]);
 const ACTIVE_RUN_STATES = new Set(["reserved", "running", "stop_requested"]);
+const RUNTIME_GIT_RE = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const encoder = new TextEncoder();
 
 export class ConductError extends Error {
@@ -45,6 +46,24 @@ function clone(value) {
 
 function asDate(value) {
   return new Date(value);
+}
+
+function validateRuntimeIdentity(value) {
+  if (value == null) return null;
+  if (
+    typeof value !== "object"
+    || Array.isArray(value)
+    || Object.keys(value).sort().join(",") !== "deployment_id,git_sha,schema_version"
+    || value.schema_version !== "limen.conduct_runtime_identity.v1"
+    || !RUNTIME_GIT_RE.test(value.git_sha || "")
+    || typeof value.deployment_id !== "string"
+    || !value.deployment_id
+    || value.deployment_id.length > 512
+    || value.deployment_id.includes("\0")
+  ) {
+    throw new ConductError("conduct runtime identity is invalid", 503);
+  }
+  return clone(value);
 }
 
 function identitiesEqual(left, right) {
@@ -189,6 +208,7 @@ export class ConductKernel {
       adoptionAfterMs = 10 * 60 * 1000,
       leaseTtlMs = 15 * 60 * 1000,
       capabilitySecret = null,
+      runtimeIdentity = null,
     } = {},
   ) {
     this.state = validateLoadedState(input);
@@ -198,6 +218,7 @@ export class ConductKernel {
     this.adoptionAfterMs = adoptionAfterMs;
     this.leaseTtlMs = leaseTtlMs;
     this.capabilitySecret = capabilitySecret;
+    this.runtimeIdentity = validateRuntimeIdentity(runtimeIdentity);
     this.projectionEvents = [];
     this.mutated = false;
   }
@@ -205,7 +226,7 @@ export class ConductKernel {
   async execute(operation, payload = {}) {
     switch (operation) {
       case "register": return this.register(payload.session, payload.principal);
-      case "capabilities": return this.capabilities();
+      case "capabilities": return this.capabilities(payload.principal);
       case "task_run": return this.taskRun(payload.task_id);
       case "submit": return this.submit(payload.packet, payload.principal);
       case "submit_graph": return this.submitGraph(payload.packets, payload.principal);
@@ -393,7 +414,7 @@ export class ConductKernel {
     return clone(stored);
   }
 
-  capabilities() {
+  capabilities(authenticatedPrincipal = null) {
     const load = this.activeLoad();
     const sessions = Object.values(this.state.sessions).map((session) => ({
       ...clone(session),
@@ -405,6 +426,13 @@ export class ConductKernel {
     return {
       schema_version: "limen.conduct_capabilities.v1",
       generated_at: this.timestamp,
+      runtime_identity: clone(this.runtimeIdentity),
+      authenticated_principal: authenticatedPrincipal ? clone(authenticatedPrincipal) : null,
+      authenticated_session_ids: Object.entries(this.state.session_principals)
+        .filter(([, principalId]) =>
+          authenticatedPrincipal && principalId === authenticatedPrincipal.principal_id)
+        .map(([sessionId]) => sessionId)
+        .sort(),
       sessions,
     };
   }
@@ -1741,6 +1769,7 @@ export class SerializedConductService {
       adoptionAfterMs,
       leaseTtlMs,
       capabilitySecret = "development-only-capability-secret",
+      runtimeIdentity,
     } = {},
   ) {
     this.store = store;
@@ -1751,6 +1780,7 @@ export class SerializedConductService {
       adoptionAfterMs,
       leaseTtlMs,
       capabilitySecret,
+      runtimeIdentity,
     };
     this.tail = Promise.resolve();
   }
