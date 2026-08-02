@@ -1,0 +1,163 @@
+<!doctype html>
+<html>
+<head><title>Audio Proof</title></head>
+<body style="font: 18px monospace; padding: 40px; background: #111; color: #eee;">
+<h1>Audio Proof — 3 Tests</h1>
+<p style="color:#888; margin-bottom:30px;">Each button is a separate test. Try them top to bottom.</p>
+
+<button id="t1" style="font-size:22px; padding:16px 32px; display:block; margin:12px 0; cursor:pointer; background:#2a2; color:#fff; border:none; border-radius:6px;">
+  TEST 1: Pure Oscillator (no files)
+</button>
+
+<button id="t2" style="font-size:22px; padding:16px 32px; display:block; margin:12px 0; cursor:pointer; background:#22a; color:#fff; border:none; border-radius:6px;">
+  TEST 2: Decode + Play One MP3
+</button>
+
+<button id="t3" style="font-size:22px; padding:16px 32px; display:block; margin:12px 0; cursor:pointer; background:#a22; color:#fff; border:none; border-radius:6px;">
+  TEST 3: ScoreEngine.playBuffer
+</button>
+
+<pre id="log" style="margin-top:20px; color:#0f0; white-space:pre-wrap; line-height:1.6;"></pre>
+
+<script type="module">
+const log = (msg) => {
+  const ts = new Date().toISOString().slice(11,23);
+  const line = `[${ts}] ${msg}`;
+  console.log(line);
+  document.getElementById("log").textContent += line + "\n";
+};
+
+// ── TEST 1: Pure oscillator. Zero file dependencies.
+// If this doesn't make sound, the problem is the browser or OS, not our code.
+document.getElementById("t1").addEventListener("click", async () => {
+  log("T1: Creating AudioContext...");
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  log(`T1: ctx created — state: ${ctx.state}, sampleRate: ${ctx.sampleRate}, destination channels: ${ctx.destination.channelCount}`);
+
+  if (ctx.state === "suspended") {
+    log("T1: ctx is suspended, calling resume()...");
+    await ctx.resume();
+    log(`T1: after resume — state: ${ctx.state}`);
+  }
+
+  const osc = ctx.createOscillator();
+  osc.type = "sine";
+  osc.frequency.value = 440;
+
+  const gain = ctx.createGain();
+  gain.gain.value = 0.3;
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  osc.start();
+  log("T1: ▶ oscillator started at 440Hz — YOU SHOULD HEAR A TONE");
+
+  setTimeout(() => {
+    osc.stop();
+    log("T1: ■ oscillator stopped after 2s");
+  }, 2000);
+});
+
+// ── TEST 2: Fetch a real grain, decode, play directly.
+document.getElementById("t2").addEventListener("click", async () => {
+  log("T2: Creating AudioContext...");
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state === "suspended") await ctx.resume();
+  log(`T2: ctx state: ${ctx.state}`);
+
+  // Pick the first bed grain (known to be 4 seconds)
+  log("T2: Fetching bank.json...");
+  const bankRes = await fetch("./public/bank/bank.json");
+  const bank = await bankRes.json();
+  const beds = bank.grains.filter(g => g.kind === "bed");
+  const grain = beds[0];
+  log(`T2: Using grain ${grain.id} (${grain.kind}, ${grain.seconds}s)`);
+
+  log("T2: Fetching mp3...");
+  const resp = await fetch(`./public/bank/${grain.id}.mp3`);
+  log(`T2: HTTP ${resp.status}, content-type: ${resp.headers.get("content-type")}, content-length: ${resp.headers.get("content-length")}`);
+  const ab = await resp.arrayBuffer();
+  log(`T2: ArrayBuffer: ${ab.byteLength} bytes`);
+
+  log("T2: Decoding...");
+  let buf;
+  try {
+    buf = await new Promise((resolve, reject) => {
+      ctx.decodeAudioData(ab, resolve, reject);
+    });
+    log(`T2: Decoded OK — ${buf.duration.toFixed(3)}s, ${buf.numberOfChannels}ch, ${buf.sampleRate}Hz, ${buf.length} samples`);
+  } catch (e) {
+    log(`T2: ✗ DECODE FAILED: ${e}`);
+    return;
+  }
+
+  // Check actual sample content
+  const ch = buf.getChannelData(0);
+  let maxAbs = 0, rmsSum = 0;
+  for (let i = 0; i < ch.length; i++) {
+    const v = Math.abs(ch[i]);
+    if (v > maxAbs) maxAbs = v;
+    rmsSum += ch[i] * ch[i];
+  }
+  const rms = Math.sqrt(rmsSum / ch.length);
+  log(`T2: Sample analysis — peak: ${maxAbs.toFixed(6)} (${(20*Math.log10(maxAbs)).toFixed(1)} dBFS), rms: ${rms.toFixed(6)} (${(20*Math.log10(rms)).toFixed(1)} dBFS)`);
+
+  if (maxAbs < 0.001) {
+    log("T2: ✗ BUFFER IS SILENT — decoded to near-zero samples");
+    return;
+  }
+
+  const source = ctx.createBufferSource();
+  source.buffer = buf;
+  const gain = ctx.createGain();
+  gain.gain.value = 1.0;
+  source.connect(gain);
+  gain.connect(ctx.destination);
+  source.start();
+  log(`T2: ▶ playing grain — YOU SHOULD HEAR ${grain.seconds}s OF ROOM SOUND`);
+  source.onended = () => log("T2: ■ playback ended");
+});
+
+// ── TEST 3: Use the actual ScoreEngine class
+document.getElementById("t3").addEventListener("click", async () => {
+  log("T3: Importing ScoreEngine...");
+  const { ScoreEngine } = await import("./engine/score.js?v=3");
+  const { pick } = await import("./engine/rng.js");
+
+  const score = new ScoreEngine("./public/bank/bank.json");
+  log("T3: Loading bank...");
+  await score.load();
+  log(`T3: Bank loaded — bed: ${score.byKind.bed.length}, sustained: ${score.byKind.sustained.length}, transient: ${score.byKind.transient.length}`);
+
+  log("T3: Calling score.resume()...");
+  await score.resume();
+  log(`T3: ctx state: ${score.ctx.state}, master: ${score.master ? 'exists' : 'NULL'}, limiter: ${score.limiter ? 'exists' : 'NULL'}`);
+
+  // Play a bed grain via playBuffer
+  const bedGrain = score.byKind.bed[0];
+  log(`T3: Loading bed grain ${bedGrain.id}...`);
+  const buf = await score.getAudio(bedGrain.id);
+  if (!buf) {
+    log("T3: ✗ getAudio returned null");
+    return;
+  }
+  log(`T3: Buffer OK — ${buf.duration.toFixed(3)}s`);
+
+  const result = score.playBuffer(buf, { gain: 1.0 });
+  if (!result) {
+    log("T3: ✗ playBuffer returned null");
+    return;
+  }
+  log(`T3: ▶ playBuffer returned OK — YOU SHOULD HEAR AUDIO`);
+
+  // Also try startBed
+  setTimeout(() => {
+    log("T3: Now calling startBed...");
+    score.startBed(12345);
+    log("T3: startBed called — bed loop should be running");
+  }, 3000);
+});
+</script>
+</body>
+</html>

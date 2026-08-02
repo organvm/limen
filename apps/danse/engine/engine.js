@@ -34,7 +34,7 @@ export function frameAt(renderer, corpus, seed, t, program = null, opts = {}) {
     s.cut === "black" && program?.signature
       ? { signature: signature(program, s), signatureStyle: program.signature }
       : {};
-  return { ...renderer.draw(cast, s, { seed, ...closing, ...draw }), state: s, cells: cast.length };
+  return { ...renderer.draw(cast, s, { seed, ...closing, ...draw }), state: s, cells: cast.length, cast };
 }
 
 /** The seed as it appears in the film's last frame, in a post caption, and in a

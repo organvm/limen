@@ -1,34 +1,18 @@
-# Danse Installation Specification
+# The Thing Without a Name: Installation Specification (Omega Phase)
 
-This document details the physical requirements and constraints for installing *Danse* in a gallery or museum setting.
+## Overview
+The interactive (Omega) phase of the project transforms the generative engine from a screen-bound artifact into a physical, responsive environment. Visitors enter a pitch-black room where the digital structure reacts to their real-time skeletal geometry via MediaPipe.
 
-## Core Directives
-1. **No Mapping Software**: The scene is already fully 3D. The output is a raw video stream derived from the exact physical geometry of the space. Do not use MadMapper, Resolume, or other projection-mapping software to warp the 2D output. Warping discards depth and flattens the artwork.
-2. **No Edge-Blending**: The projection beams should overlap, disagree, and fracture. Additive brightness where beams cross is a feature of the work, not an error.
-3. **Privacy by Design**: The interactive tracking (MediaPipe) runs locally, on-device. The user's image is never composited onto the screens, saved to disk, or transmitted over the internet. The pose only acts as a query to modulate the generative selection engine.
+## Hardware & Environment
+- **Room**: Pitch black, minimum 20ft x 20ft.
+- **Projection Surface**: Large-scale bobbinet (sharkstooth scrim) hung in the center of the room, allowing viewers to walk completely around and behind it.
+- **Projectors**: Two synchronized projectors (Tier A and Tier B).
+- **Rule of Display**: There must be NO edge-blending. The physical projection constraints should mirror the architectural framing constraints of the digital slices.
+- **Camera**: Infrared or low-light capable webcam positioned dead-center, tracking the viewer.
 
-## Materials
-- **Projection Surfaces**: 
-  - 20 yd White polyester chiffon/voile (60" width)
-  - 3 Frosted PEVA shower liners
-  - 10 yd Bridal tulle (Bobbinet)
-  - Mylar emergency blanket (use sparingly, crumpled, as HoloGauze equivalent)
-  - Vellum roll
-- **Rigging**: Tension rods, 40lb monofilament, binder clips, gaff tape. No heavy rigging required. All textiles must be NFPA 701 certified.
-
-## Tier A: Project Space (15×20 ft)
-- **Surfaces**: 5 fabric panels at staggered depths (3.5 ft, 5.5 ft, 8 ft, 10.5 ft, 13 ft) and staggered yaw angles (-38°, -14°, +7°, +26°, +49°). One panel should run into a room corner so the image folds at 90°.
-- **Projectors**: 2× Panasonic PT-VMZ51 (Optical lens shift is mandatory to keep visitor shadows out of the beam), 1× Optoma ZH450ST. 3LCD is preferred over DLP to avoid rainbow artifacts on moving eyes.
-- **Compute**: One Mac mini M4 Pro driving all three outputs.
-- **Cost**: ~$18,750 (hardware).
-
-## Tier B: Museum Space (30×40 ft)
-- **Cost**: ~$46,000 (rental), ~$90,000 (purchase).
-
-## Lighting & Environment
-- **Ambient Light**: Kill every ambient source. Tape over all router LEDs, smoke-detector LEDs, and emergency lights that aren't strictly required by code.
-- **Practical Light**: Provide one practical light at 1–2% of projection brightness, bounced off a side wall and never in frame. The room must look like a room, not a void.
-- **Backdrop**: Terminate the image in the void. A black sheet must hang behind the last layer. Nothing touches anything.
-
-## Acceptance Criteria
-- Pull the wall plug. Wait 4 minutes. If the room does not automatically come back online and resume the generative display without any human input, the installation is not finished.
+## Software Integration
+- `apps/danse/join.html` loads the MediaPipe `pose_landmarker` via WebAssembly/WebGL.
+- It extracts 33 bodily landmarks from the viewer.
+- The normalized coordinates (X, Y, Z depth) are passed into the generative engine (`engine.js`).
+- The viewer's live depth (Z-axis) controls the spread of the generative cubist slices. The closer the viewer gets, the further the slices are blown apart in 3D space, effectively tearing the body apart visually as they approach.
+- The viewer's lateral movement (X-axis) controls the panning of the WebAudio score engine, pulling the generated sound physically across the room in sync with their body.

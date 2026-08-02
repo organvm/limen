@@ -465,12 +465,12 @@ def main() -> int:
     bank = Bank(args.bank)
     control = control_track(args.window, seed, args.rate)
 
-    print(f"{control['title']} · {control['window']} · seed 0x{control['seed']:X} · {control['duration']:.1f}s")
+    print(f"{control['title']} · {control['capture']} · seed 0x{control['seed']:X} · {control['duration']:.1f}s")
     print(f"  bank {bank.fingerprint} · {len(bank.grains)} grains from {len(bank.sources)} recordings")
 
     stereo = normalise(render(control, bank))
 
-    out = args.out or (OUT / f"{control['window']}-0x{control['seed']:X}.wav")
+    out = args.out or (OUT / f"{control['capture']}-0x{control['seed']:X}.wav")
     out.parent.mkdir(parents=True, exist_ok=True)
     wavfile.write(out, SR, stereo.T.astype(np.float32))
     print(f"  {out}")

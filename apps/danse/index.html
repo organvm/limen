@@ -16,18 +16,22 @@
     background: #0e0e10; text-align: center; transition: opacity .8s ease;
   }
   #veil.gone { opacity: 0; pointer-events: none; }
+  #veil.ready { cursor: pointer; }
   #veil h1 { font: 300 34px/1 ui-serif, Georgia, serif; letter-spacing: .32em; color: #e8e8ee; }
   #veil p { color: #6a6a78; letter-spacing: .12em; }
+  #enter { display: none; color: #cfcfe0; letter-spacing: .2em; margin-top: 12px;
+           transition: opacity .4s ease; }
   #bar { width: 260px; height: 1px; background: #26262e; margin: 0 auto; }
   #bar i { display: block; height: 100%; width: 0; background: #cfcfe0; transition: width .2s; }
 
   #hud {
     position: fixed; left: 14px; bottom: 12px; display: flex; gap: 16px; align-items: baseline;
-    color: #55555f; letter-spacing: .06em; user-select: none;
+    color: #111; letter-spacing: .06em; user-select: none;
+    background: #fff; padding: 8px 14px; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.5);
   }
-  #hud b { font-weight: 400; color: #9a9aa8; }
-  #hud kbd { color: #3c3c46; }
-  #hud.hide { opacity: 0; }
+  #hud b { font-weight: 500; color: #000; }
+  #hud kbd { color: #222; font-weight: 600; }
+  #hud.hide { opacity: 0; pointer-events: none; }
   a { color: inherit; }
 </style>
 </head>
@@ -38,6 +42,7 @@
   <h1>danse</h1>
   <p>20 june 2017 &middot; 162 photographs</p>
   <div id="bar"><i></i></div>
+  <p id="enter">enter</p>
 </div>
 
 <div id="hud">
@@ -45,7 +50,7 @@
   <span><b id="clock">0:00</b></span>
   <span><b id="cut">—</b></span>
   <span><b id="planes">0</b> planes</span>
-  <span id="keys"><kbd>space</kbd> hold &middot; <kbd>n</kbd> new river &middot; <kbd>s</kbd> share &middot; <kbd>f</kbd> free &middot; <kbd>1-7</kbd> movement &middot; <kbd>m</kbd> matte &middot; <kbd>h</kbd> hud</span>
+  <span id="keys"><kbd>space</kbd> hold &middot; <kbd>n</kbd> new river &middot; <kbd>s</kbd> share &middot; <kbd>f</kbd> free &middot; <kbd>1-7</kbd> movement &middot; <kbd>m</kbd> matte &middot; <kbd>h</kbd> hide</span>
 </div>
 
 <script type="module">
@@ -53,8 +58,11 @@ import * as Arrival from "./arrival.js";
 import * as Corpus from "./engine/corpus.js";
 import * as Program from "./engine/program.js";
 import { frameAt, hex } from "./engine/engine.js";
+import { scatter } from "./engine/room.js";
 import { cutAt } from "./engine/grammar.js";
 import { Renderer } from "./engine/renderer.js";
+import { ScoreEngine } from "./engine/score.js?v=3";
+import { pick } from "./engine/rng.js";
 
 // ── Arriving IS the seed.
 //
@@ -76,10 +84,67 @@ const el = (id) => document.getElementById(id);
 
 const corpus = await Corpus.load();
 const renderer = new Renderer(canvas, corpus);
+
+// Initialize ScoreEngine
+const score = new ScoreEngine("./public/bank/bank.json");
+await score.load();
+
 await corpus.prime(renderer.gl, {
   onProgress: (p) => { el("bar").firstElementChild.style.width = `${p * 100}%`; },
 });
-el("veil").classList.add("gone");
+
+// ── Entrance gate.
+//
+// Every browser requires one user gesture before audio can play. The veil stays
+// after loading and becomes the threshold: click/tap/key to enter the piece.
+// Audio and visuals begin together in that gesture. For physical installations,
+// #mode=install bypasses the veil (requires kiosk-mode autoplay policy).
+const isInstall = params.get("mode") === "install";
+let audioStarted = false;
+
+const enterPiece = async () => {
+  if (audioStarted) return;
+
+  // Start audio — context must be created inside the user gesture
+  await score.resume();
+  audioStarted = true; // AFTER ctx is live — frame loop can now call update()
+  score.startBed(river.seed);
+
+  // Fire a few sustained grains immediately so sound is instant
+  const sustained = score.byKind.sustained || [];
+  for (let i = 0; i < Math.min(3, sustained.length); i++) {
+    const g = pick(sustained, river.seed, i, 900);
+    score.getAudio(g.id).then(buf => {
+      if (buf) score.playBuffer(buf, {
+        gain: 0.794, // ≈ -2 dB
+        playbackRate: 1.0,
+        duration: Math.min(buf.duration, 3.0)
+      });
+    });
+  }
+
+  // Dismiss the veil
+  el("veil").classList.add("gone");
+  console.log("🔊 entered — ctx.state:", score.ctx.state);
+};
+
+if (isInstall) {
+  // Installation / kiosk — no veil, start immediately
+  // (requires Chrome --autoplay-policy=no-user-gesture-required)
+  el("veil").classList.add("gone");
+  score.resume().then(() => {
+    audioStarted = true;
+    score.startBed(river.seed);
+  });
+} else {
+  // Web — transition veil to entrance gate
+  el("bar").style.display = "none";
+  el("enter").style.display = "";
+  el("veil").classList.add("ready");
+  el("veil").addEventListener("click", enterPiece);
+  el("veil").addEventListener("touchstart", enterPiece);
+  document.addEventListener("keydown", enterPiece, { once: true });
+}
 
 // Non-null ⟺ frozen at that offset. Releasing does NOT resume from there: the
 // river kept flowing while you looked, so it snaps forward to now. The pause is
@@ -116,6 +181,25 @@ function frame() {
   el("cut").textContent = program
     ? `${r.state.movement} · ${r.state.cut}${r.state.epoch ? ` · reseed ${r.state.epoch}` : ""}`
     : cutAt(river.seed, t, r.state.reveal) + (r.state.reveal < 0.02 ? " · 2017" : "");
+  // We need to pass spatial layout info to the score engine for panning and pitch
+  const layoutInfo = new Map();
+  if (r.cast) {
+    for (const cell of r.cast) {
+      const p = scatter(cell.rect, cell.id, river.seed, r.state.spread);
+      const area = (cell.rect[2] - cell.rect[0]) * (cell.rect[3] - cell.rect[1]);
+      layoutInfo.set(cell.id, {
+        z: p.position[2],
+        x: p.position[0],
+        opacity: p.opacity,
+        area: area
+      });
+    }
+  }
+
+  if (!heldAt && audioStarted) {
+    score.update(r, river.seed, t, layoutInfo);
+  }
+
   el("planes").textContent = r.missing ? `${r.planes}−${r.missing}` : r.planes;
   requestAnimationFrame(frame);
 }
