@@ -1,0 +1,14 @@
+{
+  "schema": "limen.workstream.contract.v1",
+  "slug": "charles-rose-toners-closeout",
+  "objective": "Preserve and hand off the private Charles rose-toners review after public custody correction.",
+  "runway": {
+    "started_at": "2026-08-03T12:24:52Z",
+    "duration_seconds": 3600,
+    "deadline_at": "2026-08-03T13:24:52Z"
+  },
+  "owner": "organvm-iii-ergon/collaboration-operations-platform",
+  "completion_predicate": "private review npm test && npm run lint; public scripts/verify-scoped.sh",
+  "receipt": "docs/receipts/charles/rose-toners-private-custody.md",
+  "prohibitions": ["public client copy", "anonymous review access", "publication without Charles approval"]
+}
