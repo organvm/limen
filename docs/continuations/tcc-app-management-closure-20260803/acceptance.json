@@ -3,9 +3,7 @@
     "enabled": true,
     "vendor_probe": {
       "advanced": false,
-      "baseline_version": "2.1.220",
-      "current_version": "2.1.220",
-      "result": "Claude Code is up to date (2.1.220)"
+      "result": "no newer vendor update detected during probe"
     }
   },
   "baseline": {
@@ -24,8 +22,36 @@
   },
   "completion": {
     "complete": false,
-    "remaining_predicate": "A future real Claude Code vendor update must advance beyond 2.1.220 while this normalized TCC inventory remains green.",
-    "status": "external_vendor_wait"
+    "remaining_predicate": "Track C remains blocked until an external-host update performs a non-noop change and strict baseline/post TCC inventories remain unchanged except allowlisted invariants.",
+    "status": "external_host_update_wait"
+  },
+  "tcc_track_c": {
+    "external_host_update_proof": {
+      "update_flow": {
+        "attempted": true,
+        "non_noop": false,
+        "no_op": true,
+        "command": "domus-agent-host run -- claude update",
+        "output": "Claude Code is up to date (2.1.220)",
+        "status": "no_update_available"
+      },
+      "strict_audit": {
+        "baseline_snapshot": "docs/receipts/tcc-track-c-1703/2026-08-04-baseline.json",
+        "post_snapshot": "docs/receipts/tcc-track-c-1703/2026-08-04-post.json",
+        "invariants": {
+          "stable_host_row_healthy": true,
+          "managed_path_client_absence": true,
+          "versioned_leak_growth_approved_pattern": true
+        },
+        "failure_classification": {
+          "status": "blocked",
+          "reason": "noop_update_proof_missing",
+          "classes": [
+            "noop_update_proof_missing"
+          ]
+        }
+      }
+    }
   },
   "fixture": {
     "deleted": true,

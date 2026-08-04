@@ -28,6 +28,15 @@ def test_tcc_app_management_cutover_stays_open_for_real_vendor_update():
     assert rows[0]["status"] == "open"
     assert "discharged" not in rows[0]
     assert rows[0]["owner"] == "engineering"
-    assert "external vendor availability" in rows[0]["gate"]
+    assert "external host update" in rows[0]["gate"]
     assert "zero path rows" in rows[0]["label"]
-    assert "newer than 2.1.220" in rows[0]["steps"][-1]
+    assert "non-noop" in rows[0]["steps"][-1]
+    assert "strict" in rows[0]["gate"]
+    assert "2.1.220" not in rows[0]["gate"]
+    assert "2.1.220" not in " ".join(rows[0]["steps"])
+    assert "2.1.220" not in json.dumps(rows[0])
+    evidence = rows[0]["evidence"]["track_c"]
+    assert evidence["baseline_strict_audit_snapshot"].endswith("2026-08-04-baseline.json")
+    assert evidence["post_strict_audit_snapshot"].endswith("2026-08-04-post.json")
+    assert evidence["normalized_inventory_diff"].endswith("acceptance-2026-08-04.json")
+    assert "explicit" in evidence["failure_classification"]
