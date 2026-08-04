@@ -26,12 +26,38 @@ from limen.conduct.campaign_relay import (
     launch_reserved_relay,
     reserve_relay,
 )
-from limen.conduct.campaign_relay_process import _bounded_registration, _spawn_relay_process
+from limen.conduct.campaign_relay_process import _bounded_registration
 from limen.conduct.campaign_relay_state import _read_relay, _replace_relay
 from limen.conduct.models import CampaignRelayReceiptV1
 from limen.workstream_contract import RECEIPT_MODULES, new_contract
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _spawn_fixture_relay_process(
+    command: list[str],
+    *,
+    root: Path,
+    env: dict[str, str],
+    ack_descriptor: int,
+    control_descriptor: int,
+    exec_descriptor: int,
+) -> subprocess.Popen[bytes]:
+    """Exercise relay protocol fixtures without consulting live host pressure."""
+
+    return subprocess.Popen(
+        command,
+        cwd=root,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        pass_fds=(
+            ack_descriptor,
+            control_descriptor,
+            exec_descriptor,
+        ),
+    )
 
 
 def _agent_resolution_source() -> str:
@@ -196,7 +222,7 @@ def test_full_relay_exec_proof_closes_while_keepalive_remains_live(
 
     def spawn(command, **kwargs):
         command = [str(ROOT / "scripts" / "start-worktree-session.sh"), *command[1:]]
-        return _spawn_relay_process(command, **kwargs)
+        return _spawn_fixture_relay_process(command, **kwargs)
 
     monkeypatch.setenv("LIMEN_AGENT", "codex")
     monkeypatch.setenv("LIMEN_CLI_BIN", "/usr/bin/true")
@@ -395,7 +421,7 @@ def test_activation_serializes_a_delayed_accepting_confirmation_with_keepalive(
 
     def spawn(command, **kwargs):
         command = [str(ROOT / "scripts" / "start-worktree-session.sh"), *command[1:]]
-        return _spawn_relay_process(command, **kwargs)
+        return _spawn_fixture_relay_process(command, **kwargs)
 
     monkeypatch.setenv("LIMEN_AGENT", "codex")
     monkeypatch.setenv("LIMEN_CLI_BIN", str(registration_wrapper))
@@ -455,7 +481,7 @@ def test_local_store_loss_during_live_remote_attempt_recovers_later_ready(
         attempt_published.set()
         assert continue_spawn.wait(timeout=5)
         command = [str(ROOT / "scripts" / "start-worktree-session.sh"), *command[1:]]
-        return _spawn_relay_process(command, **kwargs)
+        return _spawn_fixture_relay_process(command, **kwargs)
 
     monkeypatch.setenv("LIMEN_AGENT", "codex")
     monkeypatch.setenv("LIMEN_CLI_BIN", "/usr/bin/true")
@@ -578,7 +604,7 @@ def test_exec_failure_channel_prevents_false_readiness(
 
     def spawn(command, **kwargs):
         command = [str(ROOT / "scripts" / "start-worktree-session.sh"), *command[1:]]
-        return _spawn_relay_process(command, **kwargs)
+        return _spawn_fixture_relay_process(command, **kwargs)
 
     monkeypatch.setenv("LIMEN_AGENT", "codex")
     monkeypatch.setenv("LIMEN_CLI_BIN", "/usr/bin/true")
@@ -708,7 +734,7 @@ def test_startup_stream_read_error_after_partial_bytes_fails_closed(
 
     def spawn(command, **kwargs):
         command = [str(ROOT / "scripts" / "start-worktree-session.sh"), *command[1:]]
-        process = _spawn_relay_process(command, **kwargs)
+        process = _spawn_fixture_relay_process(command, **kwargs)
         assert process.stdout is not None
         underlying_streams.append(process.stdout)
         process.stdout = PartialThenError(process.stdout)
@@ -873,7 +899,7 @@ def test_ready_publication_failure_rolls_broker_back_to_dormant(
 
     def spawn(command, **kwargs):
         command = [str(ROOT / "scripts" / "start-worktree-session.sh"), *command[1:]]
-        return _spawn_relay_process(command, **kwargs)
+        return _spawn_fixture_relay_process(command, **kwargs)
 
     def fail_ready_publication(*_args, **_kwargs):
         raise CampaignRelayError(
@@ -984,7 +1010,7 @@ def test_expired_startup_deadline_bounds_activation_rollback_and_terminalization
 
     def spawn(command, **kwargs):
         command = [str(ROOT / "scripts" / "start-worktree-session.sh"), *command[1:]]
-        return _spawn_relay_process(command, **kwargs)
+        return _spawn_fixture_relay_process(command, **kwargs)
 
     def expire_then_fail(*_args, deadline_monotonic=None, **_kwargs):
         assert deadline_monotonic is not None
@@ -1243,7 +1269,7 @@ def test_uncertain_accepted_ready_push_preserves_activation_until_recovery(
 
     def spawn(command, **kwargs):
         command = [str(ROOT / "scripts" / "start-worktree-session.sh"), *command[1:]]
-        return _spawn_relay_process(command, **kwargs)
+        return _spawn_fixture_relay_process(command, **kwargs)
 
     def ambiguous_git(root, args, **kwargs):
         nonlocal atomic_pushed
@@ -1353,7 +1379,7 @@ def test_uncertain_absent_ready_push_is_republished_without_a_second_provider(
 
     def spawn(command, **kwargs):
         command = [str(ROOT / "scripts" / "start-worktree-session.sh"), *command[1:]]
-        return _spawn_relay_process(command, **kwargs)
+        return _spawn_fixture_relay_process(command, **kwargs)
 
     def drop_atomic_push(root, args, **kwargs):
         nonlocal atomic_attempted
