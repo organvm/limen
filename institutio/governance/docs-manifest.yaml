@@ -148,6 +148,7 @@ sanctioned:
   - {path: github-estate-census.json, kind: data, owner: fleet, why: "consumed at this exact path by config/progress-history-sources/github-estate.json (progress-history source config)"}
   - {path: progress-prompt-lineage.json, kind: data, owner: fleet, why: "consumed at this exact path by config/progress-history-sources/prompt-lineage.json (progress-history source config)"}
   - {path: work-loan-journal.json, kind: data, owner: fleet, why: "consumed at this exact path by config/progress-history-sources/work-loan.json (progress-history source config)"}
+  - {path: data-grounding-precedents.md, kind: doc, owner: governance, why: "consumed at this exact path by CLAUDE.md §Data Grounding — the relocated case histories behind its rules (2026-08-06 /doctor trim)"}
 
 grandfathered:
   - {path: health-office, target_home: "organvm/domus:docs/health-office/", why: "personal-office records in a public repo — bound to scripts/health-organ.py + his-hand-levers.json; moves when the organ relocates"}
