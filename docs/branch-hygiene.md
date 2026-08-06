@@ -23,12 +23,13 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `work/truth-session-breadcrumb-20260721` — 26a808ad fix: close SessionEnd review gaps
 - `worktree-feat-decorum-keeper` — 50145954 feat(decorum): complete the mentor loop — self-closing issues, recurrence ratchet, offline gate
 
-## Live-work branches (457) — decide each
+## Live-work branches (468) — decide each
 
 - `_pr198` — 4cd0dbaa fix(ci): heal main CI-poison — remove dead `import time` in dispatch.py (F401)
 - `agent/codex-sessions-adapter-0713` — 4f56aa95 fix(prompt): adapt Codex session records exactly
 - `agent/handoff-runtime-readiness-0713` — 2b434e2e fix(dispatch): close runtime readiness claim seams
 - `agent/opencode-db-prompt-adapter-20260713` — e267e576 fix(prompt-corpus): adapt OpenCode task prompts
+- `archive/danse-predecessor-experiments-20260802` — a232f2d7 archive(danse): preserve predecessor experiments
 - `capture/main-2026-07-02T01-03-35Z` — 71b48852 capture: off-disk sync 2026-07-02T01:03:35Z (main behind origin → side ref, HEAD untouched)
 - `capture/main-2026-07-02T18-41-47Z` — eaca4510 capture: off-disk sync 2026-07-02T18:41:47Z (main behind origin → side ref, HEAD untouched)
 - `capture/main-2026-07-03T18-23-54Z` — b53f0abc capture: off-disk sync 2026-07-03T18:23:54Z (main behind origin → side ref, HEAD untouched)
@@ -36,6 +37,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `capture/main-2026-07-06T17-09-22Z` — e85f0909 capture: off-disk sync 2026-07-06T17:09:22Z (main behind origin → side ref, HEAD untouched)
 - `capture/main-2026-07-08T21-07-28Z` — 672c21c1 capture: off-disk sync 2026-07-08T21:07:28Z (main behind origin → side ref, HEAD untouched)
 - `capture/main-2026-07-16T04-48-58Z` — a0bdb559 capture: off-disk sync 2026-07-16T04:48:58Z (main behind origin → side ref, HEAD untouched)
+- `chore/agents-byte-budget` — 2b445656 chore(agents): the instruction surface gets a byte budget — the weakest reader sets it
 - `chore/pii-containment-limen-scrub` — 59a109c8 chore(security): correct PII-containment doctrine — surgical-by-default, no unique work deleted
 - `chore/ruff-format-cli-tests` — bbd9874a heal(tests): fix 3 non-hermetic/mismatched cli tests breaking main pr-gate
 - `codex/agent-checkout-guard-20260709` — 95b47a63 limen: guard worktree session launches
@@ -59,6 +61,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `discover-limen-value-2026-06-22` — 7ad100f0 capture: autonomic off-disk sync 2026-06-23T13:19:40Z
 - `discover-organvm-browser-state` — 7fb6478b docs: preserve gens discovery thesis
 - `discovery-organvm-palimpsest` — 73808950 feat: discover organvm/palimpsest and add to value-repos
+- `docs/agents-stratify-tier1` — 49f3da3f docs(agents): nine doctrines stratify to Tier-1 — the debt drops from 13.3KB to 1.3KB
 - `docs/covenant-agent-docs` — dc7ecd51 docs(covenant): keeper law on every agent surface — AGENTS/GEMINI clauses + parity assertions + IF entry
 - `docs/diurnal-20260801100329` — e57536b7 docs(diurnal): 2026-08-01 INDEX
 - `docs/diurnal-20260801161410` — ed840b9d docs(diurnal): 2026-08-01 INDEX
@@ -66,6 +69,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `docs/diurnal-20260802100422` — 72f04e7f docs(diurnal): 2026-08-02 INDEX
 - `docs/diurnal-first-live-day` — 3c8d8480 docs(diurnal): day one — the organ's first emission against the live body
 - `docs/enc1101-eot-catchalls-20260804` — d86a575d capture(sync-release): preserve parked dirt before unpark [skip ci]
+- `docs/pr-debt-observation-20260806033359` — 7739086a docs(gitvs): record open-PR debt observation (1293 open)
 - `docs/quicken-residue` — 1890688b docs: QUICKEN residue — irreducible human atoms (daemon capture)
 - `docs/reap-acceptance-0709-final-20260709115323` — 00cd21ce docs: accept reap of final aged straggler (4th in-session round, standing grant noted) — operator in-session
 - `docs/reap-acceptance-0709-final2-20260709115636` — cdef6573 docs: accept reap of final aged straggler (4th in-session round, standing grant noted) — operator in-session
@@ -79,12 +83,15 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `feat/clavis-credential-provisioning` — 028faaa9 feat(clavis): credential-provisioning organ — own the service account + its one vault as code
 - `feat/cli-watch-subcommand` — 7f17d103 feat(cli): wire watch subcommand with --compact/--once modes
 - `feat/conversion-funnel` — 0eba9cca feat(conversion): measure the public face — traffic collector + funnel leak-diagnosis
+- `feat/cross-vendor-health-sensor` — 5bed3668 feat(insights): the pipeline watches itself — five health checks, one censor-owned packet
 - `feat/danse-screendance-leaf-20260802` — 911410ba test(danse): avoid secret-like fixture flow
 - `feat/depends-on-sequencer` — b83a5d0b feat: seq-depends.py — append depends_on edges via the keeper (concern 11)
 - `feat/hospes-podcast-os-audit` — 4523e8db feat(hospes): register organvm/hospes as value repo, positioning seed awaiting_publish
 - `feat/insights-suggestion-ledger` — ab946e5d style: ruff format test_insight_cadence.py
+- `feat/jules-flywheel` — 000b814d feat(flywheel): THE predicate — exit 0 iff quota consumed AND landing holds AND debt non-increasing
 - `feat/local-floor-routing` — 1646e63c fix(params): declare LIMEN_LOCAL_FLOOR + LIMEN_LOCAL_FLOOR_CLASSES in the parameter panel
 - `feat/mail-story-mining-20260706` — d76726f3 feat: complete mail story mining outputs
+- `feat/no-hand-poll-guard` — 073f4d8a feat(hooks): the poll-loop ban becomes mechanical — on Claude's rail AND codex's
 - `feat/outbound-valve-registry` — c281b297 feat: tiered outbound valve registry (concern 4) — all tiers coexist, configurable
 - `feat/receipt-classifier` — 45672027 feat: receipt-classifier.py — flag receipt-only diffs behind shipped-X claims (concern 9)
 - `feat/session-streams-registry` — 2e5e0494 heal(streams): record s1-homing-spine settled by #1608, and correct its edges
@@ -101,6 +108,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `feat/vigilia-nohardcode-gate` — b94e1242 feat(vigilia): wire organ-health VIGILIA rung + heartbeat stamp (build #4)
 - `feat/vltima-organ-engine` — fe3e5eb4 fix(ci): clear ruff E702/E703 in test_sync_reclaim.py — unjams the merge backlog
 - `feat/walls-auto-regen` — 990a39da feat(heartbeat): auto-regenerate the credential + his-hand Walls every 12 beats
+- `feat/work-loan-backfill` — d86f09c0 fix(gates): declare repo-predicates.yaml on the docs surface; runner baseline count 48->49
 - `feature/ORG-artist-organ-face-0628` — a99db3a6 fix: add missing pydantic dep to auto-scale CI workflow
 - `feature/ORG-education-organ-face-0630` — 9d174794 feat(education): author polished macro and micro face for education organ
 - `feature/tale-of-genji-chapters-2-5` — 50a31de4 studium: author Tale of Genji chapters 2-5
@@ -118,7 +126,9 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `fix/next-audit-bump` — ba9227b7 chore(web/app): bump next to 16.2.11 — clears fresh npm-audit advisories breaking trunk CI
 - `fix/pr-1325-migration-wedge` — 128dca24 fix: heal interrupted legacy→scoped migration write in _load()
 - `fix/pr-debt-trend-names-the-real-producer` — ff3e42bc fix(gitvs): the trend predicate named the wrong producer in its own escalation
+- `fix/pr-debt-trend-owner-assertion` — c1c1f840 fix(tests): derive the producer's owner, don't re-pin it — main is red on a stale literal
 - `fix/pubpolicy-doc-secret-false-positive` — 63901080 fix(publish): documentation-about-secrets is not a secret — kill the sweep false-positive class
+- `fix/settles-trailer-test-not-universal` — fdc22a72 fix(tests): the Claude-Session trailer-parser gap is per-commit, not universal
 - `heal-pr-621` — af456827 Build the first working vertical slice of the health organ
 - `heal/608-declare-param` — a63e6db7 chore(governance): declare LIMEN_WORKSPACE_UNIT_TIMEOUT_SEC for preserve_workspace()
 - `heal/aw-tabvlarivs-846-rebase` — dfeb06ed Finish single-writer status/result mutation conversion
@@ -198,6 +208,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `limen/heal-cifix-organvm-limen-412-2d0dda2c` — 179b2e4f fix: ruff format in cli.py workstream command options
 - `limen/heal-cifix-organvm-limen-412-2e191c19` — 6ceb44ed Gemini daily capacity-fill packet 04
 - `limen/heal-cifix-organvm-limen-413-491f6092` — 91ab4a76 Gemini daily capacity-fill packet 02
+- `limen/heal-cifix-organvm-limen-414-361fb12b` — 03883783 fix(ci): redact live root paths in absorption cadence
 - `limen/heal-cifix-organvm-limen-414-4e02d6f1` — 03883783 fix(ci): redact live root paths in absorption cadence
 - `limen/heal-cifix-organvm-limen-415-7db396da` — 20cd1a3f OpenCode daily capacity-fill packet 01
 - `limen/heal-cifix-organvm-limen-416-2dce14dc` — 04f14e28 Agy daily capacity-fill packet 02
