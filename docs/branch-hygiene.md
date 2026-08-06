@@ -37,7 +37,6 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `capture/main-2026-07-06T17-09-22Z` — e85f0909 capture: off-disk sync 2026-07-06T17:09:22Z (main behind origin → side ref, HEAD untouched)
 - `capture/main-2026-07-08T21-07-28Z` — 672c21c1 capture: off-disk sync 2026-07-08T21:07:28Z (main behind origin → side ref, HEAD untouched)
 - `capture/main-2026-07-16T04-48-58Z` — a0bdb559 capture: off-disk sync 2026-07-16T04:48:58Z (main behind origin → side ref, HEAD untouched)
-- `chore/agents-byte-budget` — 2b445656 chore(agents): the instruction surface gets a byte budget — the weakest reader sets it
 - `chore/pii-containment-limen-scrub` — 59a109c8 chore(security): correct PII-containment doctrine — surgical-by-default, no unique work deleted
 - `chore/ruff-format-cli-tests` — bbd9874a heal(tests): fix 3 non-hermetic/mismatched cli tests breaking main pr-gate
 - `codex/agent-checkout-guard-20260709` — 95b47a63 limen: guard worktree session launches
@@ -73,6 +72,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `docs/quicken-residue` — 1890688b docs: QUICKEN residue — irreducible human atoms (daemon capture)
 - `docs/reap-acceptance-0709-final-20260709115323` — 00cd21ce docs: accept reap of final aged straggler (4th in-session round, standing grant noted) — operator in-session
 - `docs/reap-acceptance-0709-final2-20260709115636` — cdef6573 docs: accept reap of final aged straggler (4th in-session round, standing grant noted) — operator in-session
+- `docs/uig-planfill` — 8bf193b6 docs(plan): R2 harvest folded — six lane suggestions, six dispositions, zero parked
 - `feat-58-referral-program` — b4c56d9d chore: fix validation errors in tasks.yaml
 - `feat-59-waitlist-landing` — 42e1dea4 feat: Closed beta waitlist landing page - pre-launch acquisition funnel
 - `feat-60-fury-taxonomy` — b4c56d9d chore: fix validation errors in tasks.yaml
@@ -83,7 +83,6 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `feat/clavis-credential-provisioning` — 028faaa9 feat(clavis): credential-provisioning organ — own the service account + its one vault as code
 - `feat/cli-watch-subcommand` — 7f17d103 feat(cli): wire watch subcommand with --compact/--once modes
 - `feat/conversion-funnel` — 0eba9cca feat(conversion): measure the public face — traffic collector + funnel leak-diagnosis
-- `feat/cross-vendor-health-sensor` — 5bed3668 feat(insights): the pipeline watches itself — five health checks, one censor-owned packet
 - `feat/danse-screendance-leaf-20260802` — 911410ba test(danse): avoid secret-like fixture flow
 - `feat/depends-on-sequencer` — b83a5d0b feat: seq-depends.py — append depends_on edges via the keeper (concern 11)
 - `feat/hospes-podcast-os-audit` — 4523e8db feat(hospes): register organvm/hospes as value repo, positioning seed awaiting_publish
@@ -94,6 +93,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `feat/no-hand-poll-guard` — 073f4d8a feat(hooks): the poll-loop ban becomes mechanical — on Claude's rail AND codex's
 - `feat/outbound-valve-registry` — c281b297 feat: tiered outbound valve registry (concern 4) — all tiers coexist, configurable
 - `feat/receipt-classifier` — 45672027 feat: receipt-classifier.py — flag receipt-only diffs behind shipped-X claims (concern 9)
+- `feat/session-contention-receipt` — 24a0c747 fix(contention): the guard could go blind quietly, and the gate graded text
 - `feat/session-streams-registry` — 2e5e0494 heal(streams): record s1-homing-spine settled by #1608, and correct its edges
 - `feat/studium-deepen-bhagavad-gita` — b79d0fae studium: deepen bhagavad-gita — chapters 2-4 (3 arcs)
 - `feat/studium-deepen-mahabharata-books-5-8` — fd8dbae6 studium: deepen mahabharata — parvas 5-8 (Udyoga, Bhishma, Drona, Karna)
