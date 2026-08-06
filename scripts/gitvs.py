@@ -37,13 +37,15 @@ from __future__ import annotations
 import argparse
 import calendar
 import fnmatch
+import hashlib
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -64,6 +66,8 @@ STAMP = ROOT / "logs" / "gitvs.json"
 # gitignored runtime sink, NEVER the git-tracked ledger: private repo names stay out of the public
 # tree, and volatile fields (size, pushed_at) never churn the ledger's idempotent fixed point.
 FACTS = ROOT / "logs" / "gitvs-census-facts.json"
+PR_DEBT_LEDGER = ROOT / "docs" / "github-pr-debt-ledger.json"
+PR_DEBT_FACTS = ROOT / "logs" / "gitvs-pr-debt-facts.json"
 # The classify receipt (per-repo proposals + rationale + path histograms — private names included):
 # a gitignored RECEIPT, never the durable record. The durable record is estate.yaml's repo_overrides,
 # landed by PR from `classify --emit-overrides` output — registry edits are never auto-written.
@@ -75,12 +79,21 @@ REQUIRED_RESOURCE_FIELDS = ("identity", "desired", "observe", "effector", "statu
 VALID_STATUS = {"active", "envisioned"}
 REQUIRED_CLASS_FIELDS = ("match", "visibility", "branch_protection", "required_checks", "owner", "note")
 VALID_VISIBILITY = {"public", "private", "any"}
-VALID_MATCH_FACT_KEYS = {"fork", "archived", "private"}      # census-fact keys a class may match on
+VALID_MATCH_FACT_KEYS = {"fork", "archived", "private"}  # census-fact keys a class may match on
 VALID_PUBLISH_ELIGIBLE = {"never", "form_twin"}
 VALID_SEO_KEYS = {"description", "topics_min", "homepage", "readme"}
 VALID_SEO_REQ = {"required", "optional"}
 # The ONE sanctioned per-repo block: each row is a durable human judgment (class + why required).
-VALID_OVERRIDE_KEYS = {"class", "why", "publish_candidate", "split", "oversize"}
+VALID_OVERRIDE_KEYS = {"class", "why", "publish_candidate", "split", "oversize", "audience"}
+VALID_AUDIENCES = {"world", "collab", "self"}
+# ACCESS — the partner-partition registry (institutio/github/access.yaml): per-repo collaborator
+# grants. Role rank is total-ordered so the policy ceiling composes; `admin` is deliberately
+# absent — an admin partner is structurally impossible to declare, not merely drift.
+ACCESS = Path(os.environ.get("LIMEN_GITVS_ACCESS") or (ROOT / "institutio" / "github" / "access.yaml"))
+GRANT_ROLE_RANK = {"pull": 0, "triage": 1, "push": 2, "maintain": 3}
+REQUIRED_GRANT_FIELDS = ("login", "person", "role", "granted", "why")
+# GitHub's live role_name/permissions vocabulary → the registry's grant-role vocabulary.
+ROLE_NAME_TO_GRANT = {"read": "pull", "write": "push"}
 REQUIRED_INTEGRATION_FIELDS = (
     "category",
     "app_slug",
@@ -96,6 +109,7 @@ EFFECTOR_KINDS = {"delegate", "file-atom", "reap"}
 EFFECTOR_KINDS_WITH_COMMAND = {"delegate", "reap"}
 
 LEDGER_SCHEMA = "limen.github_estate.v1"
+PR_DEBT_SCHEMA = "limen.github_pr_debt.v2"
 
 
 # ── auth (reuse the cascade; never touch App creds directly) ───────────────────────────────────
@@ -144,6 +158,19 @@ def _gh_user(args: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
         return subprocess.CompletedProcess(args, 1, "", str(e))
 
 
+_GH_LOGIN_CACHE: dict[str, str | None] = {}
+
+
+def _gh_login() -> str | None:
+    """The keyring gh identity's login, cached per process. None ⟺ unauthenticated/offline.
+    Routing predicate for the personal-estate lenses: /user/* routes are only truthful when the
+    owner under census IS the authenticated user."""
+    if "login" not in _GH_LOGIN_CACHE:
+        r = _gh_user(["api", "user", "--jq", ".login"], timeout=15)
+        _GH_LOGIN_CACHE["login"] = ((r.stdout or "").strip() or None) if r.returncode == 0 else None
+    return _GH_LOGIN_CACHE["login"]
+
+
 def _token_path() -> str:
     """Which cascade path resolves (app|pat|gh|none) — prints NO secret."""
     try:
@@ -180,6 +207,18 @@ def load_estate() -> dict:
     return estate
 
 
+def load_access() -> dict | None:
+    """The partner-partition registry (ACCESS). None ⟺ absent — a skip, never a failure: the
+    registry is sparse by design (only repos with grants), and fixture estates without an access
+    file must evaluate exactly as before it existed."""
+    if not ACCESS.exists():
+        return None
+    try:
+        return yaml.safe_load(ACCESS.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return {}  # unparseable ≠ absent: parity reports it as a defect
+
+
 def owners(estate: dict) -> list[str]:
     """Owners to enumerate — LIMEN_GITVS_OWNERS override, else derived from the class globs' owner
     prefixes ("names are outputs" — never pin a repo list). Falls back to the conductor owner."""
@@ -191,8 +230,14 @@ def owners(estate: dict) -> list[str]:
     for cls in (estate.get("classes") or {}).values():
         for m in cls.get("match") or []:
             owner = str(m).split("/", 1)[0]
-            if owner and owner not in ("*", "**") and owner not in derived:
+            if owner and "*" not in owner and owner not in derived:
                 derived.append(owner)
+    # Shelf orgs are declared registry data (shelf_assignments) — enumerate them too, or the
+    # census never sees shelf repos and class P reads every declared shelf row as absent.
+    for org in (estate.get("shelf_assignments") or {}).get("shelves") or {}:
+        o = str(org)
+        if o and o not in derived:
+            derived.append(o)
     return derived or ["organvm"]
 
 
@@ -308,6 +353,505 @@ def _owner_open_pr_counts(owner: str, token: str | None) -> dict[str, int] | Non
     return None
 
 
+def _resolve_owner_login(owner: str, token: str | None) -> str | None:
+    """Resolve aliases and renamed accounts to GitHub's current canonical login."""
+
+    del token
+    result = _gh_user(["api", f"/users/{owner}", "--jq", ".login"], timeout=30)
+    login = (result.stdout or "").strip()
+    return login if result.returncode == 0 and login else None
+
+
+def _owner_repo_inventory(owner: str, token: str | None) -> dict | None:
+    """Enumerate one canonical owner's complete repository graph.
+
+    Repository pages are reconciled against GraphQL ``totalCount``. Each row
+    carries the repository's exact open-PR total so zero-PR repositories do not
+    require a second request while every non-empty repository still gets its
+    own independently paginated PR cursor.
+    """
+
+    del token
+    for root_kind in ("organization", "user"):
+        cursor: str | None = None
+        expected_total: int | None = None
+        repositories: dict[str, dict] = {}
+        page_count = 0
+        while True:
+            affiliation = ",ownerAffiliations:OWNER" if root_kind == "user" else ""
+            query = (
+                "query($login:String!,$cursor:String){"
+                f"{root_kind}(login:$login){{repositories(first:100,after:$cursor{affiliation}){{"
+                "totalCount nodes{nameWithOwner isPrivate isArchived pullRequests(states:OPEN){totalCount}}"
+                "pageInfo{hasNextPage endCursor}}}}"
+            )
+            args = ["api", "graphql", "-f", f"query={query}", "-F", f"login={owner}"]
+            if cursor:
+                args.extend(["-F", f"cursor={cursor}"])
+            result = _gh_user(args, timeout=90)
+            if result.returncode != 0:
+                if cursor is None:
+                    break
+                return None
+            try:
+                payload = json.loads(result.stdout or "{}")
+                owner_data = (payload.get("data") or {}).get(root_kind)
+                if owner_data is None:
+                    break
+                block = owner_data["repositories"]
+                total = int(block["totalCount"])
+                if expected_total is None:
+                    expected_total = total
+                elif total != expected_total:
+                    return None
+                for node in block.get("nodes") or []:
+                    name = str(node["nameWithOwner"])
+                    if name in repositories:
+                        return None
+                    repositories[name] = {
+                        "name_with_owner": name,
+                        "private": bool(node.get("isPrivate")),
+                        "archived": bool(node.get("isArchived")),
+                        "open_pr_total": int((node.get("pullRequests") or {})["totalCount"]),
+                    }
+                page_count += 1
+                page = block["pageInfo"]
+                if not page.get("hasNextPage"):
+                    if expected_total != len(repositories):
+                        return None
+                    return {
+                        "owner": owner,
+                        "repository_total": expected_total,
+                        "page_count": page_count,
+                        "repositories": [repositories[name] for name in sorted(repositories)],
+                    }
+                cursor = str(page.get("endCursor") or "")
+                if not cursor:
+                    return None
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                return None
+    return None
+
+
+def _repo_open_prs(repo: str, expected_total: int, token: str | None) -> dict:
+    """Page every open PR in one repository and reconcile its live total."""
+
+    del token
+    if expected_total == 0:
+        return {"exhaustive": True, "expected_total": 0, "page_count": 0, "rows": [], "error": None}
+    try:
+        owner, name = repo.split("/", 1)
+    except ValueError:
+        return {
+            "exhaustive": False,
+            "expected_total": expected_total,
+            "page_count": 0,
+            "rows": [],
+            "error": "invalid-repository-name",
+        }
+    cursor: str | None = None
+    rows: dict[int, dict] = {}
+    page_count = 0
+    while True:
+        query = (
+            "query($owner:String!,$name:String!,$cursor:String){"
+            "repository(owner:$owner,name:$name){pullRequests(states:OPEN,first:100,after:$cursor,"
+            "orderBy:{field:UPDATED_AT,direction:DESC}){totalCount "
+            "nodes{number url title isDraft updatedAt headRefName headRefOid body "
+            "author{login} assignees(first:10){nodes{login}} labels(first:50){nodes{name}}} "
+            "pageInfo{hasNextPage endCursor}}}}"
+        )
+        args = [
+            "api",
+            "graphql",
+            "-f",
+            f"query={query}",
+            "-F",
+            f"owner={owner}",
+            "-F",
+            f"name={name}",
+        ]
+        if cursor:
+            args.extend(["-F", f"cursor={cursor}"])
+        result = _gh_user(args, timeout=90)
+        if result.returncode != 0:
+            return {
+                "exhaustive": False,
+                "expected_total": expected_total,
+                "page_count": page_count,
+                "rows": list(rows.values()),
+                "error": "pull-request-page-failed",
+            }
+        try:
+            payload = json.loads(result.stdout or "{}")
+            repository = (payload.get("data") or {}).get("repository")
+            if not isinstance(repository, dict):
+                raise ValueError("repository unavailable")
+            block = repository["pullRequests"]
+            if int(block["totalCount"]) != expected_total:
+                raise ValueError("pull-request-total-moved")
+            for node in block.get("nodes") or []:
+                number = int(node["number"])
+                if number in rows:
+                    raise ValueError("duplicate-pull-request-cursor-row")
+                rows[number] = dict(node)
+            page_count += 1
+            page = block["pageInfo"]
+            if not page.get("hasNextPage"):
+                if len(rows) != expected_total:
+                    raise ValueError("pull-request-total-not-reconciled")
+                return {
+                    "exhaustive": True,
+                    "expected_total": expected_total,
+                    "page_count": page_count,
+                    "rows": [rows[number] for number in sorted(rows)],
+                    "error": None,
+                }
+            cursor = str(page.get("endCursor") or "")
+            if not cursor:
+                raise ValueError("pull-request-cursor-missing")
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            return {
+                "exhaustive": False,
+                "expected_total": expected_total,
+                "page_count": page_count,
+                "rows": list(rows.values()),
+                "error": str(exc),
+            }
+
+
+def _pr_owner(row: dict, owner_label_prefix: str) -> tuple[str | None, str | None]:
+    labels = sorted(
+        str(node.get("name") or "") for node in ((row.get("labels") or {}).get("nodes") or []) if isinstance(node, dict)
+    )
+    labelled = [label[len(owner_label_prefix) :].strip() for label in labels if label.startswith(owner_label_prefix)]
+    labelled = [owner for owner in labelled if owner]
+    if len(labelled) == 1:
+        return labelled[0], "label"
+    assignees = sorted(
+        str(node.get("login") or "")
+        for node in ((row.get("assignees") or {}).get("nodes") or [])
+        if isinstance(node, dict) and node.get("login")
+    )
+    if assignees:
+        return assignees[0], "assignee"
+    author = row.get("author") or {}
+    if isinstance(author, dict) and author.get("login"):
+        return str(author["login"]), "author"
+    return None, None
+
+
+def _pr_lifecycle(
+    labels: set[str],
+    body: str,
+    policy: dict,
+) -> tuple[str | None, str, list[str]]:
+    allowed = {
+        str(value)
+        for value in (
+            policy.get("lifecycle_labels")
+            or (
+                "lifecycle:delivery",
+                "lifecycle:preservation",
+                "lifecycle:active-human",
+                "lifecycle:blocked",
+                "lifecycle:superseded",
+            )
+        )
+    }
+    matches = sorted(labels & allowed)
+    if len(matches) == 1:
+        return matches[0], "label", matches
+    if len(matches) > 1:
+        return None, "conflicting-labels", matches
+
+    preservation_labels = {str(value) for value in (policy.get("preservation_labels") or ())}
+    preservation_markers = [str(value) for value in (policy.get("preservation_markers") or ()) if str(value)]
+    if labels.intersection(preservation_labels) or any(marker in body for marker in preservation_markers):
+        return "lifecycle:preservation", "legacy-preservation-marker", []
+    return None, "missing-label", []
+
+
+def _body_receipt_references(body: str, marker: str) -> list[str]:
+    pattern = re.compile(
+        rf"(?im)^\s*{re.escape(marker)}\s*:\s*(https://github\.com/[^\s]+|[\w.-]+/[\w.-]+#\d+|#\d+)\s*$"
+    )
+    return sorted(set(pattern.findall(body)))
+
+
+def _pr_lifecycle_debt_reasons(row: dict) -> list[str]:
+    reasons: list[str] = []
+    if not row.get("lifecycle_disposition"):
+        reasons.append("missing-or-conflicting-lifecycle-disposition")
+    exact_owner = row.get("exact_head_owner")
+    if not isinstance(exact_owner, dict) or not exact_owner.get("owner") or not exact_owner.get("head_oid"):
+        reasons.append("missing-exact-head-owner")
+    if row.get("lifecycle_disposition") == "lifecycle:superseded" and not row.get("supersession_target"):
+        reasons.append("missing-supersession-target")
+    return reasons
+
+
+def _classify_open_pr(repo: str, row: dict, policy: dict, now: datetime) -> dict:
+    number = int(row["number"])
+    owner_label_prefix = str(policy.get("owner_label_prefix") or "owner:")
+    owner, owner_source = _pr_owner(row, owner_label_prefix)
+    head_oid = str(row.get("headRefOid") or "")
+    labels = {
+        str(node.get("name") or "") for node in ((row.get("labels") or {}).get("nodes") or []) if isinstance(node, dict)
+    }
+    body = str(row.get("body") or "")
+    lifecycle, lifecycle_source, lifecycle_matches = _pr_lifecycle(labels, body, policy)
+    dependencies = _body_receipt_references(body, "Depends on")
+    supersession_targets = _body_receipt_references(body, "Superseded by")
+    supersession_target = supersession_targets[0] if len(supersession_targets) == 1 else None
+    markers = [str(marker) for marker in (policy.get("preservation_markers") or []) if str(marker)]
+    preservation = bool(labels.intersection(policy.get("preservation_labels") or [])) or any(
+        marker in body for marker in markers
+    )
+    predicate = f"github:required-checks:{repo}@{head_oid}" if head_oid else None
+    merge_condition = f"github:merge-queue:{repo}#{number}:ready-and-required-checks-green" if head_oid else None
+    base = {
+        "repository": repo,
+        "number": number,
+        "url": row.get("url"),
+        "private": False,
+        "owner": owner,
+        "owner_source": owner_source,
+        "exact_head_owner": {
+            "owner": owner,
+            "owner_source": owner_source,
+            "head_oid": head_oid or None,
+        },
+        "predicate": predicate,
+        "receipt_target": row.get("url"),
+        "merge_condition": merge_condition,
+        "head_oid": head_oid or None,
+        "title": row.get("title"),
+        "draft": bool(row.get("isDraft")),
+        "dependencies": dependencies,
+        "supersession_target": supersession_target,
+        "lifecycle_disposition": lifecycle,
+        "lifecycle_disposition_source": lifecycle_source,
+        "lifecycle_label_matches": lifecycle_matches,
+        "disposition_observed_at": now.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "updated_at": row.get("updatedAt"),
+    }
+    if preservation and owner and head_oid:
+        result = {
+            **base,
+            "classification": "preservation",
+            "classification_reason": "remote-preservation-marker",
+        }
+        result["lifecycle_debt_reasons"] = _pr_lifecycle_debt_reasons(result)
+        result["lifecycle_complete"] = not result["lifecycle_debt_reasons"]
+        return result
+
+    try:
+        updated = datetime.fromisoformat(str(row.get("updatedAt") or "").replace("Z", "+00:00"))
+        if updated.tzinfo is None:
+            updated = updated.replace(tzinfo=timezone.utc)
+        age_hours = max(0.0, (now - updated.astimezone(timezone.utc)).total_seconds() / 3600)
+    except ValueError:
+        age_hours = float("inf")
+    max_age = int(policy.get("active_owner_max_age_hours") or 168)
+    if owner and head_oid and age_hours <= max_age:
+        result = {
+            **base,
+            "classification": "active_custody",
+            "classification_reason": "fresh-remote-owner-and-head",
+            "age_hours": round(age_hours, 2),
+        }
+        result["lifecycle_debt_reasons"] = _pr_lifecycle_debt_reasons(result)
+        result["lifecycle_complete"] = not result["lifecycle_debt_reasons"]
+        return result
+    if owner and predicate and merge_condition:
+        result = {
+            **base,
+            "classification": "owner_route",
+            "classification_reason": "stale-or-inactive-routed-to-live-owner",
+            "age_hours": None if age_hours == float("inf") else round(age_hours, 2),
+        }
+        result["lifecycle_debt_reasons"] = _pr_lifecycle_debt_reasons(result)
+        result["lifecycle_complete"] = not result["lifecycle_debt_reasons"]
+        return result
+    result = {
+        **base,
+        "classification": "untyped",
+        "classification_reason": "missing-owner-or-remote-head",
+        "age_hours": None if age_hours == float("inf") else round(age_hours, 2),
+    }
+    result["lifecycle_debt_reasons"] = _pr_lifecycle_debt_reasons(result)
+    result["lifecycle_complete"] = not result["lifecycle_debt_reasons"]
+    return result
+
+
+def _redact_pr_row(row: dict) -> dict:
+    if not row.get("private"):
+        return row
+    repo = str(row.get("repository") or "")
+    number = int(row.get("number") or 0)
+    owner = str(row.get("owner") or "")
+    return {
+        **row,
+        "repository": None,
+        "number": None,
+        "url": None,
+        "owner": None,
+        "head_oid": None,
+        "exact_head_owner": None,
+        "predicate": None,
+        "receipt_target": None,
+        "merge_condition": None,
+        "dependencies": None,
+        "supersession_target": None,
+        "pr_key": hashlib.sha256(f"{repo}#{number}".encode()).hexdigest(),
+        "owner_key": hashlib.sha256(owner.encode()).hexdigest() if owner else None,
+    }
+
+
+def _apply_repository_state(row: dict, repository: dict) -> dict:
+    result = {
+        **row,
+        "private": bool(repository["private"]),
+        "repository_archived": bool(repository.get("archived")),
+    }
+    if result["repository_archived"] and result.get("lifecycle_disposition_source") == "missing-label":
+        result["lifecycle_disposition"] = "lifecycle:blocked"
+        result["lifecycle_disposition_source"] = "repository-archived-immutable"
+        result["lifecycle_label_matches"] = []
+        result["lifecycle_debt_reasons"] = _pr_lifecycle_debt_reasons(result)
+        result["lifecycle_complete"] = not result["lifecycle_debt_reasons"]
+    return result
+
+
+def pr_debt_census(estate: dict, *, now: datetime | None = None) -> tuple[dict, dict]:
+    """Return the full private runtime receipt and its tracked redacted projection."""
+
+    observed = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    online = not os.environ.get("LIMEN_OFFLINE") and shutil.which("gh") is not None
+    token = "user-native" if online else None
+    requested_owners = owners(estate)
+    failures: list[str] = []
+    canonical_owners: list[str] = []
+    for requested in requested_owners:
+        canonical = _resolve_owner_login(requested, token) if token else None
+        if not canonical:
+            failures.append(f"owner-unavailable:{requested}")
+            continue
+        if canonical not in canonical_owners:
+            canonical_owners.append(canonical)
+
+    repositories: dict[str, dict] = {}
+    repository_pages = 0
+    for owner in canonical_owners:
+        inventory = _owner_repo_inventory(owner, token)
+        if inventory is None:
+            failures.append(f"repository-cursor-failed:{owner}")
+            continue
+        repository_pages += int(inventory["page_count"])
+        for repository in inventory["repositories"]:
+            name = str(repository["name_with_owner"])
+            prior = repositories.get(name)
+            if prior is not None and prior != repository:
+                failures.append(f"repository-reconciliation-conflict:{name}")
+                continue
+            repositories[name] = repository
+
+    policy = estate.get("pr_debt_policy") or {}
+    classified: list[dict] = []
+    pr_pages = 0
+    expected_pr_total = sum(int(repo["open_pr_total"]) for repo in repositories.values())
+    for repo_name in sorted(repositories):
+        repository = repositories[repo_name]
+        page = _repo_open_prs(repo_name, int(repository["open_pr_total"]), token)
+        pr_pages += int(page["page_count"])
+        if not page["exhaustive"]:
+            failures.append(f"pull-request-cursor-failed:{repo_name}:{page['error']}")
+        for pr in page["rows"]:
+            row = _apply_repository_state(
+                _classify_open_pr(repo_name, pr, policy, observed),
+                repository,
+            )
+            classified.append(row)
+
+    if len(classified) != expected_pr_total:
+        failures.append(f"open-pr-total-not-reconciled:{len(classified)}/{expected_pr_total}")
+    counts: dict[str, int] = {}
+    lifecycle_counts: dict[str, int] = {}
+    for row in classified:
+        category = str(row["classification"])
+        counts[category] = counts.get(category, 0) + 1
+        disposition = str(row.get("lifecycle_disposition") or "untyped")
+        lifecycle_counts[disposition] = lifecycle_counts.get(disposition, 0) + 1
+    classification_untyped = counts.get("untyped", 0)
+    lifecycle_untyped = sum(not bool(row.get("lifecycle_complete")) for row in classified)
+    exhaustive = not failures
+    full = {
+        "schema": PR_DEBT_SCHEMA,
+        "generated_at": observed.isoformat().replace("+00:00", "Z"),
+        "exhaustive": exhaustive,
+        "requested_owner_count": len(requested_owners),
+        "canonical_owner_count": len(canonical_owners),
+        "canonical_owners": sorted(canonical_owners),
+        "repository_count": len(repositories),
+        "private_repository_count": sum(bool(repo["private"]) for repo in repositories.values()),
+        "open_pr_count": len(classified),
+        "expected_open_pr_count": expected_pr_total,
+        "classification_counts": dict(sorted(counts.items())),
+        "lifecycle_disposition_counts": dict(sorted(lifecycle_counts.items())),
+        "classification_untyped_count": classification_untyped,
+        "lifecycle_untyped_count": lifecycle_untyped,
+        "untyped_count": sum(
+            row.get("classification") == "untyped" or not row.get("lifecycle_complete") for row in classified
+        ),
+        "cursor_reconciliation": {
+            "repository_pages": repository_pages,
+            "pull_request_pages": pr_pages,
+            "failures": failures,
+        },
+        "pull_requests": classified,
+    }
+    public_rows = [_redact_pr_row(row) for row in classified]
+    tracked = {
+        **{key: value for key, value in full.items() if key not in {"canonical_owners", "pull_requests"}},
+        "canonical_owner_count": len(canonical_owners),
+        "cursor_reconciliation": {
+            "repository_pages": repository_pages,
+            "pull_request_pages": pr_pages,
+            "failure_count": len(failures),
+        },
+        "pull_requests": public_rows,
+    }
+    tracked["content_sha256"] = hashlib.sha256(
+        json.dumps(
+            {key: value for key, value in tracked.items() if key not in {"generated_at", "content_sha256"}},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    return full, tracked
+
+
+def pr_debt(estate: dict, *, check: bool, print_json: bool, write_ledger: bool) -> int:
+    full, tracked = pr_debt_census(estate)
+    if write_ledger:
+        PR_DEBT_LEDGER.parent.mkdir(parents=True, exist_ok=True)
+        PR_DEBT_LEDGER.write_text(json.dumps(tracked, indent=2, sort_keys=True) + "\n")
+        PR_DEBT_FACTS.parent.mkdir(parents=True, exist_ok=True)
+        PR_DEBT_FACTS.write_text(json.dumps(full, indent=2, sort_keys=True) + "\n")
+    if print_json:
+        print(json.dumps(tracked, indent=2, sort_keys=True))
+    ok = bool(full["exhaustive"] and full["untyped_count"] == 0)
+    if not print_json:
+        mark = "✓" if ok else "✗"
+        print(
+            f"{mark} gitvs pr-debt: repos={full['repository_count']} "
+            f"open_prs={full['open_pr_count']} exhaustive={str(full['exhaustive']).lower()} "
+            f"untyped={full['untyped_count']}"
+        )
+    return 1 if check and not ok else 0
+
+
 def _org_app_estate(token: str | None, online: bool) -> dict:
     """The FULL cross-org app-installation inventory — the 'what is on ALL my orgs/accounts' portal.
     Enumerates the authed user's orgs (/user/orgs) and each org's installed app_slugs
@@ -381,23 +925,36 @@ def _org_posture(estate: dict, online: bool) -> dict:
     return out
 
 
-def _owner_repos(owner: str, token: str | None) -> list[dict] | None:
+def _owner_repos(
+    owner: str,
+    token: str | None,  # allow-secret (type annotation, no value)
+    user_scoped: bool = False,
+) -> list[dict] | None:
     """Enumerate ALL repos of an owner with per-repo census facts. Tries the org route first —
     /orgs/{owner}/repos?type=all surfaces the private repos the cascade token can see (the /users
     route is structurally public-only, the census blindness this Lens fix removes) — then falls back
-    to /users/{owner}/repos for personal accounts. None ⟺ both routes failed (fail-open)."""
+    to /users/{owner}/repos for personal accounts. `user_scoped` runs the read on the owner's
+    NATIVE gh identity: non-canonical owners (personal estate, shelf orgs) sit outside the App
+    installation, and the App token silently hides their PRIVATE repos. None ⟺ both routes
+    failed (fail-open)."""
     jq = (
         ".[] | {full_name, private, fork, archived, size, description, homepage, "
         "stars: .stargazers_count, topics_count: ((.topics // []) | length), pushed_at}"
     )
-    for route in (f"/orgs/{owner}/repos?type=all", f"/users/{owner}/repos"):
-        r = _gh(
-            ["api", route, "--paginate", "-X", "GET", "-F", "per_page=100", "--jq", jq],
-            token,
-            timeout=180,
-        )
-        if r.returncode != 0 or not (r.stdout or "").strip():
+    routes = [f"/orgs/{owner}/repos?type=all", f"/users/{owner}/repos"]
+    if user_scoped and _gh_login() == owner:
+        # The authenticated user's own estate: /user/repos?affiliation=owner is the ONLY route
+        # that surfaces their PRIVATE repos (/users/{owner}/repos is structurally public-only —
+        # the personal-estate half of the census blindness, PR B). The owner filter below drops
+        # any affiliation row outside the {owner}/ namespace.
+        routes.insert(0, "/user/repos?affiliation=owner")
+    for route in routes:
+        args = ["api", route, "--paginate", "-X", "GET", "-F", "per_page=100", "--jq", jq]
+        r = _gh_user(args, timeout=180) if user_scoped else _gh(args, token, timeout=180)
+        if r.returncode != 0:
             continue
+        if not (r.stdout or "").strip():
+            return []
         rows: list[dict] = []
         for ln in r.stdout.splitlines():
             ln = ln.strip()
@@ -406,11 +963,13 @@ def _owner_repos(owner: str, token: str | None) -> list[dict] | None:
             try:
                 row = json.loads(ln)
             except json.JSONDecodeError:
+                return None
+            if not isinstance(row, dict) or not row.get("full_name"):
+                return None
+            if str(row["full_name"]).split("/", 1)[0] != owner:
                 continue
-            if isinstance(row, dict) and row.get("full_name"):
-                rows.append(row)
-        if rows:
-            return rows
+            rows.append(row)
+        return rows
     return None
 
 
@@ -423,6 +982,119 @@ def _write_census_facts(rows: list[dict]) -> None:
         FACTS.write_text(json.dumps(body, indent=2, sort_keys=True) + "\n")
     except Exception as e:  # observability must never break the beat
         print(f"[gitvs] note: census-facts write skipped ({str(e)[:80]})")
+
+
+def _collaborator_census(estate: dict, access: dict | None, token: str | None, online: bool) -> dict:
+    """Class N's Lens: outside collaborators + pending invites over the bounded probe set
+    (granted repos ∪ never-grant repos), plus each owner org's outside-collaborator roll.
+    Logins + roles only — the same public facts the ACCESS registry already carries."""
+    out: dict = {"complete": False, "by_repo": {}, "org_outside": {}}
+    if not online or not isinstance(access, dict) or not access:
+        return out
+    grants = access.get("grants") or {}
+    policy = access.get("policy") or {}
+    probe = sorted({str(r) for r in grants} | {str(r) for r in (policy.get("never_grant_repos") or [])})
+    ok = True
+
+    def _owner_org_class(repo: str) -> str | None:
+        # The orgs-registry class is the routing truth: 'canonical' rides the App token;
+        # everything else (shelf orgs, and the personal account which matches NO orgs row)
+        # sits outside the App installation and must read user-scoped. NOTE: owners(estate)
+        # is NOT usable here — it includes the personal account via its class glob.
+        cls_name, _row = _org_class(repo.split("/", 1)[0], estate)
+        return cls_name
+
+    def _roll(repo: str, path: str, jq: str) -> subprocess.CompletedProcess:
+        if _owner_org_class(repo) == "canonical":
+            return _gh(["api", path, "--jq", jq], token, timeout=30)
+        return _gh_user(["api", path, "--jq", jq], timeout=30)
+
+    def _outside_path_jq(repo: str) -> tuple[str, str]:
+        owner, _, _name = repo.partition("/")
+        if _owner_org_class(repo) is None:
+            # 'outside' is an ORG affiliation — on a personal repo it misses direct invitees
+            # (victoroff-os: david reads write in the full roll, absent from the outside roll).
+            # The personal-estate lens is every collaborator except the owner.
+            return (
+                f"/repos/{repo}/collaborators?per_page=100",
+                f'[.[] | select(.login != "{owner}") | {{login: .login, role: .role_name}}] | sort_by(.login)',
+            )
+        return (
+            f"/repos/{repo}/collaborators?affiliation=outside&per_page=100",
+            "[.[] | {login: .login, role: .role_name}] | sort_by(.login)",
+        )
+
+    for repo in probe:
+        row: dict = {"outside": None, "invitations": None}
+        r = _roll(repo, *_outside_path_jq(repo))
+        if r.returncode == 0:
+            try:
+                row["outside"] = json.loads(r.stdout or "[]")
+            except ValueError:
+                ok = False
+        else:
+            ok = False
+        r = _roll(
+            repo,
+            f"/repos/{repo}/invitations?per_page=100",
+            "[.[] | {id: .id, login: .invitee.login, role: .permissions}] | sort_by(.login)",
+        )
+        if r.returncode == 0:
+            try:
+                row["invitations"] = json.loads(r.stdout or "[]")
+            except ValueError:
+                ok = False
+        else:
+            ok = False
+        out["by_repo"][repo] = row
+    for org in owners(estate):
+        # Non-canonical org rolls (shelf orgs) sit outside the App installation — user-scoped.
+        org_args = ["api", f"/orgs/{org}/outside_collaborators?per_page=100", "--jq", "[.[].login] | sort"]
+        if _org_class(org, estate)[0] == "canonical":
+            r = _gh(org_args, token, timeout=30)
+        else:
+            r = _gh_user(org_args, timeout=30)
+        try:
+            # personal accounts 404 here — degrade to None; class N skips that roll, never guesses
+            out["org_outside"][org] = json.loads(r.stdout or "[]") if r.returncode == 0 else None
+        except ValueError:
+            out["org_outside"][org] = None
+    # ── The personal-estate FULL-ROLL lens (rungs D + N, PR B). A personal account has no org
+    # outside-collaborator roll (the 404 above), so derive the equivalent: enumerate the
+    # authenticated owner's repos user-scoped (the only route that sees their privates) and take
+    # each repo's every-collaborator-except-owner roll. personal_full feeds class D beyond N's
+    # bounded probe set; the unioned logins become the synthesized org_outside roll, so class N
+    # stops skipping the personal owner. Unreadable stays None — a SKIP, never a guess.
+    out["personal_full"] = None
+    for owner in owners(estate):
+        if _org_class(owner, estate)[0] is not None or _gh_login() != owner:
+            continue
+        inventory = _owner_repos(owner, token, user_scoped=True)
+        if inventory is None:
+            out["org_outside"][owner] = None
+            continue
+        full_rolls: dict[str, list | None] = {}
+        roll_logins: set[str] = set()
+        for inv_row in inventory:
+            repo = str(inv_row["full_name"])
+            roll_path, roll_jq = _outside_path_jq(repo)
+            r = _gh_user(["api", roll_path, "--jq", roll_jq], timeout=30)
+            if r.returncode != 0:
+                ok = False
+                full_rolls[repo] = None
+                continue
+            try:
+                outside = json.loads(r.stdout or "[]")
+            except ValueError:
+                ok = False
+                full_rolls[repo] = None
+                continue
+            full_rolls[repo] = outside
+            roll_logins |= {str(c.get("login") or "") for c in outside if isinstance(c, dict)}
+        out["personal_full"] = full_rolls
+        out["org_outside"][owner] = sorted(roll_logins)
+    out["complete"] = ok
+    return out
 
 
 def observe(estate: dict) -> dict:
@@ -486,7 +1158,10 @@ def observe(estate: dict) -> dict:
         facts_all: list[dict] = []
         complete = True
         for owner in owner_list:
-            rows = _owner_repos(owner, token)
+            # Non-canonical owners (personal estate, shelf orgs) sit outside the App
+            # installation — enumerate them user-scoped or their private repos vanish silently.
+            cls_name, _row = _org_class(owner, estate)
+            rows = _owner_repos(owner, token, user_scoped=(cls_name != "canonical"))
             if rows is None:
                 complete = False
                 continue
@@ -537,6 +1212,9 @@ def observe(estate: dict) -> dict:
 
     # Org posture — the ACCOUNT layer (billing plan + repo custody per org; class L's input).
     led["orgs"] = _org_posture(estate, online)
+
+    # Collaborator census — the partner-partition layer (class N's input; ACCESS is desired-state).
+    led["collaborators"] = _collaborator_census(estate, load_access(), token, online)
     return led
 
 
@@ -640,6 +1318,93 @@ def _effector_defects(rt_name: str, effectors: object, *, require_reachable: boo
             if not isinstance(approval, dict) or not str(approval.get("lever") or "").strip():
                 defects.append(f"{where}: approval must name a lever")
     return defects
+
+
+def _access_parity(estate: dict) -> list[str]:
+    """The ACCESS registry's offline rung (partner partitioning): every grant row is a complete,
+    ceiling-bounded human judgment, and no grant lands on an ungrantable repo/class. Absent file =
+    skip (sparse-by-design); unparseable/malformed = defects. Mirrors the repo_overrides shape."""
+    access = load_access()
+    if access is None:
+        return []
+    fails: list[str] = []
+    if not isinstance(access, dict) or not access:
+        return [f"access registry {ACCESS.name}: missing or unparseable"]
+    if "schema_version" not in access:
+        fails.append("access: missing schema_version")
+    for field in ("owner", "note"):
+        if field not in access:
+            fails.append(f"access: missing '{field}'")
+
+    policy = access.get("policy")
+    ceiling = "push"
+    never_repos: set[str] = set()
+    never_classes: set[str] = set()
+    if not isinstance(policy, dict):
+        fails.append("access: policy must be a mapping")
+    else:
+        for field in ("role_ceiling", "never_grant_classes", "never_grant_repos", "owner", "note"):
+            if field not in policy:
+                fails.append(f"access policy: missing '{field}'")
+        ceiling = str(policy.get("role_ceiling") or "push")
+        if ceiling not in GRANT_ROLE_RANK:
+            fails.append(f"access policy: role_ceiling '{ceiling}' not in {sorted(GRANT_ROLE_RANK)}")
+            ceiling = "push"
+        declared_classes = estate.get("classes") or {}
+        for cls_name in policy.get("never_grant_classes") or []:
+            if cls_name not in declared_classes:
+                fails.append(f"access policy: never_grant_class '{cls_name}' names no declared class")
+            never_classes.add(str(cls_name))
+        for repo in policy.get("never_grant_repos") or []:
+            if not (isinstance(repo, str) and repo.count("/") == 1):
+                fails.append(f"access policy: never_grant_repo '{repo}' is not an owner/repo name")
+            never_repos.add(str(repo))
+
+    grants = access.get("grants")
+    if grants is None:
+        grants = {}
+    if not isinstance(grants, dict):
+        fails.append("access: grants must be a mapping of repo → grant rows")
+        grants = {}
+    for repo, rows in grants.items():
+        where = f"grant '{repo}'"
+        if not (isinstance(repo, str) and repo.count("/") == 1):
+            fails.append(f"{where}: not an owner/repo name")
+            continue
+        if repo in never_repos:
+            fails.append(f"{where}: repo is in never_grant_repos — an engine repo never carries a grant")
+        cls_name = classify_repo(repo, estate)
+        if cls_name in never_classes:
+            fails.append(f"{where}: class '{cls_name}' is in never_grant_classes — structurally ungrantable")
+        if not isinstance(rows, list) or not rows:
+            fails.append(f"{where}: must be a non-empty list of grant rows")
+            continue
+        for row in rows:
+            if not isinstance(row, dict):
+                fails.append(f"{where}: grant row is not a mapping")
+                continue
+            login = str(row.get("login") or "")
+            rwhere = f"{where} login '{login or '<missing>'}'"
+            for field in REQUIRED_GRANT_FIELDS:
+                if not str(row.get(field) or "").strip():
+                    fails.append(f"{rwhere}: missing '{field}' (a grant without it is not a durable judgment)")
+            unknown = set(row) - set(REQUIRED_GRANT_FIELDS)
+            if unknown:
+                fails.append(f"{rwhere}: unknown key(s) {sorted(unknown)}")
+            role = str(row.get("role") or "")
+            if role not in GRANT_ROLE_RANK:
+                fails.append(f"{rwhere}: role '{role}' not in {sorted(GRANT_ROLE_RANK)} (admin is undeclarable)")
+            elif GRANT_ROLE_RANK[role] > GRANT_ROLE_RANK[ceiling]:
+                fails.append(f"{rwhere}: role '{role}' exceeds the policy ceiling '{ceiling}'")
+            granted = row.get("granted")
+            if isinstance(granted, datetime):
+                granted = granted.date()
+            if not isinstance(granted, date):
+                try:
+                    datetime.strptime(str(granted), "%Y-%m-%d")
+                except (TypeError, ValueError):
+                    fails.append(f"{rwhere}: granted '{granted}' is not an ISO date (YYYY-MM-DD)")
+    return fails
 
 
 def parity(estate: dict) -> list[str]:
@@ -753,6 +1518,22 @@ def parity(estate: dict) -> list[str]:
                 if row.get("publish_candidate") and isinstance(target_cls, dict):
                     if target_cls.get("visibility") != "private":
                         fails.append(f"{where}: publish_candidate requires a private-visibility class")
+                # `audience` is declared INTENT, present only where it disagrees with the
+                # derivation (public → world; private+grant → collab; else self). Parity checks the
+                # value and the one combination that is structurally impossible rather than merely
+                # unmet: a publish candidate is by definition on its way to `world`, so declaring
+                # it `collab` asks for two contradictory futures at once. Everything softer —
+                # "declared collab, nobody invited yet" — is an OWED judgment for check-audience
+                # and rung Q, never a parity failure.
+                aud = row.get("audience")
+                if aud is not None:
+                    if aud not in VALID_AUDIENCES:
+                        fails.append(f"{where}: audience '{aud}' is not one of {sorted(VALID_AUDIENCES)}")
+                    elif aud == "collab" and row.get("publish_candidate"):
+                        fails.append(
+                            f"{where}: audience 'collab' with publish_candidate — a shared operation "
+                            "and a solo publication are contradictory futures; pick one"
+                        )
                 split = row.get("split")
                 if split is not None:
                     into = split.get("into") if isinstance(split, dict) else None
@@ -821,10 +1602,12 @@ def parity(estate: dict) -> list[str]:
             if field not in org_row:
                 fails.append(f"org-class '{oname}': missing '{field}'")
         pok = org_row.get("plan_ok")
-        if pok is not None and (
-            not isinstance(pok, list) or not pok or not all(isinstance(p, str) and p for p in pok)
-        ):
+        if pok is not None and (not isinstance(pok, list) or not pok or not all(isinstance(p, str) and p for p in pok)):
             fails.append(f"org-class '{oname}': plan_ok must be a non-empty string list")
+
+    # ACCESS (the partner-partition registry) — validated in the same offline rung so a malformed
+    # grant, a ceiling breach, or a grant on an ungrantable repo/class reddens the PR gate.
+    fails.extend(_access_parity(estate))
     return fails
 
 
@@ -836,11 +1619,58 @@ def _facts_rows() -> list[dict] | None:
         return None
 
 
-def visibility_drift(rows: list[dict], estate: dict) -> tuple[list[str], list[str]]:
-    """Class G, pure: desired (class) visibility − observed. 'any' is exempt; a desired-public repo
-    still private whose row carries publish_candidate is CITED (homed with the publish-wave lever,
-    the GitOps direction: the registry is desired-state, the effector converges reality); every
-    other mismatch — including a desired-private repo observed public (leak posture) — is drift."""
+def _audience_lens():
+    """check-audience.py's (derive, assess) pair, or None when it cannot be loaded.
+
+    Same fail-open contract as the sweep lens below, and the same reason for IMPORTING rather than
+    re-deriving: the audience law (public → world; private+grant → collab; else self) already lives
+    in one place, and a second copy inside the doctor is precisely the drift every registry in this
+    estate exists to prevent. If the module is missing, rung Q skips — it never guesses.
+    """
+    try:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("check_audience", str(SCRIPT_DIR / "check-audience.py"))
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["check_audience"] = mod
+        spec.loader.exec_module(mod)
+        return mod.derive, mod.assess
+    except Exception:
+        return None
+
+
+def _sweep_receipt_lens():
+    """publish-sweep.py's ``receipt_fresh_green``, or None when it cannot be loaded.
+
+    Fail-open by construction: class G is a REPORTING rung, so a missing/broken sweep script must
+    degrade it to the pure read (cite every public candidate) rather than break the whole doctor.
+    Returning None — not a stub that answers True — keeps the failure legible: the un-lensed path
+    over-cites, and over-citing is the safe direction for a posture rung."""
+    try:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("publish_sweep", str(SCRIPT_DIR / "publish-sweep.py"))
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["publish_sweep"] = mod
+        spec.loader.exec_module(mod)
+        return mod.receipt_fresh_green
+    except Exception:
+        return None
+
+
+def visibility_drift(rows: list[dict], estate: dict, receipt_ok=None) -> tuple[list[str], list[str]]:
+    """Class G, pure: desired visibility − observed. ``publish_candidate`` is desired-public,
+    matching apply-visibility.py: its nominal operation-private class preserves the pre-publication
+    posture while a green history sweep gates the actual flip. A candidate still private is CITED
+    (homed with the publish-wave owner). ``any`` is exempt. Every other mismatch, including
+    desired-private observed-public, is drift.
+
+    ``receipt_ok(repo) -> (bool, why)`` is the optional live sweep-receipt lens. Omitted (the pure
+    fixture path) every already-public candidate is cited, because purity cannot tell an adjudicated
+    public from an un-adjudicated one. Supplied (the live doctor), a green+fresh receipt legitimately
+    OWNS the public posture and the repo is genuinely converged — so it is not cited at all. Without
+    that distinction the rung cites all 32 swept-clean publics forever, and a rung that always cites
+    is a rung nobody reads."""
     fails: list[str] = []
     cites: list[str] = []
     classes = estate.get("classes") or {}
@@ -849,12 +1679,26 @@ def visibility_drift(rows: list[dict], estate: dict) -> tuple[list[str], list[st
         full = str(row.get("full_name") or "")
         cls_name = classify_repo(full, estate, facts=row)
         desired = (classes.get(cls_name) or {}).get("visibility") if cls_name else None
+        publish_candidate = bool((overrides.get(full) or {}).get("publish_candidate"))
+        if publish_candidate:
+            desired = "public"
         if desired not in ("public", "private"):
             continue  # 'any' is exempt; unclassed is rung J's finding
         observed = "private" if row.get("private") else "public"
         if desired == observed:
+            if publish_candidate and observed == "public":
+                # The old silent "converged" read let an un-gated public ride (micro-tato /
+                # mirror-mirror, 2026-07-30): candidacy is a GATED desire — public without a
+                # released wave receipt is a posture question, not a convergence.
+                ok, why = receipt_ok(full) if receipt_ok else (False, "no receipt lens")
+                if ok:
+                    continue  # the receipt owns the flip — genuinely converged
+                cites.append(
+                    f"[G visibility-drift] {full}: publish candidate observed public with no receipt "
+                    f"owning the flip ({why}) — publish-sweep.py adjudicates; RED demotes it"
+                )
             continue
-        if desired == "public" and (overrides.get(full) or {}).get("publish_candidate"):
+        if desired == "public" and publish_candidate:
             cites.append(
                 f"[G visibility-drift] {full}: desired public, observed private — publish-wave pending (lever-gated)"
             )
@@ -905,7 +1749,127 @@ def _homed_levers() -> set[str]:
     return out
 
 
-def doctor(estate: dict, *, parity_only: bool, offline: bool) -> int:
+def custody_drift(ledger: list, grants: dict, by_repo: dict, org_set: set) -> list[str]:
+    """The dual-estate custody rung's pure join (class O). A register-marked product
+    (ASSET LEDGER `product_ledger`, owner-independent names) that still lives in an ORG
+    while a DECLARED partner grant is LIVE on it has the wrong custody home — partnered
+    products belong to the personal estate (seats free forever, moat insulated; see the
+    repo_custody resource type). Staged-never-sent grants and undeclared collaborators
+    are class N's jurisdiction, not custody evidence. Deterministic (sorted)."""
+    ledger_set = {str(n) for n in ledger}
+    out: list[str] = []
+    for repo, obs in sorted((by_repo or {}).items()):
+        owner, _, name = str(repo).partition("/")
+        if name not in ledger_set or owner not in org_set:
+            continue
+        outside = (obs or {}).get("outside")
+        if outside is None:
+            continue  # unreadable roll → class N already SKIPs it; custody never guesses
+        declared = {str(g.get("login", "")).lower() for g in (grants.get(repo) or []) if isinstance(g, dict)}
+        live = sorted({str(c.get("login") or "") for c in outside if str(c.get("login") or "").lower() in declared})
+        if live:
+            out.append(f"{repo}: register-marked product with LIVE partner lane ({', '.join(live)}) still org-side")
+    return out
+
+
+def shelf_drift(shelves: dict, rows: list) -> list[str]:
+    """Class P's pure join (shelf parity, custody v4.0.0 Phase 2): declared shelf membership
+    (estate shelf_assignments, bare names) vs census owner, BOTH directions — a declared repo
+    living elsewhere is drift, and an undeclared repo squatting in a shelf org is drift.
+    Deterministic (sorted); reports remediation, never fires a transfer."""
+    declared: dict[str, set[str]] = {str(o): {str(n) for n in (ns or [])} for o, ns in (shelves or {}).items()}
+    owners_by_name: dict[str, set[str]] = {}
+    for r in rows or []:
+        full = str((r or {}).get("full_name") or "")
+        o, _, n = full.partition("/")
+        if o and n:
+            owners_by_name.setdefault(n, set()).add(o)
+    out: list[str] = []
+    for org, names in sorted(declared.items()):
+        for n in sorted(names):
+            owners_ = owners_by_name.get(n) or set()
+            if not owners_:
+                out.append(f"{org}/{n}: declared on the shelf but absent from the census")
+            elif org not in owners_:
+                out.append(f"{n}: declared shelf {org}, census owner {'/'.join(sorted(owners_))} — transfer owed")
+    for n, owners_ in sorted(owners_by_name.items()):
+        for o in sorted(owners_):
+            if o in declared and n not in declared[o]:
+                out.append(f"{o}/{n}: undeclared repo in a shelf org — declare the row or move it out")
+    return out
+
+
+def permission_over_grant(personal_full: dict, grants: dict, probed: set[str]) -> list[str]:
+    """Class D, pure: the personal estate's FULL collaborator roll vs the ACCESS registry — the
+    lens beyond class N's bounded probe set (granted ∪ never-grant). A collaborator on an
+    UNLISTED personal repo, or any live role above the declared grant, is drift. Probed repos
+    are class N's finding, never double-reported here; unreadable rolls (None) are the caller's
+    SKIP. The rung only ever reports — permission changes stay with collab-sync / his hand."""
+    drifts: list[str] = []
+    for repo, outside in sorted((personal_full or {}).items()):
+        if repo in probed or outside is None:
+            continue
+        declared = {str(g.get("login", "")).lower(): g for g in (grants.get(repo) or []) if isinstance(g, dict)}
+        for c in outside:
+            if not isinstance(c, dict):
+                continue
+            login = str(c.get("login") or "")
+            role = ROLE_NAME_TO_GRANT.get(str(c.get("role")), str(c.get("role")))
+            g = declared.get(login.lower())
+            if g is None:
+                drifts.append(f"{repo}: {login} ({role}) has live access with NO grant row (repo unlisted in ACCESS)")
+            elif GRANT_ROLE_RANK.get(role, 99) > GRANT_ROLE_RANK.get(str(g.get("role")), -1):
+                drifts.append(f"{repo}: {login} live role {role} exceeds declared {g.get('role')}")
+    return drifts
+
+
+def posture_window(eligible: list[str], size: int, ordinal: int) -> list[str]:
+    """Class A's bounded rotating window, pure and stateless: a deterministic size-`size` slice of
+    the sorted eligible set, rotated by day ordinal — full coverage every ceil(n/size) days with
+    zero persisted cursor. Same ordinal ⇒ same slice (a doctor re-run probes identical repos)."""
+    if not eligible or size <= 0:
+        return []
+    ordered = sorted(eligible)
+    if size >= len(ordered):
+        return ordered
+    start = (ordinal * size) % len(ordered)
+    return (ordered + ordered)[start : start + size]
+
+
+def _protection_probe(
+    repos: list[str],
+    estate: dict,
+    token: str | None,  # allow-secret (type annotation, no value)
+) -> dict[str, str]:
+    """Class A's Lens: live branch-protection state per repo → 'protected' | 'missing' |
+    'plan-gated' | 'unreadable'. Canonical-org repos ride the App token; personal/shelf owners
+    sit outside the installation and read user-scoped. plan-gated = GitHub refuses protection on
+    a free-plan private repo (the billing levers own the fix, not the rung)."""
+    out: dict[str, str] = {}
+    for repo in repos:
+        canonical = _org_class(repo.split("/", 1)[0], estate)[0] == "canonical"
+        args = ["api", f"/repos/{repo}", "--jq", ".default_branch"]
+        r = _gh(args, token, timeout=30) if canonical else _gh_user(args, timeout=30)
+        if r.returncode != 0 or not (r.stdout or "").strip():
+            out[repo] = "unreadable"
+            continue
+        branch = r.stdout.strip().splitlines()[0]
+        args = ["api", f"/repos/{repo}/branches/{branch}/protection", "--jq", ".url"]
+        r = _gh(args, token, timeout=30) if canonical else _gh_user(args, timeout=30)
+        if r.returncode == 0:
+            out[repo] = "protected"
+            continue
+        blob = f"{r.stdout or ''}\n{r.stderr or ''}"
+        if "Upgrade to GitHub" in blob:
+            out[repo] = "plan-gated"
+        elif "Branch not protected" in blob or "Not Found" in blob or "HTTP 404" in blob:
+            out[repo] = "missing"
+        else:
+            out[repo] = "unreadable"
+    return out
+
+
+def doctor(estate: dict, *, parity_only: bool, offline: bool, strict: bool = False) -> int:
     """The Diff operator. Exit 0 ⟺ drift == ∅ (over the rungs that could run). SKIP is never a faked PASS."""
     fails: list[str] = []
     cites: list[str] = []
@@ -916,7 +1880,7 @@ def doctor(estate: dict, *, parity_only: bool, offline: bool) -> int:
     fails += [f"[H parity] {m}" for m in h]
 
     if parity_only:
-        return _verdict(fails, cites, skips, "parity-only")
+        return _verdict(fails, cites, skips, "parity-only", strict=strict)
 
     # SPLIT — owed form-twin/eviction work: every override row carrying split: is CITED until the
     # hygiene predicate (scripts/check-split-hygiene.py) retires the row — owned, never a memory chore.
@@ -944,6 +1908,51 @@ def doctor(estate: dict, *, parity_only: bool, offline: bool) -> int:
     elif not c:
         fails.append("[C orphaned-branch] a provably-landed local branch lingers past the grace window")
 
+    # Q — audience intent (2026-07-30, decision 4): who each repo actually faces vs who it was
+    # meant to. The audience is DERIVED, never stored (public → world; private+grant → collab;
+    # else self) — and the derivation alone has a blind spot big enough to hide the defect: a
+    # partner lane with nobody invited derives `self`, `self` is self-consistent, and a repo the
+    # partner CANNOT SEE certifies green. So intent comes from the estate's declared `audience:`
+    # rows and, as a hint only, the constellation register.
+    #
+    # CITES ONLY, and never a flip demand. Two hard constraints the first draft of this rung got
+    # wrong and would have made permanent:
+    #   · `world` is defined as "public, SOLO", so a public repo carrying a live grant is a FOURTH
+    #     state the enum cannot express — not drift. Reading it as drift would demand a
+    #     public→private flip of a traction repo and put Q permanently at war with class G.
+    #   · the register may SUGGEST a lane and never decide one. Its rows are people-data; if an
+    #     editorial removal could flip a repo to `self`, a live human-decided grant would read as
+    #     "undeclared exposure" whose machine-runnable direction (L-PARTNER-GRANTS) is REMOVAL.
+    # Behind ratchets.audience_parity_armed, per the house observable-before-autonomous pattern.
+    q_atom = "L-PARTNER-GRANTS"
+    q_armed = bool(((estate.get("ratchets") or {}).get("audience_parity_armed")))
+    q_lens = _audience_lens()
+    # Loaded here rather than reused from the live section below: Q runs BEFORE the offline
+    # early-return (it is a pure registry join — estate + access + register, zero gh calls), so it
+    # must not depend on a binding that only exists on the online path.
+    q_access = load_access()
+    if not q_armed:
+        skips.append("[Q audience-intent] ratchets.audience_parity_armed is false (observable-before-autonomous)")
+    elif q_lens is None:
+        skips.append("[Q audience-intent] scripts/check-audience.py unavailable — the rung never re-derives the law")
+    elif not q_access:
+        skips.append("[Q audience-intent] no ACCESS registry")
+    else:
+        q_derive, q_assess = q_lens
+        try:
+            q_reg_path = SCRIPT_DIR.parent / "organs" / "consulting" / "constellation" / "registry.yaml"
+            q_reg = yaml.safe_load(q_reg_path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            q_reg = {}  # no register ⇒ no lane HINTS; declared `audience:` rows still evaluate
+        q_breaks, q_owed = q_assess(q_derive(estate, q_access, q_reg))
+        for b in q_breaks:
+            fails.append(f"[Q audience-intent] {b} — the estate contradicts itself; check-audience.py --check")
+        for o in q_owed:
+            (cites if q_atom in homed else fails).append(
+                f"[Q audience-intent] {o} → "
+                + (f"{q_atom} (owned, open)" if q_atom in homed else f"{q_atom} (UNHOMED)")
+            )
+
     # ── Live classes (A/D/E/F/G/J/K/M) — need gh; SKIP offline, cite a homed atom instead of failing. ──
     if offline:
         for tag in (
@@ -956,9 +1965,10 @@ def doctor(estate: dict, *, parity_only: bool, offline: bool) -> int:
             "K seo-floor",
             "L org-posture",
             "M org-namespace",
+            "N collaborator-drift",
         ):
             skips.append(f"[{tag}] live rung — offline")
-        return _verdict(fails, cites, skips, "offline")
+        return _verdict(fails, cites, skips, "offline", strict=strict)
 
     led = observe(estate)
 
@@ -1011,7 +2021,7 @@ def doctor(estate: dict, *, parity_only: bool, offline: bool) -> int:
     elif rows is None:
         skips.append("[G visibility-drift] no census facts (run census online first)")
     else:
-        g_fails, g_cites = visibility_drift(rows, estate)
+        g_fails, g_cites = visibility_drift(rows, estate, receipt_ok=_sweep_receipt_lens())
         fails += g_fails
         cites += g_cites
 
@@ -1070,24 +2080,185 @@ def doctor(estate: dict, *, parity_only: bool, offline: bool) -> int:
                 if isinstance(ceiling, int) and (ob.get("repos") or 0) > ceiling:
                     drifts.append(f"{org}: holds {ob.get('repos')} repo(s), declared {ceiling}")
             if drifts:
-                atom = (estate.get("human_atoms") or {}).get("enterprise_cancel", {}).get(
-                    "lever", "L-ORG-TEAM-UPGRADE"
-                )
+                atom = (estate.get("human_atoms") or {}).get("enterprise_cancel", {}).get("lever", "L-ORG-TEAM-UPGRADE")
                 more = f"; +{len(drifts) - 4} more" if len(drifts) > 4 else ""
-                line = f"[L org-posture] {len(drifts)} org(s) off account policy ({'; '.join(drifts[:4])}{more}) → {atom}"
-                (cites if atom in homed else fails).append(
-                    line + (" (owned, open)" if atom in homed else " (UNHOMED)")
+                line = (
+                    f"[L org-posture] {len(drifts)} org(s) off account policy ({'; '.join(drifts[:4])}{more}) → {atom}"
                 )
+                (cites if atom in homed else fails).append(line + (" (owned, open)" if atom in homed else " (UNHOMED)"))
 
-    # A/D are per-repo posture rungs — the census surfaces the inputs; the full per-repo
-    # assertion arms with the reconcile layer (bounded rotating window). Reported SKIP, never faked.
-    for tag in ("A protection-missing", "D permission-over-grant"):
-        skips.append(f"[{tag}] per-repo posture rung — arms with the reconcile layer (PR B)")
+    # N — collaborator drift (the partner-partition rung): live outside collaborators vs the
+    # ACCESS registry. Undeclared access or an over-ceiling role is RED (removal is the machine-
+    # runnable direction, via collab-sync --apply); a declared-but-absent grant is a STAGED INVITE —
+    # outbound is his hand, so it is cited on the lever, never auto-sent.
+    access = load_access()
+    coll = led.get("collaborators") or {}
+    n_atom = "L-PARTNER-GRANTS"
+    if access is None:
+        skips.append("[N collaborator-drift] no ACCESS registry (institutio/github/access.yaml absent)")
+    elif not access:
+        pass  # unparseable registry is already a class-H parity defect this run
+    elif not coll.get("complete"):
+        skips.append("[N collaborator-drift] census incomplete (gh errors)")
+    else:
+        grants = access.get("grants") or {}
+        declared_logins = {
+            str(g.get("login", "")).lower()
+            for rows_ in grants.values()
+            if isinstance(rows_, list)
+            for g in rows_
+            if isinstance(g, dict)
+        }
+        for org, roll in sorted((coll.get("org_outside") or {}).items()):
+            if roll is None:
+                skips.append(f"[N collaborator-drift] {org}: outside-collaborator roll unreadable")
+                continue
+            undeclared = sorted(login for login in roll if str(login).lower() not in declared_logins)
+            if undeclared:
+                fails.append(
+                    f"[N collaborator-drift] {org}: undeclared outside collaborator(s): {', '.join(undeclared)}"
+                )
+        for repo, obs in sorted((coll.get("by_repo") or {}).items()):
+            declared = {str(g.get("login", "")).lower(): g for g in (grants.get(repo) or []) if isinstance(g, dict)}
+            outside = obs.get("outside")
+            if outside is None:
+                skips.append(f"[N collaborator-drift] {repo}: collaborator list unreadable")
+                continue
+            for c in outside:
+                login = str(c.get("login") or "")
+                role = ROLE_NAME_TO_GRANT.get(str(c.get("role")), str(c.get("role")))
+                g = declared.get(login.lower())
+                if g is None:
+                    fails.append(f"[N collaborator-drift] {repo}: {login} ({role}) has no grant row")
+                elif GRANT_ROLE_RANK.get(role, 99) > GRANT_ROLE_RANK.get(str(g.get("role")), -1):
+                    fails.append(
+                        f"[N collaborator-drift] {repo}: {login} live role {role} exceeds declared {g.get('role')}"
+                    )
+            live = {str(c.get("login") or "").lower() for c in outside}
+            pending = {str(i.get("login") or "").lower() for i in (obs.get("invitations") or [])}
+            for login_l, g in sorted(declared.items()):
+                if login_l in live:
+                    continue
+                if login_l in pending:
+                    cites.append(f"[N collaborator-drift] {repo}: invite pending for {g.get('login')} → {n_atom}")
+                else:
+                    (cites if n_atom in homed else fails).append(
+                        f"[N collaborator-drift] {repo}: {g.get('login')} declared but absent — staged invite → "
+                        + (f"{n_atom} (owned, open)" if n_atom in homed else f"{n_atom} (UNHOMED)")
+                    )
 
-    return _verdict(fails, cites, skips, "live")
+    # O — custody drift (the dual-estate rung, v4.0.0): ASSET LEDGER ∧ live declared grant ∧
+    # org owner. A partnered product's custody home is the personal estate; the transfer
+    # effector is outward-facing multi-repo custody movement — his hand — so drift CITES
+    # L-CONST-CUSTODY-MIGRATION while homed and reds only if the atom loses its owner.
+    ledger_rows = ((estate.get("product_ledger") or {}).get("repos")) or []
+    o_atom = "L-CONST-CUSTODY-MIGRATION"
+    org_set = set(((led.get("orgs") or {}).get("by_org")) or {})
+    if not ledger_rows:
+        skips.append("[O custody-drift] no product_ledger in ESTATE")
+    elif access is None or not access:
+        skips.append("[O custody-drift] no ACCESS registry")
+    elif not coll.get("complete"):
+        skips.append("[O custody-drift] census incomplete (gh errors)")
+    elif not org_set:
+        skips.append("[O custody-drift] org roll unavailable (user-scoped read failed)")
+    else:
+        for d in custody_drift(ledger_rows, access.get("grants") or {}, coll.get("by_repo") or {}, org_set):
+            (cites if o_atom in homed else fails).append(
+                f"[O custody-drift] {d} → " + (f"{o_atom} (owned, open)" if o_atom in homed else f"{o_atom} (UNHOMED)")
+            )
+
+    # P — shelf parity (custody v4.0.0 Phase 2): declared shelf membership vs census owner,
+    # both directions. Real drift is RED with the exact remediation named; the rung never
+    # fires a transfer itself.
+    shelves_reg = ((estate.get("shelf_assignments") or {}).get("shelves")) or {}
+    if shelves_reg:
+        if not rows:
+            skips.append("[P shelf-parity] no census facts (run census online first)")
+        else:
+            for d in shelf_drift(shelves_reg, rows):
+                fails.append(f"[P shelf-parity] {d}")
+
+    # D — permission-over-grant (PR B, armed): the personal estate's FULL roll vs ACCESS — the
+    # lens beyond N's bounded probe set. A collaborator on an unlisted personal repo was
+    # structurally invisible before this rung. Report-only; remediation is named, never fired.
+    personal_full = coll.get("personal_full")
+    if access is None or not access:
+        skips.append("[D permission-over-grant] no ACCESS registry")
+    elif personal_full is None:
+        skips.append("[D permission-over-grant] personal full-roll unavailable (user-scoped read failed)")
+    else:
+        for repo_ in sorted(r_ for r_, v_ in personal_full.items() if v_ is None):
+            skips.append(f"[D permission-over-grant] {repo_}: collaborator roll unreadable")
+        for d in permission_over_grant(personal_full, access.get("grants") or {}, set(coll.get("by_repo") or {})):
+            fails.append(
+                f"[D permission-over-grant] {d} — remediation: declare the grant row in ACCESS "
+                f"(or remove the access via collab-sync); the rung never edits"
+            )
+
+    # A — protection-missing (PR B, armed): declared class posture (branch_protection: required)
+    # vs live branch protection, over a bounded stateless rotating window (full coverage cycles
+    # by day ordinal). plan-gated repos cite their billing lever (Pro/Team); missing protection
+    # cites L-BRANCH-PROTECTION while homed — posture writes stay with the levers, never the rung.
+    a_atom = "L-BRANCH-PROTECTION"
+    if not rows:
+        skips.append("[A protection-missing] no census facts (run census online first)")
+    else:
+        classes_ = estate.get("classes") or {}
+        eligible = [
+            str(row.get("full_name"))
+            for row in rows
+            if (classes_.get(classify_repo(str(row.get("full_name")), estate, facts=row) or "") or {}).get(
+                "branch_protection"
+            )
+            == "required"
+        ]
+        try:
+            win_size = int(os.environ.get("LIMEN_GITVS_POSTURE_WINDOW", "15"))
+        except ValueError:
+            win_size = 15
+        window = posture_window(eligible, win_size, datetime.now(timezone.utc).toordinal())
+        if len(window) < len(eligible):
+            skips.append(
+                f"[A protection-missing] rotating window: {len(window)}/{len(eligible)} eligible probed this run"
+            )
+        probe = _protection_probe(window, estate, _token())
+        by_owner_private = {str(r_.get("full_name")): bool(r_.get("private")) for r_ in rows}
+        for repo_, state in sorted(probe.items()):
+            if state == "protected":
+                continue
+            if state == "unreadable":
+                skips.append(f"[A protection-missing] {repo_}: protection state unreadable")
+                continue
+            if state == "plan-gated":
+                owner_ = repo_.split("/", 1)[0]
+                lever = "L-PERSONAL-PRO" if _org_class(owner_, estate)[0] is None else "L-ORG-TEAM-UPGRADE"
+                (cites if lever in homed else fails).append(
+                    f"[A protection-missing] {repo_}: private repo protection is plan-gated → "
+                    + (f"{lever} (owned, open)" if lever in homed else f"{lever} (UNHOMED)")
+                )
+                continue
+            suffix = (
+                " (private repo — free-plan personal protection may also need L-PERSONAL-PRO)"
+                if by_owner_private.get(repo_)
+                else ""
+            )
+            (cites if a_atom in homed else fails).append(
+                f"[A protection-missing] {repo_}: class demands branch_protection, none live{suffix} → "
+                + (f"{a_atom} (owned, open)" if a_atom in homed else f"{a_atom} (UNHOMED)")
+            )
+
+    return _verdict(fails, cites, skips, "live", strict=strict)
 
 
-def _verdict(fails: list[str], cites: list[str], skips: list[str], mode: str) -> int:
+def _verdict(
+    fails: list[str],
+    cites: list[str],
+    skips: list[str],
+    mode: str,
+    *,
+    strict: bool = False,
+) -> int:
     for c in cites:
         print(f"  · cited (homed) {c}")
     for s in skips:
@@ -1097,6 +2268,9 @@ def _verdict(fails: list[str], cites: list[str], skips: list[str], mode: str) ->
         for f in fails:
             print(f"   {f}")
         return 1
+    if strict and skips:
+        print(f"\n~ gitvs doctor ({mode}): {len(skips)} rung(s) unavailable under --strict")
+        return 77
     print(
         f"✓ gitvs doctor ({mode}): drift == ∅ over {len(skips)} skipped + all run rungs; "
         f"{len(cites)} homed atom(s) cited."
@@ -1240,9 +2414,7 @@ def _pubpolicy():
     try:
         import importlib.util
 
-        spec = importlib.util.spec_from_file_location(
-            "publication_policy", str(SCRIPT_DIR / "publication-policy.py")
-        )
+        spec = importlib.util.spec_from_file_location("publication_policy", str(SCRIPT_DIR / "publication-policy.py"))
         pp = importlib.util.module_from_spec(spec)
         sys.modules["publication_policy"] = pp
         spec.loader.exec_module(pp)
@@ -1289,9 +2461,7 @@ def _registry_repo_set(path: Path, key: str = "repos") -> set[str]:
         return set()
 
 
-def classify_estate(
-    estate: dict, *, fresh: bool, sample_max: int, emit: bool, only: str | None
-) -> int:
+def classify_estate(estate: dict, *, fresh: bool, sample_max: int, emit: bool, only: str | None) -> int:
     """Propose a publication class per repo (R1–R9 over census facts + path sampling). Writes the
     gitignored receipt (DECISIONS); --emit-overrides prints ready-to-paste registry rows. The
     PROPOSAL engine — the durable decision is the estate.yaml row a human-reviewed PR lands."""
@@ -1385,10 +2555,7 @@ def classify_estate(
     try:
         DECISIONS.parent.mkdir(parents=True, exist_ok=True)
         DECISIONS.write_text(
-            json.dumps(
-                {"schema": "limen.estate_decisions.v1", "rows": decisions}, indent=2, sort_keys=True
-            )
-            + "\n"
+            json.dumps({"schema": "limen.estate_decisions.v1", "rows": decisions}, indent=2, sort_keys=True) + "\n"
         )
     except Exception as e:
         print(f"[gitvs] note: decisions receipt write skipped ({str(e)[:80]})")
@@ -1499,19 +2666,21 @@ def _billing_canary(repo: str) -> tuple[bool | None, str]:
     return True, f"newest run {run_id} failed, but not on the billing wall"
 
 
-def usage(estate: dict, *, check: bool, print_json: bool) -> int:
+def usage(estate: dict, *, check: bool, print_json: bool, strict: bool = False) -> int:
     """The Meter: projected monthly NET Actions spend vs the declared budget AND the billing canary.
     Exit 0 ⟺ within budget and no account-billing block; offline/unreadable → SKIP exit 0 (the
     fail-open sibling-organ contract). Writes the durable doc + volatile stamp (the census idiom)."""
     if os.environ.get("LIMEN_OFFLINE") or not shutil.which("gh"):
         print("[gitvs] usage: SKIP (offline)")
-        return 0
+        return 77 if strict else 0
     now = datetime.now(timezone.utc)
     org = owners(estate)[0]
     month_data = _usage_month(org, now.year, now.month)
     if month_data is None:
-        print(f"[gitvs] usage: SKIP (billing usage endpoint unreadable for {org} — needs the user-scoped keyring token)")
-        return 0
+        print(
+            f"[gitvs] usage: SKIP (billing usage endpoint unreadable for {org} — needs the user-scoped keyring token)"
+        )
+        return 77 if strict else 0
     canary_repo = os.environ.get("LIMEN_BILLING_CANARY_REPO") or "organvm/limen"
     canary_green, canary_detail = _billing_canary(canary_repo)
     budget_default = ((estate.get("budgets") or {}).get("actions_spend") or {}).get("monthly_net_usd_max", 25)
@@ -1551,9 +2720,12 @@ def usage(estate: dict, *, check: bool, print_json: bool) -> int:
         fails.append(f"projected ${projected} exceeds budget ${budget}")
     if canary_green is False:
         fails.append(f"billing canary RED on {canary_repo} ({canary_detail}) → L-CARD-FRAUD-HOLD (#182)")
-    if check and fails:
+    if (check or strict) and fails:
         print(f"✗ gitvs usage: {'; '.join(fails)} — see {USAGE_DOC.relative_to(ROOT)}")
         return 1
+    if strict and canary_green is None:
+        print("[gitvs] usage: SKIP (billing canary unreadable)")
+        return 77
     canary_word = "green" if canary_green else ("RED" if canary_green is False else "unreadable")
     print(
         f"✓ gitvs usage: net MTD ${doc['net_usd_total']}, projected ${projected} vs budget ${budget}, "
@@ -1571,6 +2743,7 @@ def main(argv: list[str] | None = None) -> int:
     pd = sub.add_parser("doctor", help="diff desired − observed; exit 0 ⟺ drift == ∅ (the Predicate)")
     pd.add_argument("--parity-only", action="store_true", help="class H only (deterministic, the PR gate)")
     pd.add_argument("--offline", action="store_true", help="det + offline-safe rungs; live rungs → SKIP")
+    pd.add_argument("--strict", action="store_true", help="exit 77 when any declared rung is skipped")
     prc = sub.add_parser("reconcile", help="drive drift → policy via the three effector sinks (the Effector)")
     prc.add_argument(
         "--apply",
@@ -1589,7 +2762,16 @@ def main(argv: list[str] | None = None) -> int:
     pu.add_argument(
         "--check", action="store_true", help="exit 1 when projected spend exceeds budget or the canary is red"
     )
+    pu.add_argument("--strict", action="store_true", help="exit 77 when live usage or canary evidence is unavailable")
     pu.add_argument("--print", action="store_true", help="print the usage doc JSON to stdout too")
+    ppd = sub.add_parser("pr-debt", help="exact paginated open-PR custody and owner-route predicate")
+    ppd.add_argument("--check", action="store_true", help="exit 1 unless enumeration is exhaustive and typed")
+    ppd.add_argument("--json", action="store_true", help="print the redacted machine-readable census")
+    ppd.add_argument(
+        "--write-ledger",
+        action="store_true",
+        help="write the tracked redacted ledger and gitignored private facts receipt",
+    )
     args = ap.parse_args(argv)
 
     estate = load_estate()
@@ -1610,7 +2792,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "doctor":
         offline = bool(args.offline) or bool(os.environ.get("LIMEN_OFFLINE"))
-        return doctor(estate, parity_only=bool(args.parity_only), offline=offline)
+        return doctor(
+            estate,
+            parity_only=bool(args.parity_only),
+            offline=offline,
+            strict=bool(args.strict),
+        )
 
     if args.cmd == "reconcile":
         # --check is the report-only sensor idiom; --apply mutates. Report wins if both are given (safety).
@@ -1626,7 +2813,20 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     if args.cmd == "usage":
-        return usage(estate, check=bool(args.check), print_json=bool(args.print))
+        return usage(
+            estate,
+            check=bool(args.check),
+            print_json=bool(args.print),
+            strict=bool(args.strict),
+        )
+
+    if args.cmd == "pr-debt":
+        return pr_debt(
+            estate,
+            check=bool(args.check),
+            print_json=bool(args.json),
+            write_ledger=bool(args.write_ledger),
+        )
 
     return 2
 

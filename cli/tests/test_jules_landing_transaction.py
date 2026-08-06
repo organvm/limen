@@ -16,7 +16,14 @@ sys.path.insert(0, str(ROOT / "cli" / "src"))
 import limen.jules_landing_custody as custody  # noqa: E402
 import limen.jules_landing_transaction as transaction  # noqa: E402
 from limen.io import load_limen_file, save_limen_file  # noqa: E402
-from limen.models import DispatchLogEntry, LimenFile, Task  # noqa: E402
+from limen.models import (  # noqa: E402
+    DispatchLogEntry,
+    LimenFile,
+    Task,
+    dispatch_agent,
+    dispatch_session_id,
+)
+from limen.tabularius import apply_limen_file_sync  # noqa: E402
 
 
 def load_jules_land():
@@ -33,6 +40,10 @@ def test_named_older_session_pr_after_new_dispatch_does_not_claim_new_session() 
         target_agent="jules",
         status="failed",
         created=date(2026, 7, 17),
+        source_origin="human_prompt",
+        horizon="present",
+        value_case="exercise jules landing transaction logic",
+        budget_cost=1,
         dispatch_log=[
             DispatchLogEntry(
                 timestamp=now,
@@ -78,6 +89,12 @@ def test_transaction_preserves_unrelated_concurrent_board_write(
                     target_agent="jules",
                     status="dispatched",
                     created=date(2026, 7, 17),
+                    source_origin="human_prompt",
+                    horizon="present",
+                    value_case="exercise jules landing transaction logic",
+                    budget_cost=1,
+                    predicate="python3 -m pytest -q",
+                    receipt_target="github:organvm/example:pull-request:T-LAND",
                     dispatch_log=[
                         DispatchLogEntry(
                             timestamp=now,
@@ -94,6 +111,12 @@ def test_transaction_preserves_unrelated_concurrent_board_write(
                     target_agent="codex",
                     status="open",
                     created=date(2026, 7, 17),
+                    source_origin="human_prompt",
+                    horizon="present",
+                    value_case="exercise jules landing transaction logic",
+                    budget_cost=1,
+                    predicate="python3 -m pytest -q",
+                    receipt_target="github:organvm/other:pull-request:T-OTHER",
                 ),
             ]
         ),
@@ -102,10 +125,18 @@ def test_transaction_preserves_unrelated_concurrent_board_write(
     def land_with_concurrent_write(_task, _sid, _apply, **_kwargs):
         with module.queue_lock(tasks_path, timeout=1) as got:
             assert got
-            fresh = load_limen_file(tasks_path)
-            other = next(task for task in fresh.tasks if task.id == "T-OTHER")
+            before = load_limen_file(tasks_path)
+            desired = before.model_copy(deep=True)
+            other = next(task for task in desired.tasks if task.id == "T-OTHER")
             other.context = "concurrent owner write"
-            save_limen_file(tasks_path, fresh)
+            result = apply_limen_file_sync(
+                tasks_path,
+                desired,
+                agent="codex",
+                session_id="concurrent-owner-write",
+                before=before,
+            )
+            assert result.applied == 1
         return "LANDED T-LAND -> https://github.com/organvm/example/pull/50 ; retained"
 
     monkeypatch.setattr(module, "land_one", land_with_concurrent_write)
@@ -122,7 +153,10 @@ def test_transaction_preserves_unrelated_concurrent_board_write(
     )
     tasks = {task.id: task for task in load_limen_file(tasks_path).tasks}
     assert tasks["T-LAND"].status == "done"
-    assert tasks["T-LAND"].dispatch_log[-1].session_id == "https://github.com/organvm/example/pull/50"
+    landed = tasks["T-LAND"].dispatch_log[-1]
+    assert landed.agent == "jules"
+    assert dispatch_agent(landed) == "jules"
+    assert dispatch_session_id(landed) == "https://github.com/organvm/example/pull/50"
     assert tasks["T-OTHER"].context == "concurrent owner write"
 
 
@@ -145,6 +179,12 @@ def test_transaction_fences_same_id_changed_owner_and_session(
                     target_agent="jules",
                     status="dispatched",
                     created=date(2026, 7, 17),
+                    source_origin="human_prompt",
+                    horizon="present",
+                    value_case="exercise jules landing transaction logic",
+                    budget_cost=1,
+                    predicate="python3 -m pytest -q",
+                    receipt_target="github:organvm/example:pull-request:T-CHANGED",
                     dispatch_log=[
                         DispatchLogEntry(
                             timestamp=now,
@@ -161,9 +201,9 @@ def test_transaction_fences_same_id_changed_owner_and_session(
     def land_after_claim_changes(_task, _sid, _apply, **_kwargs):
         with module.queue_lock(tasks_path, timeout=1) as got:
             assert got
-            fresh = load_limen_file(tasks_path)
-            changed = fresh.tasks[0]
-            changed.status = "open"
+            before = load_limen_file(tasks_path)
+            desired = before.model_copy(deep=True)
+            changed = desired.tasks[0]
             changed.target_agent = "codex"
             changed.dispatch_log.append(
                 DispatchLogEntry(
@@ -174,7 +214,14 @@ def test_transaction_fences_same_id_changed_owner_and_session(
                     output="new owner/session won while old PR work ran",
                 )
             )
-            save_limen_file(tasks_path, fresh)
+            result = apply_limen_file_sync(
+                tasks_path,
+                desired,
+                agent="codex",
+                session_id="456",
+                before=before,
+            )
+            assert result.applied == 1
         return "LANDED T-CHANGED -> https://github.com/organvm/example/pull/51 ; retained"
 
     monkeypatch.setattr(module, "land_one", land_after_claim_changes)
@@ -190,10 +237,10 @@ def test_transaction_fences_same_id_changed_owner_and_session(
         is False
     )
     task = load_limen_file(tasks_path).tasks[0]
-    assert task.status == "open"
+    assert task.status == "dispatched"
     assert task.target_agent == "codex"
-    assert task.dispatch_log[-1].session_id == "456"
-    assert all("/pull/51" not in str(entry.session_id or "") for entry in task.dispatch_log)
+    assert dispatch_session_id(task.dispatch_log[-1]) == "456"
+    assert all("/pull/51" not in dispatch_session_id(entry) for entry in task.dispatch_log)
     assert "FENCE T-CHANGED" in capsys.readouterr().out
 
 
@@ -215,6 +262,12 @@ def test_process_session_lands_current_jules_claim_targeted_at_any(
                     target_agent="any",
                     status="dispatched",
                     created=date(2026, 7, 17),
+                    source_origin="human_prompt",
+                    horizon="present",
+                    value_case="exercise jules landing transaction logic",
+                    budget_cost=1,
+                    predicate="python3 -m pytest -q",
+                    receipt_target="github:organvm/example:pull-request:T-ANY",
                     dispatch_log=[
                         DispatchLogEntry(
                             timestamp=now,
@@ -248,7 +301,7 @@ def test_process_session_lands_current_jules_claim_targeted_at_any(
     assert task.target_agent == "any"
     assert task.status == "done"
     assert module.JULES_LANDING_HOLD_LABEL not in task.labels
-    assert task.dispatch_log[-1].session_id == "https://github.com/organvm/example/pull/59"
+    assert dispatch_session_id(task.dispatch_log[-1]) == "https://github.com/organvm/example/pull/59"
     rerouted = task.model_copy(update={"target_agent": "codex"})
     assert module._jules_claim_is_current(rerouted, "123") is False
 
@@ -271,6 +324,12 @@ def test_process_session_serializes_concurrent_landings(
                     target_agent="jules",
                     status="dispatched",
                     created=date(2026, 7, 17),
+                    source_origin="human_prompt",
+                    horizon="present",
+                    value_case="exercise jules landing transaction logic",
+                    budget_cost=1,
+                    predicate="python3 -m pytest -q",
+                    receipt_target="github:organvm/example:pull-request:T-CONCURRENT",
                     dispatch_log=[
                         DispatchLogEntry(
                             timestamp=now,
@@ -331,7 +390,7 @@ def test_process_session_serializes_concurrent_landings(
     assert calls == ["123"]
     task = load_limen_file(tasks_path).tasks[0]
     assert task.status == "done"
-    assert sum("/pull/60" in str(entry.session_id or "") for entry in task.dispatch_log) == 1
+    assert sum("/pull/60" in dispatch_session_id(entry) for entry in task.dispatch_log) == 1
 
 
 def test_post_pr_receipt_failure_retries_by_adopting_existing_pr(
@@ -355,6 +414,12 @@ def test_post_pr_receipt_failure_retries_by_adopting_existing_pr(
                     target_agent="jules",
                     status="dispatched",
                     created=date(2026, 7, 17),
+                    source_origin="human_prompt",
+                    horizon="present",
+                    value_case="exercise jules landing transaction logic",
+                    budget_cost=1,
+                    predicate="python3 -m pytest -q",
+                    receipt_target="github:organvm/example:pull-request:T-ADOPT",
                     dispatch_log=[
                         DispatchLogEntry(
                             timestamp=now,
@@ -476,7 +541,7 @@ def test_post_pr_receipt_failure_retries_by_adopting_existing_pr(
     )
     after_failure = load_limen_file(tasks_path).tasks[0]
     assert after_failure.status == "dispatched"
-    assert str(after_failure.dispatch_log[-1].session_id).startswith("jules-land-intent:")
+    assert dispatch_session_id(after_failure.dispatch_log[-1]).startswith("jules-land-intent:")
     assert module.JULES_LANDING_HOLD_LABEL in after_failure.labels
 
     assert (
@@ -493,7 +558,7 @@ def test_post_pr_receipt_failure_retries_by_adopting_existing_pr(
     task = load_limen_file(tasks_path).tasks[0]
     assert task.status == "done"
     assert module.JULES_LANDING_HOLD_LABEL not in task.labels
-    assert task.dispatch_log[-1].session_id == "https://github.com/organvm/example/pull/61"
+    assert dispatch_session_id(task.dispatch_log[-1]) == "https://github.com/organvm/example/pull/61"
 
 
 @pytest.mark.parametrize(
@@ -519,6 +584,12 @@ def test_landing_intent_preserves_lifecycle_status(
                     target_agent="jules",
                     status=status,
                     created=date(2026, 7, 17),
+                    source_origin="human_prompt",
+                    horizon="present",
+                    value_case="exercise jules landing transaction logic",
+                    budget_cost=1,
+                    predicate="python3 -m pytest -q",
+                    receipt_target="github:organvm/example:pull-request:T-HOLD",
                     dispatch_log=[
                         DispatchLogEntry(
                             timestamp=now,
@@ -581,6 +652,12 @@ def test_terminal_non_pr_outcome_is_a_rerun_fixed_point(
                     target_agent="jules",
                     status="dispatched",
                     created=date(2026, 7, 17),
+                    source_origin="human_prompt",
+                    horizon="present",
+                    value_case="exercise jules landing transaction logic",
+                    budget_cost=1,
+                    predicate="python3 -m pytest -q",
+                    receipt_target="github:organvm/example:pull-request:T-FIXED",
                     dispatch_log=[
                         DispatchLogEntry(
                             timestamp=now,
@@ -650,6 +727,12 @@ def test_transient_failures_reach_finite_terminal_receipt(
                     target_agent="jules",
                     status="dispatched",
                     created=date(2026, 7, 17),
+                    source_origin="human_prompt",
+                    horizon="present",
+                    value_case="exercise jules landing transaction logic",
+                    budget_cost=1,
+                    predicate="python3 -m pytest -q",
+                    receipt_target="github:organvm/example:pull-request:T-RETRY",
                     dispatch_log=[
                         DispatchLogEntry(
                             timestamp=now,

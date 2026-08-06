@@ -45,15 +45,19 @@ SCAN_DIRS = (
     "institutio/governance/sensors.yaml",
 )
 # The orphan check scans wider than the undeclared check: a param read only by CI workflows, the
-# container/launchd plumbing, or the ianva package is legitimately used, not orphaned.
-ORPHAN_SCAN_DIRS = SCAN_DIRS + (".github", "container", "ianva")
+# container/launchd plumbing, the ianva package, or an ORGAN executable is legitimately used, not
+# orphaned. `organs` earns its place the same way .github does — gates.yaml dispatches organ
+# executables directly (constellation-registry runs organs/consulting/constellation/
+# validate-constellation.py), so a knob read only there is wired to a registered gate, not dead.
+# Widening this tuple can only REDUCE false orphans; undeclared-detection still keys off SCAN_DIRS.
+ORPHAN_SCAN_DIRS = SCAN_DIRS + (".github", "container", "ianva", "organs")
 SCAN_SUFFIXES = (".py", ".sh", ".mjs", ".js", ".ts", ".yaml", ".yml", ".json", ".plist", ".toml")
 TOKEN = re.compile(r"LIMEN_[A-Z0-9_]+")
 
 # Env names the body legitimately uses that we do NOT own as LIMEN_ params
 # (external mechanisms / third-party levers). The gate never chases these.
 EXTERNAL_ALLOW = {
-    "DISABLE_AUTOUPDATER",  # the autoupdater mechanism, governed by the INTEGRITY organ
+    "DISABLE_AUTOUPDATER",  # forbidden third-party control, audited by the INTEGRITY organ
 }
 
 

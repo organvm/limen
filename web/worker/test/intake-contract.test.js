@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import worker from "../src/index.js";
@@ -9,6 +10,13 @@ import {
   validateIntakeContract,
 } from "../src/index.js";
 
+test("production projection targets the protected board publication branch", () => {
+  const config = readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
+  assert.match(config, /LIMEN_GITHUB_BRANCH = "tabularius\/board-projection"/);
+  assert.match(config, /LIMEN_CONDUCT_KEEPER_NAME = "tabularius-conduct-v2"/);
+  assert.doesNotMatch(config, /LIMEN_GITHUB_BRANCH = "main"/);
+});
+
 function typedTask(overrides = {}) {
   return {
     id: "WORKER-1",
@@ -16,6 +24,11 @@ function typedTask(overrides = {}) {
     repo: "organvm/limen",
     target_agent: "codex",
     status: "open",
+    budget_cost: 1,
+    origin: "human_prompt",
+    horizon: "present",
+    value_case: "Deliver one bounded Worker task",
+    owner_surface: "organvm/limen",
     predicate: "pytest -q web/api/tests/test_main.py",
     receipt_target: "github:organvm/limen:pull-request:WORKER-1",
     ...overrides,
@@ -48,7 +61,7 @@ test("Worker normalizes only a selected owned legacy task and fails closed when 
   assert.throws(() => normalizeSelectedLegacyTask(unowned), /exact owner\/repo/);
 });
 
-test("GitHub-backed Worker mutations fail closed before any Contents PUT while reads stay live", async (t) => {
+test("GitHub-backed Worker mutations fail closed at the missing conduct keeper while reads stay live", async (t) => {
   const originalFetch = globalThis.fetch;
   t.after(() => {
     globalThis.fetch = originalFetch;
@@ -60,8 +73,17 @@ test("GitHub-backed Worker mutations fail closed before any Contents PUT while r
     "tasks:",
     "  - id: WORKER-1",
     "    title: Keeper-owned task",
+    "    repo: organvm/limen",
     "    target_agent: codex",
+    "    priority: high",
+    "    budget_cost: 1",
     "    status: dispatched",
+    "    predicate: pytest -q",
+    "    receipt_target: git:organvm/limen:tasks.yaml#WORKER-1",
+    "    origin: human_prompt",
+    "    horizon: present",
+    "    value_case: Verify the bounded Worker task",
+    "    owner_surface: organvm/limen",
     "    created: '2026-07-01'",
     "    dispatch_log: []",
     "",
@@ -109,39 +131,28 @@ test("GitHub-backed Worker mutations fail closed before any Contents PUT while r
 
   const mutations = [
     new Request("https://limen.test/api/release-stale?hours=0&dry_run=false", { method: "POST" }),
-    new Request("https://limen.test/api/dispatch", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ agent: "codex", live: true }),
-    }),
     new Request("https://limen.test/api/tasks/WORKER-1/verify", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ status: "done" }),
+      body: JSON.stringify({
+        status: "done",
+        predicate_exit_code: 0,
+        receipt_target: "git:organvm/limen:tasks.yaml#WORKER-1",
+        receipt_verified: true,
+        verification_context_digest: "a".repeat(64),
+      }),
     }),
     new Request("https://limen.test/api/tasks/WORKER-1/assign", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ target_agent: "codex" }),
     }),
-    new Request("https://limen.test/api/tasks/WORKER-1/archive", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({}),
-    }),
   ];
   for (const request of mutations) {
     const mutation = await worker.fetch(request, env);
-    assert.equal(mutation.status, 409);
+    assert.equal(mutation.status, 503);
     const receipt = await mutation.json();
-    assert.equal(receipt.status, "mutation_deferred");
-    assert.equal(receipt.code, "board_mutation_deferred");
-    assert.equal(receipt.retryable, true);
-    assert.equal(receipt.owner, "tabularius");
-    assert.equal(receipt.target.access, "read_only");
-    assert.equal(receipt.target.writable, false);
-    assert.equal(receipt.target.branch, "tabularius/board-projection");
-    assert.equal("released" in receipt, false);
+    assert.match(receipt.detail, /conduct keeper binding is not configured/);
   }
-  assert.deepEqual(calls.map((call) => call.method), ["GET", "GET"]);
+  assert.deepEqual(calls.map((call) => call.method), ["GET", "GET", "GET", "GET", "GET"]);
 });

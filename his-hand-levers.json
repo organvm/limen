@@ -10,10 +10,10 @@
       "owner": "yours",
       "cost": "~1 min once, durable — OR skip entirely (keyed path covers Gmail headlessly)",
       "status": "optional-fallback (keyed IMAP path designs the grant out for Gmail)",
-      "gate": "macOS TCC Automation (GUI approval) + one env flag — only for non-Gmail accounts' drafts",
+      "gate": "macOS TCC Automation (GUI approval for the fixed Domus Agent Host) + one env flag — only for non-Gmail accounts' drafts",
       "unlocks": "autonomic per-beat draft creation on non-Gmail accounts (draft-only; never auto-sent). Gmail drafts already work headlessly once creds-hydrate lands GMAIL_APP_PASSWORD + GMAIL_USER in ~/.limen.env.",
       "source_task": "mail organ · C_MAIL draft effector (limen PR #958); designed out for Gmail by the keyed path (UMA #168 + creds lane)",
-      "note": "No longer on your critical path. The keyed path: creds-hydrate hydrates op://Private/gmail-app-pw-2026-06-06 (password → GMAIL_APP_PASSWORD, username → GMAIL_USER) into ~/.limen.env each beat; UMA draft_writer._select_saver then APPENDs Gmail drafts via IMAP, no AppleScript, no grant. If you ever want headless drafts for a NON-Gmail account too: System Settings -> Privacy & Security -> Automation -> allow the limen heartbeat (or osascript/Terminal) to control Mail, run `bash scripts/mail-beat.sh` once in Terminal and click Allow, recreate the pinned interpreter (`python3 -m venv --copies ~/Workspace/limen/.venv`), and set LIMEN_MAIL_DRAFTS=1. Send stays draft-only / disarmed regardless.",
+      "note": "No longer on your critical path. The keyed path: creds-hydrate hydrates op://Private/gmail-app-pw-2026-06-06 (password → GMAIL_APP_PASSWORD, username → GMAIL_USER) into ~/.limen.env each beat; UMA draft_writer._select_saver then APPENDs Gmail drafts via IMAP, no AppleScript, no grant. If you ever want headless drafts for a NON-Gmail account too: run `scripts/mail-beat.sh` through `domus-agent-host run -- ...`, then in System Settings -> Privacy & Security -> Automation allow Domus Agent Host to control Mail and set LIMEN_MAIL_DRAFTS=1. Never grant or pin a Limen venv interpreter. Send stays draft-only / disarmed regardless.",
       "issue": 960
     },
     {
@@ -185,7 +185,8 @@
         "Decide styx — value-repos key organvm/styx 404s; the real public product is organvm/peer-audited--behavioral-blockchain, which is pre-revenue (deck live, API undeployed). Tell me to deploy it or reframe the door to admit built-but-not-live systems, and I'll seed it.",
         "Seed the remaining value-repos — session-meta, portfolio, the two limen mirrors. Point me at a repo's real proof (tests/deploy/scale) or just name it; I verify and draft the seed. No fabricated weight. Seeded & live: public-record-data-scrapper, universal-mail--automation, a-i-chat--exporter.",
         "Deeper lead capture — BUILT: the inbound-lead lane is now live end-to-end (UMA inbound-lead-hire/deploy/linkedin protocol family + the opportunity-pipeline beat sensor + a warm-lead badge on the obligations face). Detail in docs/positioning/_capture.md. No hand step remains here; the lane is armed by LIMEN_MAIL_SEND (the send valve) like every other SAFE reply.",
-        "LinkedIn — make email the front door (one profile pass, your hand): (1) mirror InMail + message notifications to Gmail (LinkedIn Settings → Communications → email notifications ON for messages/InMail) so a reach-out lands in the mail lane that already classifies it; (2) put the fastest channel in the open — profile headline/About and the Contact-info panel say 'fastest: contact@4444j99.dev'; (3) set Open To Work to recruiters-only (not the public #OpenToWork banner). This is your hand because it edits your public identity + account settings; it turns LinkedIn into an email-first inbound source the built lane already handles."
+        "LinkedIn — make email the front door (one profile pass, your hand): (1) mirror InMail + message notifications to Gmail (LinkedIn Settings → Communications → email notifications ON for messages/InMail) so a reach-out lands in the mail lane that already classifies it; (2) put the fastest channel in the open — profile headline/About and the Contact-info panel say 'fastest: contact@4444j99.dev'; (3) set Open To Work to recruiters-only (not the public #OpenToWork banner). This is your hand because it edits your public identity + account settings; it turns LinkedIn into an email-first inbound source the built lane already handles.",
+        "Pin the partner monuments — the front door now carries a derived 'Built with partners' section (constellation faces, first-name slugs only; regenerates as each face lands). When you republish it, also pin the flagship partner repos on your public profile. Publishes to your identity — which monuments ride your profile is your call."
       ],
       "note": "INVARIANT: none of this sends, deletes, or spends without you — capture drafts, it never reaches out. The system record docs/positioning/_his-hand.md is the full owner-record; this lever is its single canonical pointer on the obligations face (per this file's _doc: a his-hand task hangs HERE, not only in a satellite doc). See memory: [[repos-are-inbound-signal-surface]], [[publish-form-rent-operation]], [[his-hand-tasks-hang-in-permanent-registry]].",
       "issue": 267
@@ -214,27 +215,83 @@
     },
     {
       "id": "L-AGENT-BASH-PROMPT",
-      "label": "Apply the agent bash-prompt fix — ONE reversible paste. Plan/auto/fleet agents get prompted on nearly every `cd ~/Workspace/<repo> && <cmd>` because the PreToolUse hook allow-trusted-cd-git.sh only auto-approves the `git` form, and Claude Code v2.1.x prompts on every compound-cd (upstream #32985). This floods autonomous agents and holds the fleet back. It is YOUR hand because the auto-mode classifier hard-denies an agent widening its own hook / settings.json allow array.",
+      "label": "Arm the trust hook — ONE command, not a paste. Every lane is prompted on nearly every Bash call because allow-trusted-cd-git.sh, though deployed and byte-identical to the repo canonical, is NOT WIRED into hooks.PreToolUse — and Claude Code v2.1.x prompts on every compound `cd <dir> && <cmd>` (upstream #32985), which no settings allow rule can suppress. It is YOUR hand because the auto-mode classifier blocks the AGENT from widening its own gate — and that block is on the ACT, not the path: verified 2026-07-31 it covers the chezmoi SOURCE too, including a read-only dry-run of the effector. Correct guardrail; not routed around.",
       "owner": "yours",
-      "cost": "one reversible paste (~1 min)",
-      "unlocks": "the fleet stops drowning in compound-cd permission prompts — autonomous lanes run unblocked",
-      "source_task": "fleet-permission-prompt-fix (memory carries the exact block + rationale)",
-      "gate": "the classifier denies an agent editing its own hook/settings.json — opens only from your side",
+      "cost": "one command (~10s), reversible — the effector backs up the source and prints the full diff before writing",
+      "unlocks": "the compound-cd prompt flood ends for every lane; permissions.ask regains its five-rule fail-safe backstop; the auto-mode classifier finally learns the trust boundary via autoMode.allow",
+      "source_task": "fleet-permission-prompt-fix; effector shipped 2026-07-31 as scripts/heal-hook-wiring.py",
+      "gate": "the classifier denies an agent widening its own permission gate, wherever that file lives (rendered target AND cartridge source) — opens only from your side",
+      "effector": "scripts/heal-hook-wiring.py",
       "steps": [
-        "Paste the prepared block from memory/fleet-permission-prompt-fix.md — backs up settings.json, overwrites the hook with the directory-trust version (trust the directory + any inner command inside ~/Workspace / *.claude/worktrees/* / ~/.claude/jobs/* / /tmp), idempotently merges the missing allow families",
-        "Closes when the hook is generalized (no longer git-only). Full detail in issue #183."
+        "cd ~/Workspace/limen && python3 scripts/heal-hook-wiring.py            # dry-run: prints the exact diff, writes nothing",
+        "cd ~/Workspace/limen && python3 scripts/heal-hook-wiring.py --apply    # asserts hook + ask + autoMode in the cartridge source, then chezmoi apply",
+        "Restart Claude Code (hooks load at session start), then verify: bash scripts/dialogs-silenced.sh",
+        "Closes when class 1d prints green. The hook itself is generalized as of 2026-07-31 — standalone commands now earn the same trust as cd-chains (matrix 77 -> 99 cases). Only the WIRING remains. Detail in issue #183."
       ],
+      "note_do_not": "Do NOT cure this by editing ~/.claude/settings.json — it is rendered from the cartridge template and the next `chezmoi apply` discards the edit (Rule #6). Do NOT beat-wire the effector: an auto-armed valve here would let the system widen its own gate unattended, which is exactly what the classifier exists to prevent.",
       "issue": 183
     },
     {
       "id": "L-BACKUP-FDA",
       "label": "OPTIONAL enhancements — nothing is blocked without these; filed only so they have a permanent home, never nagged. (1) Time Machine destination: no completed TM backup, but data already has 3 copies (iCloud + Archive4T + Backblaze) so TM is convenience, not a durability gap. (2) Full Disk Access for Mail/Messages preservation: the 'python3 wants data from other apps' dialog is already neutralized (library-preserve.py skips FDA-gated stores when it lacks FDA, 7ad100f) — act only if you want Mail+Messages added to the offsite sliver.",
       "owner": "yours",
-      "cost": "TM: a staging drive + `tmutil setdestination`. FDA: grant Full Disk Access to ~/Workspace/limen/.venv/bin/python3 in System Settings",
+      "cost": "TM: a staging drive + `tmutil setdestination`. FDA: grant the fixed Domus Agent Host once through L-DOMUS-AGENT-HOST-TCC; never grant a Limen venv interpreter",
       "unlocks": "(optional) a 4th backup tier (Time Machine); Mail+Messages added to offsite preservation",
       "source_task": "needs_human digest (optional tier)",
-      "gate": "both are local-machine settings only you can grant — never automatable; neither blocks anything",
+      "gate": "both are local-machine settings only you can grant — never automatable; neither blocks anything. Any protected Limen read must run beneath the fixed Domus host.",
       "issue": 184
+    },
+    {
+      "id": "L-DOMUS-AGENT-HOST-TCC",
+      "label": "Grant App Management to the fixed Domus Agent Host — ONCE, not once per version. Its identity is a signed bundle, so the grant survives every Claude Code update and covers everything that genuinely execs through the host (the fleet, LaunchAgents, MCP ingresses). It does NOT stop Claude Code's own per-version consent dialogs: Claude Code disclaims inherited TCC responsibility by design, so no host can carry an identity into it (see step 10).",
+      "owner": "engineering",
+      "cost": "~1 min once, durable across every future Claude Code version",
+      "unlocks": "foreground agents, background PTYs/spares, MCP descendants, and Python control-plane commands retain protected access across executable version rotation with no repeated privacy prompts",
+      "source_task": "Auto-Updates Without TCC Permission Sprawl · docs/architecture/tcc-stable-agent-host.md",
+      "gate": "macOS TCC (GUI approval) — tccutil can only reset, never grant, so this atom is irreducible. One click on the STABLE HOST ends the class; one click per version does not.",
+      "steps": [
+        "Completed: route all ten live managed GUI/MCP ingresses through `domus-agent-host ensure --` without replacing the native host",
+        "Completed: add and enable DomusAgentHost.app and remove exactly eight path rows through the pane's per-row minus control; no bundle row changed",
+        "Completed: run the hosted update/delete fixture through renamed uvx, Node, Python, and portable Ruby paths and cold-start Claude Desktop without a new identity",
+        "Completed 2026-08-05 (#1833): discharge evidence pins an IMMUTABLE timestamped receipt, never the beat-rewritten closeout-latest.json alias",
+        "Completed 2026-08-05: the instrument itself — `autoUpdates` is read from every .claude.json root (incl. CLAUDE_CONFIG_DIR), an unreadable TCC database reports `unmeasured` instead of manufacturing a green and two reds, and `rotating_identity_active_grants` counts version-keyed paths holding live grants ACROSS ALL SERVICES (the class L-TCC-VERSIONED-CLIENT-LEAK-2-1-222 was found by hand is now detected automatically)",
+        "Open (operator, click 1 of 2): System Settings -> Privacy & Security -> Full Disk Access -> add and enable Domus Agent Host. This grant is what makes the audit MEASURABLE at all: reading ~/Library/Application Support/com.apple.TCC/TCC.db is gated by kTCCServiceSystemPolicyAllFiles, so without it every database-derived predicate reports `unmeasured` (verified 2026-08-05: `domus-agent-host run -- python3 scripts/tcc-identity-audit.py --json` returns tcc_database_unavailable even though the host is valid and signed). Grant it to the HOST bundle, never to a versioned path.",
+        "Open (operator, click 2 of 2): System Settings -> Privacy & Security -> App Management -> enable Domus Agent Host. Verify with `python3 scripts/tcc-identity-audit.py --strict` run BENEATH the host (`domus-agent-host run -- ...`); a bare run cannot read the TCC database and honestly reports `unmeasured`, and so does a hosted run until click 1 lands.",
+        "Completed 2026-08-05 (CORRECTION): the interactive lane was ALREADY hosted and routing it was never the fix. `claude()` in ~/.config/zsh/25-agent-runtime.zsh enters domus-agent-runtime -> DomusAgentHost (PID 30699 carried DOMUS_AGENT_HOST_ACTIVE=1 + a real lifetime FD/ID). Claude Code then re-execs itself with `process.execve(..., {macDisclaimResponsibility: true})` — responsibility_spawnattrs_setdisclaim — so NO supervising host can carry a TCC identity into it, by vendor design (the operator should see 'Claude Code', not the terminal). `domus-agent-host verify-lifetime` exits 1 downstream, exactly as the host's own safeguard specifies. This lever's App Management grant therefore covers the FLEET (LaunchAgents, the ten MCP ingresses), never the interactive prompts.",
+        "Completed 2026-08-05 (SUPERSEDED IN PART by step 10): the disclaimed identity is decided by `let e = await _jb() ?? process.execPath`. _jb() materializes <store>/ClaudeCode.app (CFBundleIdentifier com.anthropic.claude-code, stable across versions). TCC resolves a client by the bundle enclosing the exec'd path, never by the bytes — the bundled path and versions/<version> are the SAME INODE, but only the former has an identity to resolve. scripts/claude-identity-bundle.py keeps it present and inode-correct, beat-wired and idempotent. The claim made here that this is 'why the dialog reads 2.1.222' was WRONG and is corrected in step 10.",
+        "Open (engineering, advisory): two runnable versions remain in the store (2.1.220 and 2.1.222). Different versions have different inodes, so concurrent starts of BOTH still unlink and re-link each other's hardlink, reopening the race the keeper closes for the single-version case. The keeper reports this rather than repairing it — deleting a vendor version is not its authority.",
+        "Open (upstream, not operator-actionable) 2026-08-05 CORRECTION: keeping the bundle does NOT stop the per-version prompts, verified against a live process tree while the keeper reported at-ideal. `~/.local/bin/claude daemon run` (launchd-rooted) spawns its pty host FROM the bundle, then hands the session process its versions/<version> path as literal argv; that session disclaims and becomes its own TCC client, named by filename. Corroborated by lever 17, which records real TCC rows bound to versions/2.1.222. The argv is composed inside the vendor binary — redirecting it would mean patching a signed 271MB Mach-O, breaking its signature and auto-update. FILED 2026-08-05 with full evidence (inode equality, live process tree, argv) as a comment on the existing upstream report rather than a duplicate — the tracker already carries ~20 open issues on this class: https://github.com/anthropics/claude-code/issues/79867#issuecomment-5198453531 . Owner is upstream; watch that thread. NOT an operator click and NOT a local workaround. Do not re-file this as a Domus Agent Host grant: no host grant can reach a disclaimed child."
+      ],
+      "status": "open",
+      "issue": 1703,
+      "derived_status": "IF-AGENT-IDENTITY in institutio/governance/ideal-forms.yaml — run `python3 scripts/check-ideal-forms.py --measure`. This lever carries NO status of its own beyond open/closed; the probe decides.",
+      "retracted_discharge": {
+        "at": "2026-08-05T14:14:23Z",
+        "by": "scripts/tcc-track-c-closeout.py --finalize",
+        "issue": 1703,
+        "receipt": "docs/receipts/tcc-track-c-1703/closeout-20260805T133718Z.json",
+        "version": "2.1.222",
+        "retracted_at": "2026-08-05",
+        "reason": "Vacuous proof, retracted after PR #1833 re-pinned it. #1833 correctly fixed a REAL and separate defect — latest_met_receipt() reverse-globbed to the mutable closeout-latest.json alias, which flipped to blocked under the lever's own pointer — and that immutable pin is retained here. But the evidence it pins to is itself vacuous: receipt closeout-20260805T133718Z.json records normalized_inventory.automatic_updates_enabled=true while `autoUpdates` was false in BOTH .claude.json roots, because _disabled_updates() never read that field. inventory_green()'s automatic_updates_disabled guard therefore passed on an unread value, and with updates off the version could not advance: update_attempted=false, version_before==version_after==2.1.222, and non_noop=true only because the current version exceeds the 2.1.220 cutover baseline — never because an update was observed. #1833's own finding corroborates this: grants attached to versions/2.1.222 at 16:22Z and 17:07Z, AFTER the 14:14Z discharge. Kept, not deleted: a retracted discharge is evidence about the instrument. See docs/IDEAL-FORMS-LEDGER.md → IF-AGENT-IDENTITY."
+      }
+    },
+    {
+      "id": "L-TCC-VERSIONED-CLIENT-LEAK-2-1-222",
+      "label": "Remove the EIGHT TCC grants that attached to the rotating versioned client `~/.local/share/claude/versions/2.1.222` on 2026-08-05 (16:22Z-22:59Z) and re-land what is still needed on the fixed Domus Agent Host. Identity un-redacted 2026-08-06 via _identity_id(client, client_type=1) -> sha256:7faf64b4..., confirming the 2.1.222 attribution. The host's own AppleEvents decision is DENIED (auth_value 0), which is why the prompt fell through to the versioned binary.",
+      "owner": "yours",
+      "cost": "~2 min GUI, durable",
+      "unlocks": "beat sensor `tcc-track-c` returns green (active_leaks 0, new_managed 0); osascript/Mail automation and removable-volume access survive the next Claude Code version rotation without a fresh prompt",
+      "source_task": "post-discharge inventory regression · docs/receipts/tcc-track-c-1703/closeout-20260805T165301Z.json onward · L-DOMUS-AGENT-HOST-TCC",
+      "gate": "macOS TCC (GUI approval + per-row removal) — never automatable",
+      "steps": [
+        "Trigger the AppleEvents flow once THROUGH the host (`domus-agent-host run -- osascript ...`) and Allow the prompt so the grant lands on Domus Agent Host, not a versioned path (if no prompt appears, first flip Domus Agent Host back ON under System Settings -> Privacy & Security -> Automation)",
+        "Remove the versioned 2.1.222 client's row in EACH of these panes — this is the correction of 2026-08-06; the lever previously named only the first two, so following it as written removed 2 of 8 and left the sensor red: Automation (kTCCServiceAppleEvents, 16:22:16Z) · Files & Folders > Removable Volumes (17:07:04Z) · Files & Folders > Documents (20:38:23Z) · Files & Folders > Desktop (22:59:03Z) · Files & Folders > Downloads (22:59:05Z) · Media & Apple Music (22:59:06Z) · App Data (22:59:10Z, auth_value 5) · Files & Folders > FileProvider (22:59:11Z)",
+        "Leave the kTCCServiceSystemPolicyAllFiles row alone if present — it is auth_value 0 (DENIED, 20:39:47Z), not a grant, and removing a denial is not the goal",
+        "Re-grant only what is actually needed, through the host, on next hosted use",
+        "Verify: `scripts/tcc-identity-audit --strict` exits 0 with active_leaks 0 and new_managed 0, and the next `python3 scripts/tcc-track-c-closeout.py --beat` receipt is green. Cite the WRAPPER, not `scripts/tcc-identity-audit.py`: it execs the same module and additionally handles the no-python3 and non-Darwin cases the bare module does not, so it is the citation that works when someone actually runs it. cli/tests/test_his_hand_registry.py pins the path both spellings share, so this is a free choice, not a pinned one."
+      ],
+      "note": "Root cause of recurrence: any osascript/volume access run from an UNHOSTED claude session re-creates this leak after removal — route those flows through `domus-agent-host run --`. SCOPE CORRECTED 2026-08-06: the live audit shows NINE decisions on this identity (eight non-denied, one denial), not two. Five of the eight landed in a 9-second burst at 22:59:03-22:59:11Z. The version path still exists on disk (2.1.221/222/223 all present), so these are live rows, not orphans. Un-redact any future leak hash with _identity_id in scripts/tcc-identity-audit.py. See docs/architecture/macos-tcc-gatekeeper-dialogs-solved.md for the OPEN QUESTION on whether the pre-#1848 deleting effector was generating these.",
+      "issue": 1703
     },
     {
       "id": "L-LINT-HOOK",
@@ -279,18 +336,35 @@
         "Verify: bash scripts/dialogs-silenced.sh --agent-curable-only prints ALL CLEAR (agent-curable), and python3 scripts/armed-valve-audit.py --check shows the three valves ARMED. Until you arm them they read PARKED (this lever cites them), never SILENT-OFF."
       ],
       "source_task": "dialogs-silenced self-healing organ · R3 (sensors.yaml 0g8b; effectors heal-hook-drift.sh / heal-claude-cask.sh / heal-claude-lsregister.sh; PRs #1206 + #1212)",
-      "note": "The three deliverable valves default OFF because each authorizes an unattended HOST MUTATION (reinstall a hook / uninstall a cask / unregister an app). Off, the beat still DETECTS + reports (advisory); armed, it CURES — the sensor-without-effector defect closed for the whole agent-curable estate. Sibling levers cover the human-gated classes no effector can touch: settings.json self-mod (L-AGENT-BASH-PROMPT #183) and the firewall sudo (L-FIREWALL-PROMPT #289). scripts/dialogs-silenced.sh is the single predicate over the whole estate; --agent-curable-only is the omega rung. See memory: macos-tcc-gatekeeper-dialogs-solved.",
+      "note": "The three deliverable valves default OFF because each authorizes an unattended HOST MUTATION (reinstall a hook / uninstall a cask / unregister an app). Off, the beat still DETECTS + reports (advisory); armed, it CURES — the sensor-without-effector defect closed for the whole agent-curable estate. Sibling levers cover the human-gated classes no effector can touch: settings.json self-mod (L-AGENT-BASH-PROMPT #183) and the firewall sudo (L-FIREWALL-PROMPT #289). scripts/dialogs-silenced.sh is the single predicate over the whole estate; --agent-curable-only is the omega rung. The class-4b effector UNREGISTERS and no longer removes (2026-08-05): the bundle is vendor-materialized every start and deleting it destroyed the stable TCC identity 0g8d keeps. Corrected root: docs/architecture/macos-tcc-gatekeeper-dialogs-solved.md; ideal form IF-GATEKEEPER-INERT.",
       "issue": 289
     },
     {
+      "id": "L-CLAUDE-DEEPLINK-REGISTRATION",
+      "label": "Decide whether Claude Code should register its claude-cli:// protocol handler with macOS. The handler bundle (~/Applications/Claude Code URL Handler.app) wraps a bare-signed Mach-O in a hand-written Info.plist, so Gatekeeper can never assess it — and it sits in ~/Applications, a LaunchServices-SCANNED domain, so unregistration does not hold there. The vendor ships the only convergent off-switch.",
+      "owner": "yours",
+      "cost": "one key in ~/.claude/settings.json (~15s), or an explicit decision to keep deep links and accept the finding",
+      "unlocks": "IF-GATEKEEPER-INERT reaches at-ideal across every scanned domain, not just the Claude store — the last registered-but-unassessable vendor bundle on the host goes away",
+      "gate": "Writing ~/.claude/settings.json is classifier-blocked for the agent (the self-modification boundary, same as L-AGENT-BASH-PROMPT). This is ALSO a genuine feature trade, not merely a permission: disabling registration turns off claude-cli:// deep links, so it is a product decision the registry must not make for you.",
+      "steps": [
+        "Decide: do you use claude-cli:// deep links (IDE/desktop 'open in Claude Code' handoffs)? If unsure, leave this lever open — the finding is advisory and costs nothing but a non-green --strict.",
+        "If NOT: add to ~/.claude/settings.json  ->  \"disableDeepLinkRegistration\": \"disable\"",
+        "Remove the now-unmanaged bundle if you wish: rm -rf ~/Applications/'Claude Code URL Handler.app'  (safe — nothing else links it, and the vendor will not recreate it once the setting is set)",
+        "Verify: python3 scripts/claude-identity-bundle.py --strict exits 0, and its instances[] shows ls_registered=false for the handler."
+      ],
+      "source_task": "IF-GATEKEEPER-INERT · the second instance of the vendor-bundle class, surfaced by the keeper's class enumeration (scripts/claude-identity-bundle.py)",
+      "note": "Measured by the keeper, never applied by it — the deliberate split between what this organ can observe and what it has authority to change, same shape as concurrent_version_race_risk. The setting key is the vendor's own: 'Prevent claude-cli:// protocol handler registration with the OS'. Do NOT 'fix' this bundle by re-linking or re-signing it: its symlink already tracks the launcher correctly, and signing it would rewrite the live CLI's Developer ID signature in place. See docs/architecture/macos-tcc-gatekeeper-dialogs-solved.md.",
+      "issue": 1851
+    },
+    {
       "id": "L-TCC-RECORDER",
-      "label": "Grant Screen Recording + Microphone permission to the media-recorder binary (organs/media/tools/recorder) on first capture — the one human step for native system-audio recording.",
+      "label": "Grant Screen Recording + Microphone permission to the fixed Domus Agent Host on first hosted media-recorder capture — the one human step for native system-audio recording without creating a versioned recorder client.",
       "owner": "yours",
       "cost": "~1 min once, durable",
       "gate": "macOS TCC (GUI approval)",
       "unlocks": "native screen + SYSTEM-AUDIO recording (no BlackHole needed)",
-      "source_task": "media organ · recorder",
-      "note": "System Settings -> Privacy & Security -> Screen Recording (and Microphone) -> enable media-recorder. Route via the macOS-TCC auto-updater lever if the binary path churns.",
+      "source_task": "media organ · recorder · L-DOMUS-AGENT-HOST-TCC",
+      "note": "Run the recorder through `domus-agent-host run -- ...`, then in System Settings -> Privacy & Security -> Screen Recording (and Microphone) enable Domus Agent Host. Never grant a rotating recorder or interpreter path.",
       "issue": 529
     },
     {
@@ -306,13 +380,13 @@
     },
     {
       "id": "L-TCC-PHOTOS-AUTOMATION",
-      "label": "Grant Automation permission to control Photos.app for the screen-capture importer — fixes its on-record exit-1 (AppleScript error -4960).",
+      "label": "Grant Automation permission to the fixed Domus Agent Host to control Photos.app for the hosted screen-capture importer — fixes its on-record exit-1 (AppleScript error -4960) without creating a rotating importer client.",
       "owner": "yours",
       "cost": "~1 min once, durable",
       "gate": "macOS TCC Automation (GUI approval)",
       "unlocks": "auto-import of screengrabs/recordings into Photos.app",
-      "source_task": "media organ · screen-capture-importer",
-      "note": "System Settings -> Privacy & Security -> Automation -> allow the importer (or its parent) to control Photos. Or run the importer once from Terminal to trigger the prompt, then reload the LaunchAgent.",
+      "source_task": "media organ · screen-capture-importer · L-DOMUS-AGENT-HOST-TCC",
+      "note": "Run the importer once through `domus-agent-host run -- ...` to trigger the request, then in System Settings -> Privacy & Security -> Automation allow Domus Agent Host to control Photos. The importer remains on-demand; do not register or grant a rotating interpreter.",
       "issue": 531
     },
     {
@@ -468,12 +542,13 @@
     },
     {
       "id": "L-STORAGE-DRAIN-PUSHED",
-      "label": "Flip LIMEN_RECLAIM_PUSHED_OK=1 in the beat/launchd environment to DRAIN the pushed-but-unmerged worktree backlog (~293 roots, the dominant boot-disk pin) toward the 200 GiB free target. The escape hatch shipped DEFAULT-OFF in PR #867 (round-three storage-deadlock heal): the code, the standing grant (clean+pushed+idle), and its tests are all live — only the flip is un-pulled. Reaching ~200 GiB free otherwise waits on this OR the container cutover (L-CONTAINER-CUTOVER #255); the beat already drains the merged + clone classes without it.",
+      "label": "Retired: pushed-but-unmerged local checkout reclaim is now a default-on, loss-free lifecycle rule governed by all-local-ref remote proof and the live resource envelope.",
       "owner": "yours",
-      "cost": "~1 min, one env flip, REVERSIBLE and loss-free (pushed roots are on origin, re-cloneable; only the disposable local checkout is freed).",
-      "unlocks": "closes the boot free-space gap toward LIMEN_ALWAYS_WORKING_TARGET_FREE_GIB (200) via reclaim, without the irreversible container cutover.",
-      "gate": "This OVERRIDES your own tested merge-before-reap rule (2026-07-09, test_reclaim_keeps_clean_pushed_unmerged_branch: 'pushed preservation is not closure'). Enabling it reaps the LOCAL checkouts of ~293 in-flight/abandoned pushed-but-unmerged branches — the branches and their PR/babysitting lifecycle stay on origin, unaffected. Loss-free and reversible, but a policy choice only you make: speed-to-200 GiB vs keep-local-until-merged. Not defaulted on for exactly this reason.",
-      "source_task": "round-three storage-deadlock heal, PR #867 (LIMEN_RECLAIM_PUSHED_OK escape hatch, default-off)",
+      "status": "retired",
+      "cost": "none",
+      "unlocks": "none; the prior one-time hand gate is superseded",
+      "gate": "none; fixed free-space targets are historical evidence, not current authority",
+      "source_task": "superseded by Prima Materia evacuation v2 and the dynamic resource-envelope contract",
       "issue": 912
     },
     {
@@ -502,6 +577,15 @@
       "unlocks": "required-check protection on the governed repos; the GITVS branch_protection resource (class A/G) goes green",
       "source_task": "GITVS estate (institutio/github/estate.yaml branch_protection) + #257",
       "issue": 257
+    },
+    {
+      "id": "L-PARTNER-GRANTS",
+      "label": "Fire staged partner-access commands when the repo_collaborators resource cites them: adding a grant row to institutio/github/access.yaml stages an invite (outbound — collab-sync.py --plan prints the exact `gh api -X PUT` command; the machine never sends it), and any role downgrade or relationship-sensitive removal of a DECLARED partner is your call the same way. Removal of UNDECLARED access is machine-runnable (collab-sync.py --apply, double-dark LIMEN_COLLAB_APPLY=1) but still rides this lever via the estate.yaml approval gate. GITVS doctor class N detects the drift; this lever fires the human half.",
+      "owner": "yours",
+      "cost": "~1 min per staged command; REVERSIBLE (a grant can be removed, an invite cancelled)",
+      "unlocks": "declared partner grants go live (invite fired) or stay clean (undeclared access removed); the GITVS repo_collaborators resource (class N) goes green",
+      "source_task": "GITVS estate (institutio/github/estate.yaml repo_collaborators) + institutio/github/access.yaml",
+      "issue": 1434
     },
     {
       "id": "L-OPENCODE-AUTH",
@@ -622,19 +706,8 @@
       "issue": 1190
     },
     {
-      "id": "L-SEO-METADATA",
-      "label": "Arm the repo-metadata effector: setting LIMEN_REPO_METADATA_APPLY=1 (with LIMEN_GITVS_APPLY=1 so the reconcile beat dispatches it) lets repo-metadata-sync.py write description/topics/homepage on governed public repos — outward-facing but reversible. Seeds (positioning-seeds.json, seo-seeds.yaml) win; derivation only fills gaps, never overwrites a human-set value; bounded 25 repos/run. Review one dry plan first: python3 scripts/repo-metadata-sync.py",
-      "owner": "him",
-      "cost": "5 min review + one env flip",
-      "status": "needs_human",
-      "gate": "review the dry plan; set LIMEN_REPO_METADATA_APPLY=1 in the runtime env",
-      "unlocks": [],
-      "source_task": "publication-engine lane (SEO organ)",
-      "issue": 1191
-    },
-    {
       "id": "L-ORG-TEAM-UPGRADE",
-      "label": "Upgrade the `organvm` org to Team (~$4/mo) — the ONE surviving atom of the old enterprise-cancel lever (#1185, closed with receipts). The Enterprise half is DONE by machine (2026-07-17): all 8 shell orgs were removed from the meta-organvm enterprise via scripted same-origin form posts (0 organizations, 0 consumed licenses, every org standalone on the free plan, names kept; gitvs doctor class J green, verified live). Team on organvm arms private-repo rulesets/branch-protection (#257). Optional, unforced: delete the now-empty meta-organvm enterprise container.",
+      "label": "Upgrade the `organvm` org to Team (~$4/mo) — the ONE surviving atom of the old enterprise-cancel lever (#1185, closed with receipts). The Enterprise half is DONE by machine (2026-07-17): all 8 shell orgs were removed from the meta-organvm enterprise via scripted same-origin form posts (0 organizations, 0 consumed licenses, every org standalone on the free plan, names kept; gitvs doctor class J green, verified live). Team on organvm arms private-repo rulesets/branch-protection (#257). Optional, unforced: delete the now-empty meta-organvm enterprise container. SEAT-METERING FACT (doc-verified 2026-07-30, docs.github.com): on Team, OUTSIDE COLLABORATORS on private org repos CONSUME paid per-user licenses (+pending invites, +dormant users) — with partner lanes bound for the personal estate (custody v4.0.0), Team would meter every private-lane partner forever, while GitHub Pro personal (~$4/mo flat, L-PERSONAL-PRO #1659) buys the same review-gating for the lanes that actually carry partners. Weigh THIS lever only for org-side private-repo protection needs (engine room), never as the partner path.",
       "owner": "yours",
       "cost": "$4/mo; ~1 min checkout; REVERSIBLE (downgrade any time)",
       "unlocks": "private-repo rulesets/branch protection (#257); required merge checks on the 105 private repos",
@@ -683,6 +756,175 @@
       "gate": "outward-facing domain identity — only the owner can sanction which hostname maps to which surface; once approved the DNS attach itself is fleet-executable",
       "note": "The effector (scripts/cf-wrangler.sh) already drives wrangler custom-domain commands headlessly. The apex 4444j99.dev additionally requires a new Cloudflare Pages project created from organvm/portfolio before the custom domain can be attached. studio.objectlessons.film is excluded from this signoff — its gate is L-STUDIO-GOLIVE (#538) which requires NS delegation at the registrar (a separate action not covered by cf-wrangler.sh). See institutio/identity/url-map.yaml for the full taxonomy with current_url, canonical_secondary, and deploy_mechanism per entry.",
       "issue": 1258
+    },
+    {
+      "id": "L-CCE-PROVIDER-BUNDLES",
+      "label": "Download conversation export bundles from the 6 non-scriptable AI-chat vendors (Gemini Takeout, Grok, Perplexity, Copilot, DeepSeek, Mistral) and drop each archive under the CCE source-drop inbox (conversation-corpus-check: cce provider import picks them up). ChatGPT + Claude are already live-session-scripted and imported (2026-07-22, 320MB); this lever only widens dossier coverage — the constellation program is green without it.",
+      "owner": "yours",
+      "cost": "~5-10 min per vendor, once per refresh cycle",
+      "status": "open",
+      "gate": "vendor-portal logins the organ cannot perform (interactive export flows)",
+      "unlocks": "widens AI-chat dossier coverage to all 8 vendors — adds Gemini, Grok, Perplexity, Copilot, DeepSeek, Mistral alongside the already-imported ChatGPT + Claude corpus. The constellation program is green without it; this deepens source breadth for the cross-vendor insights engine.",
+      "source_task": "constellation closeout filings (limen PR #1373); CCE provider-import lane in conversation-corpus-check picks up archives dropped under the source-drop inbox.",
+      "issue": 1394
+    },
+    {
+      "id": "L-DECORUM-LINKEDIN-HEADLINE",
+      "label": "Paste the CURRENT LinkedIn headline + About text into this lever (or a private capture file it names) so DECORVM can voice-judge it like any other public prose surface. LinkedIn has no write API without OAuth partner status, so the text can only be captured by you; once captured, the professionalization keeper checks it for stale title/claims and brand-voice on every change.",
+      "owner": "yours",
+      "cost": "~2 min once per headline change",
+      "status": "open",
+      "gate": "no LinkedIn write API without partner OAuth — the current headline/About text can only be captured by the account holder",
+      "unlocks": "DECORVM (the professionalization keeper) covers the LinkedIn headline/About as an off-platform surface — voice-judged for stale claims and brand-voice, closing an egg-face gap no organ can reach headlessly",
+      "source_task": "DECORVM off_platform slot linkedin_headline (institutio/governance/decorum-surfaces.yaml)",
+      "issue": 1426
+    },
+    {
+      "id": "L-DECORUM-X-BIO",
+      "label": "Paste the CURRENT X/Twitter bio (160 chars) into this lever so DECORVM can voice-judge it. No write path without the paid X API; the text is captured by you, then checked for stale positioning + voice on every change.",
+      "owner": "yours",
+      "cost": "~1 min once per bio change",
+      "status": "open",
+      "gate": "no free X write API — the current bio can only be captured by the account holder",
+      "unlocks": "DECORVM covers the X bio as an off-platform surface (voice + staleness), closing another human-facing egg-face gap",
+      "source_task": "DECORVM off_platform slot x_bio (institutio/governance/decorum-surfaces.yaml)",
+      "issue": 1427
+    },
+    {
+      "id": "L-DECORUM-EMAIL-SIGNATURE",
+      "label": "Paste the CURRENT outbound email signature block into this lever so DECORVM can check it for a stale title, dead links, and brand-voice. Signatures live in mail-client config the organ cannot read; capture it once and on any change.",
+      "owner": "yours",
+      "cost": "~1 min once per signature change",
+      "status": "open",
+      "gate": "mail-client signature config is not organ-readable — the current block can only be captured by you",
+      "unlocks": "DECORVM covers the email signature as an off-platform surface (stale title/links + voice)",
+      "source_task": "DECORVM off_platform slot email_signature (institutio/governance/decorum-surfaces.yaml)",
+      "issue": 1428
+    },
+    {
+      "id": "L-DECORUM-RESUME-PDF",
+      "label": "Drop the CURRENT public resume PDF (or its text) into the private capture this lever names so DECORVM can check it for stale dates and a narrative that matches the actual contribution mix (the same VVLTVS NVMERVS check it runs on the profile). A resume that claims a role the contribution graph doesn't support is a quiet egg-face.",
+      "owner": "yours",
+      "cost": "~2 min once per resume revision",
+      "status": "open",
+      "gate": "the canonical resume PDF lives off-repo — the current file/text can only be provided by you",
+      "unlocks": "DECORVM covers the public resume as an off-platform surface (stale dates + narrative-accuracy against the contribution mix)",
+      "source_task": "DECORVM off_platform slot resume_pdf (institutio/governance/decorum-surfaces.yaml)",
+      "issue": 1429
+    },
+    {
+      "id": "L-APPLY-FIRE",
+      "label": "THE SUBMIT ARM for the outbound job funnel. The application-funnel beat sensor already SOURCES roles, SCORES them (>=9.0), BUILDS tailored materials, and STAGES complete application packages autonomously — reversibly, submitting nothing. Arming this lets the daily cycle also run the `apply` phase: submit staged applications to ATS portals, capped by the pipeline's own precision limits (<=2/week, 1 per org). Mirrors the mail send-arm exactly (stage always / fire when armed).",
+      "owner": "yours",
+      "cost": "one-time paste, durable — OR leave off and review staged packages first; the funnel never blocks on it",
+      "status": "optional — the funnel stages fully autonomously without it; this opens only the final third-party submit step",
+      "gate": "set LIMEN_APPLY_FIRE=1 in ~/.limen.env (writing a persistence-arming LIMEN_*=1 is classifier-gated to the agent, so this line is yours to paste) AND the pipeline's .submit-config.yaml (personal info for ATS autofill) present",
+      "unlocks": "end-to-end autonomous applying — the beat sources, scores, builds, stages, and submits qualified applications on its own, capped by precision limits; until armed it stops at staged and you glance before submit",
+      "source_task": "outbound funnel wiring — application-funnel sensor + scripts/application-funnel.py (limen); mirrors LIMEN_MAIL_SEND for outbound mail",
+      "issue": 1441
+    },
+    {
+      "id": "L-VIC-SHARE-PITCH",
+      "label": "Send the pitch to admin@victoroffgroup.com. This is an external/sending action and must be executed by the human to comply with the DO NOT SEND/LEAK constraints.",
+      "owner": "yours",
+      "cost": "~1 min to draft and send the email with the link to https://vic-pub-001-ui-001.victoroff-os.pages.dev",
+      "status": "open",
+      "unlocks": "the pitch is sent to David",
+      "source_task": "victoroff-os pitch deploy",
+      "gate": "Sending emails is irreversible external communication. The human must send it.",
+      "issue": 1450
+    },
+    {
+      "id": "L-CONST-CUSTODY-MIGRATION",
+      "label": "DISCHARGED 2026-07-30: all TEN partner-lane transfers fired and verified the same hour, under the operator's explicit live directive + the Bash(gh *) allow-rule he pasted into settings.local.json (the classifier gate the machine could not self-lift). Canary micro-tato-play first (owner 4444J99 + organvm redirect verified), then micro-tato, hokage-chess, peer-audited--behavioral-blockchain, styx-behavioral-economics-theory, styx-behavioral-art, mirror-mirror, your-fit-tailored, content-engine--asset-amplifier, sovereign-systems--elevate-align — all ten verified owner=4444J99 in one GraphQL read. All three live partner lanes verified intact post-move (jtenen, LeflerDesign, eauco-mads). elevate-align flipped private personal-side immediately after — the org-side 422 seat-metering block dissolved exactly as the dual-estate doctrine predicted, completing 8/8 registry demotes. Row re-path landed the same hour (estate + access + constellation + value-repos + revenue-ladder + positioning-seeds re-keys, derive-streams rerun). hospes remains org-side by design until its transcript→vault split (see registry notes).",
+      "owner": "yours",
+      "cost": "spent: ~15 min total for all 10 + the one settings paste",
+      "status": "discharged",
+      "gate": "Mass cross-account custody moves are outward-facing (collaborator notifications, invitation acceptance on the personal account) and multi-repo — his hand by the standing human-gated-lever classes. Machine never fires a transfer.",
+      "unlocks": "dual-estate v1.0.0 realized in ground truth: partner lanes insulated from the org Team upgrade seat economics; the moat estate carries zero partner access; repo_custody resource type can activate (observe + effector) in estate.yaml",
+      "source_task": "custody dual-estate excavation + encoding, 2026-07-29 (docs/plans/2026-07-29-custody-dual-estate-semver-lineage.md)",
+      "issue": 1642
+    },
+    {
+      "id": "L-GITVS-DEMOTE-ARM",
+      "label": "DISCHARGED 2026-07-30 via this lever's own one-shot path in the operator-authorized wave session: 7 of 8 registry-decided demotes are LIVE (organvm-corpvs-testamentvm, in-my-head, sovereign--ground, system-system--system, manumissio, content-engine--asset-amplifier, + netmode after its machine-infra re-class in PR #1653) — receipts in logs/visibility-actions.jsonl; collaborator access verified surviving on content-engine (LeflerDesign intact). sovereign-systems--elevate-align alone 422s on org private-repo seat-metering (maddie's live lane — the exact economics the dual-estate doctrine names) and flips FREE the moment its transfer lands (L-CONST-CUSTODY-MIGRATION). The durable ~/.limen.env LIMEN_GITVS_APPLY=1 arm stays optional: it makes the BEAT carry this posture continuously instead of per-session one-shots.",
+      "owner": "yours",
+      "cost": "optional residue: one line pasted into ~/.limen.env: LIMEN_GITVS_APPLY=1 (durable, beat fires it)",
+      "status": "discharged",
+      "gate": "writing a persistence-arming LIMEN_*=1 is classifier-gated to the agent (the L-APPLY-FIRE precedent), and the visibility effector itself was classifier-blocked in the 2026-07-29 background session — the paste or the one-shot is yours",
+      "unlocks": "the secret-sauce posture the registry already adjudicated becomes ground truth: the 334K-word governance corpus, personal notes, and two partner build lanes stop being world-readable",
+      "source_task": "custody dual-estate excavation 2026-07-29 — Part III/IV of docs/plans/2026-07-29-custody-dual-estate-semver-lineage.md",
+      "issue": 1643
+    },
+    {
+      "id": "L-PEOPLE-ROOM-CONSTELLATION-SEED",
+      "label": "Seed the people-room constellation overlay directory (~/Workspace/_people-private/constellation/ — the private-overlay location the public register header already declares; materialized 0700 on 2026-07-29) by moving the local-only constellation scope-memory records (e.g. the victoroff-os project scope under .agent-runtime/claude/projects/) into it. Rule #2 closes itself from there: the beat's arca.sh backup sweep turns the store into durable, versioned ciphertext in the vault automatically — no public exposure, no extra step.",
+      "owner": "yours",
+      "cost": "~1 min: mv the relevant *.md into ~/Workspace/_people-private/constellation/ — the next beat seals it",
+      "status": "open",
+      "gate": "person-scoped writes into the private stores are classifier-gated to agents in background sessions (verified 2026-07-29, repeated denials including content-neutral rewrites) — the move is yours",
+      "unlocks": "zero local-only partner records: every constellation record durable as vault ciphertext, satisfying Rule #2 with nothing world-readable",
+      "source_task": "custody dual-estate excavation 2026-07-29 — docs/plans/2026-07-29-custody-dual-estate-semver-lineage.md",
+      "issue": 1646
+    },
+    {
+      "id": "L-PERSONAL-PRO",
+      "label": "Buy GitHub Pro (~$4/mo, flat) on the personal account 4444J99 — the ONE optional spend of custody v4.0.0. Pro adds protected branches, required reviewers, and code owners on personal PRIVATE repos: the partner estate (victoroff-os + the 10 lanes arriving via L-CONST-CUSTODY-MIGRATION). Doc-verified 2026-07-30: personal collaborator seats are free with or without Pro — this buys ONLY the review-gating, at flat cost, vs Team's per-partner seat metering (see L-ORG-TEAM-UPGRADE note). No regression while unpulled: the lanes are equally unprotected org-side today.",
+      "owner": "yours",
+      "cost": "$4/mo flat; ~1 min checkout; REVERSIBLE (downgrade any time)",
+      "status": "open",
+      "gate": "personal-account billing checkout — a purchase; never automatable",
+      "unlocks": "branch protection + required reviews on every partner lane, at flat cost, forever seat-free",
+      "source_task": "custody v4.0.0 wave 2026-07-30 (plan tranquil-spinning-possum; doc-verification of GitHub pricing 2026-07-30)",
+      "steps": [
+        "github.com → Settings → Billing and plans → Compare plans → Pro (monthly)",
+        "Done when `gh api /user --jq .plan.name` prints 'pro'"
+      ],
+      "issue": 1659
+    },
+    {
+      "id": "L-OUTBOUND-PREFLIGHT-ARM",
+      "label": "Arm the outbound preflight gate: paste ONE hook entry into `.claude/settings.json` → hooks.PreToolUse[0].hooks (the existing \"matcher\": \"Bash\" block that already holds worktree-commit-guard.sh and pytest-scope-guard.sh). The exact snippet, byte-identical in shape to the two guards already there, is in docs/runbooks/outbound-preflight-arming.md § The one edit. Everything else is DONE and on main — registry (institutio/governance/outbound-effectors.yaml), enforcer (scripts/hooks/outbound-preflight-guard.py), receipt producer (scripts/preflight-receipt.py), both ground-truth predicates, 13/13 hermetic tests, and the panel's own drift gate (scripts/check-effectors.py, wired into pr-gate). Shipped unarmed on purpose: .claude/settings.json is the self-modification boundary, so a model may not arm its own hook.",
+      "owner": "yours",
+      "cost": "~2 min, one paste, REVERSIBLE (delete the entry); escape hatch LIMEN_ALLOW_UNVERIFIED_OUTBOUND=1 is a declared parameter",
+      "status": "open",
+      "gate": "`.claude/settings.json` is the self-modification boundary (CLAUDE.md § Standing Autonomy & Compliant Gate Reroute) — the model stages the validated snippet and may not arm it",
+      "unlocks": "the gate goes from built-and-tested to ENFORCING. An outbound email or public GitHub comment with no fresh digest-bound receipt is DENIED, not reminded about. This is the consequence half of the 2026-07-31 escape: ten prose rules were written for the act-on-an-artifact-instead-of-reality class and all ten were followed by a recurrence, because a checklist the model self-certifies is a mirror. This one is os.stat() plus a SHA-256 compare — not a question the model gets to answer about itself.",
+      "source_task": "closeout 2026-07-31 (OUTBOUND-EFFECTORS, the fifth VIGILIA panel — PRs #1727, #1729, #1735)",
+      "steps": [
+        "Paste the snippet from docs/runbooks/outbound-preflight-arming.md § The one edit",
+        "bash scripts/tests/outbound-preflight-guard.test.sh   # expect 13/13, hermetic, no network",
+        "Done when a matched command with no receipt is refused: printf '%s' '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"scripts/mail-send --to someone@example.com\"}}' | python3 scripts/hooks/outbound-preflight-guard.py   # must print permissionDecision: deny"
+      ],
+      "issue": 1736
+    },
+    {
+      "id": "L-HEARTBEAT-WORKTREE-VOLUME-GONE",
+      "label": "The running heartbeat daemon is configured with LIMEN_WORKTREES=/Volumes/Scratch/limen-worktrees, and /Volumes/Scratch is NOT MOUNTED. Every worktree the fleet creates targets a path on a volume that no longer exists. The installed plist was generated while the volume was present; gen-launchd-plist.sh falls back to $WORKDIR/.limen-worktrees only when the scratch root is absent AND writable at generation time, so the daemon kept the dead path. Two ways out, and only you can pick: (a) remount /Volumes/Scratch, which restores the intent that worktrees live off the main disk — relevant on a 16GB machine that logs jetsam kills; or (b) accept the derived path by regenerating and reinstalling the plist, which moves worktrees under ~/Workspace. Either resolves it; doing neither leaves the fleet writing to a phantom mountpoint.",
+      "owner": "yours",
+      "cost": "~2 min — remount the volume, or `scripts/gen-launchd-plist.sh --install` then relaunch the agent",
+      "status": "open (surfaced 2026-07-31 by scripts/check-heartbeat-env.py on its first run)",
+      "gate": "a physical volume decision + a LaunchAgent write (hook-blocked for agents by design)",
+      "unlocks": "clause 3 of the autonomy maintenance resume predicate, which is one of the three conditions holding the estate paused since 2026-07-22",
+      "source_task": "PR #1741 — heal(autonomy): a resume predicate written as prose is a pause with no exit",
+      "note": "Verify with `python3 scripts/check-heartbeat-env.py --diff`: exit 0 means the root the daemon names still generates it byte-for-byte. This lever exists because a merged organ that never ran led back through a nine-day pause to a daemon whose environment nobody had checked against the repo.",
+      "issue": 1776
+    },
+    {
+      "id": "L-COLLABORATION-OPERATIONS-PLATFORM-GENESIS",
+      "label": "DISCHARGED 2026-08-02: create and operate exactly organvm-iii-ergon/collaboration-operations-platform as a private, owner-only repository plus a no-cost hosted ciphertext-only workspace for the Universal Collaboration Hub. Repository genesis and reversible no-cost deployment are authorized; no collaborator grants, plaintext client records, credentials, client-account access, DNS changes, public sharing, payments, or paid upgrades are authorized.",
+      "owner": "yours",
+      "cost": "authorized direct-session action; no paid spend",
+      "status": "discharged",
+      "gate": "discharged by the owner's explicit 2026-08-02 implementation directive; retained boundaries remain executable predicates",
+      "unlocks": "private repository genesis, owner-only encrypted workspace implementation, and no-cost ciphertext-only hosting under the collaboration-operations boundary contract",
+      "source_task": "Universal Collaboration Hub autonomous completion plan; successor workstream collaboration-operations-platform-alpha-20260802",
+      "steps": [
+        "Freshly prove the target repository is absent and repo-genesis gates G1-G4 pass",
+        "Create and seed the private repository; verify owner, visibility, collaborators, and default branch",
+        "Build, deploy, migrate, restore-test, and close only on the plan's executable predicates"
+      ],
+      "issue": 1779
     }
   ]
 }

@@ -47,6 +47,19 @@ out="$(LIMEN_ROOT="$tmp/live" LIMEN_RELEASE_BRANCH=main bash "$script" 2>&1)" \
   || { echo "FAIL: sync-release exited nonzero"; echo "$out"; exit 1; }
 
 cur="$(git -C "$tmp/live" symbolic-ref --short HEAD)"
+[ "$cur" = codex/work ] || { echo "FAIL: dirty board cache did not fence unpark (HEAD on '$cur')"; echo "$out"; exit 1; }
+printf '%s' "$out" | grep -q "local tasks.yaml cache is dirty" \
+  || { echo "FAIL: dirty board cache emitted no exact refusal"; echo "$out"; exit 1; }
+grep -q v2-dirty "$tmp/live/docs/branch-hygiene.md" \
+  || { echo "FAIL: fenced unpark lost parked tracked dirt"; echo "$out"; exit 1; }
+grep -q task2 "$tmp/live/tasks.yaml" \
+  || { echo "FAIL: fenced unpark changed the dirty board cache"; echo "$out"; exit 1; }
+
+# Once the local cache is clean, the same valve may preserve the unrelated dirt and unpark.
+git -C "$tmp/live" checkout -q -- tasks.yaml
+out="$(LIMEN_ROOT="$tmp/live" LIMEN_RELEASE_BRANCH=main bash "$script" 2>&1)" \
+  || { echo "FAIL: clean-cache sync-release exited nonzero"; echo "$out"; exit 1; }
+cur="$(git -C "$tmp/live" symbolic-ref --short HEAD)"
 [ "$cur" = main ] || { echo "FAIL: not unparked to main (HEAD on '$cur')"; echo "$out"; exit 1; }
 
 git -C "$tmp/live" fetch -q origin codex/work
@@ -81,4 +94,98 @@ grep -q "REFUSED.*origin's default branch" <<<"$override_out" \
 grep -q "must-stay-local" "$tmp/live/docs/branch-hygiene.md" \
   || { echo "FAIL: release override consumed default-branch dirt"; echo "$override_out"; exit 1; }
 
-echo "PASS: preserve-then-unpark + mutable release override cannot write the actual default branch"
+# A clean committed tasks.yaml-only divergence is regenerable, including when
+# the daemon exports the authoritative parameter-panel default.
+panel_receipt_globs="$(
+  env -u LIMEN_SYNC_RECEIPT_GLOBS \
+    LIMEN_ROOT="$here/../.." \
+    PYTHONPATH="$here/../../cli/src" \
+    python3 -c 'from limen.vigilia import params; print(params.get("LIMEN_SYNC_RECEIPT_GLOBS", ""))'
+)"
+[ -n "$panel_receipt_globs" ] \
+  || { echo "FAIL: LIMEN_SYNC_RECEIPT_GLOBS has no parameter-panel default"; exit 1; }
+
+git init -q --bare "$tmp/diverged-origin.git"
+git clone -q "$tmp/diverged-origin.git" "$tmp/diverged-live" 2>/dev/null
+git -C "$tmp/diverged-live" checkout -q -b main
+mkdir -p "$tmp/diverged-live/docs"
+printf 'task-v1\n' > "$tmp/diverged-live/tasks.yaml"
+printf 'base\n' > "$tmp/diverged-live/docs/base.md"
+git -C "$tmp/diverged-live" add -A
+git -C "$tmp/diverged-live" commit -q -m "divergence base"
+git -C "$tmp/diverged-live" push -q -u origin main
+git --git-dir="$tmp/diverged-origin.git" symbolic-ref HEAD refs/heads/main
+git clone -q "$tmp/diverged-origin.git" "$tmp/diverged-peer" 2>/dev/null
+
+printf 'task-local-only\n' > "$tmp/diverged-live/tasks.yaml"
+git -C "$tmp/diverged-live" add tasks.yaml
+git -C "$tmp/diverged-live" commit -q -m "local tasks projection"
+printf 'release-one\n' > "$tmp/diverged-peer/release-one.md"
+git -C "$tmp/diverged-peer" add release-one.md
+git -C "$tmp/diverged-peer" commit -q -m "release advance one"
+git -C "$tmp/diverged-peer" push -q origin main
+
+receipt_out="$(LIMEN_ROOT="$tmp/diverged-live" LIMEN_RELEASE_BRANCH=main \
+  LIMEN_SYNC_RECEIPT_GLOBS="$panel_receipt_globs" bash "$script" 2>&1)" \
+  || { echo "FAIL: tasks-only divergence sync exited nonzero"; echo "$receipt_out"; exit 1; }
+remote_head="$(git --git-dir="$tmp/diverged-origin.git" rev-parse refs/heads/main)"
+[ "$(git -C "$tmp/diverged-live" rev-parse HEAD)" = "$remote_head" ] \
+  || { echo "FAIL: tasks-only divergence did not re-converge"; echo "$receipt_out"; exit 1; }
+grep -Fq "local commit(s) touch ONLY regenerable receipts" <<<"$receipt_out" \
+  || { echo "FAIL: tasks-only divergence emitted no receipt-valve reason"; echo "$receipt_out"; exit 1; }
+[ "$(git -C "$tmp/diverged-live" show HEAD:tasks.yaml)" = "task-v1" ] \
+  || { echo "FAIL: tasks-only divergence did not restore the remote projection"; echo "$receipt_out"; exit 1; }
+
+# Mixed local history is genuine work even when one path is tasks.yaml; it must
+# retain the exact local head and fail open.
+printf 'task-local-mixed\n' > "$tmp/diverged-live/tasks.yaml"
+printf 'local-real-work\n' > "$tmp/diverged-live/docs/real-work.md"
+git -C "$tmp/diverged-live" add tasks.yaml docs/real-work.md
+git -C "$tmp/diverged-live" commit -q -m "mixed local work"
+mixed_head="$(git -C "$tmp/diverged-live" rev-parse HEAD)"
+printf 'release-two\n' > "$tmp/diverged-peer/release-two.md"
+git -C "$tmp/diverged-peer" add release-two.md
+git -C "$tmp/diverged-peer" commit -q -m "release advance two"
+git -C "$tmp/diverged-peer" push -q origin main
+
+mixed_out="$(LIMEN_ROOT="$tmp/diverged-live" LIMEN_RELEASE_BRANCH=main \
+  LIMEN_SYNC_RECEIPT_GLOBS="$panel_receipt_globs" bash "$script" 2>&1)" \
+  || { echo "FAIL: mixed divergence sync exited nonzero"; echo "$mixed_out"; exit 1; }
+[ "$(git -C "$tmp/diverged-live" rev-parse HEAD)" = "$mixed_head" ] \
+  || { echo "FAIL: mixed divergence moved the local head"; echo "$mixed_out"; exit 1; }
+grep -Fq "with UNIQUE local work — fail open" <<<"$mixed_out" \
+  || { echo "FAIL: mixed divergence emitted no fail-open reason"; echo "$mixed_out"; exit 1; }
+grep -q "local-real-work" "$tmp/diverged-live/docs/real-work.md" \
+  || { echo "FAIL: mixed divergence lost genuine local work"; echo "$mixed_out"; exit 1; }
+
+
+# --check: a real predicate, not the informational --census. Fresh clone at HEAD==origin/main
+# with default RECEIPT_GLOBS (no override) proves the shipped defaults, not just the test panel's.
+git clone -q "$tmp/origin.git" "$tmp/check-live" 2>/dev/null
+( cd "$tmp/check-live" && git checkout -q main )
+check_rc=0
+check_out="$(LIMEN_ROOT="$tmp/check-live" LIMEN_RELEASE_BRANCH=main bash "$script" --check 2>&1)" || check_rc=$?
+[ "$check_rc" = 0 ] || { echo "FAIL: --check on a clean live root at origin/main should PASS"; echo "$check_out"; exit 1; }
+
+# Genuine uncommitted source-tree work must FAIL --check.
+mkdir -p "$tmp/check-live/scripts"
+echo "wip" > "$tmp/check-live/scripts/wip.sh"
+dirty_rc=0
+dirty_out="$(LIMEN_ROOT="$tmp/check-live" LIMEN_RELEASE_BRANCH=main bash "$script" --check 2>&1)" || dirty_rc=$?
+[ "$dirty_rc" = 1 ] || { echo "FAIL: --check should FAIL on genuine untracked source dirt"; echo "$dirty_out"; exit 1; }
+rm -f "$tmp/check-live/scripts/wip.sh"
+
+# Regenerable bookkeeping churn (the default globs: branch-hygiene.md, overnight-watch.md) must
+# still PASS --check — this is the exact class that stranded the live root for 3+ days when the
+# tolerance list didn't cover it.
+echo "v3-dirty" >> "$tmp/check-live/docs/branch-hygiene.md"
+mkdir -p "$tmp/check-live/logs"
+echo "beat line" >> "$tmp/check-live/logs/overnight-watch.md"
+mkdir -p "$tmp/check-live/docs/receipts/some-lane"
+echo '{"ok":true}' > "$tmp/check-live/docs/receipts/some-lane/closeout-latest.json"
+bookkeeping_rc=0
+bookkeeping_out="$(LIMEN_ROOT="$tmp/check-live" LIMEN_RELEASE_BRANCH=main bash "$script" --check 2>&1)" || bookkeeping_rc=$?
+[ "$bookkeeping_rc" = 0 ] \
+  || { echo "FAIL: --check should PASS with only regenerable bookkeeping dirty"; echo "$bookkeeping_out"; exit 1; }
+
+echo "PASS: preserve/unpark + override guard + tasks-only self-heal + mixed divergence fail-open + --check predicate"

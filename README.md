@@ -1,16 +1,16 @@
 # Limen
 
-Universal agent task intake — one file to aim every AI agent across every repo.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE) [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 
-Limen is a cross-agent, cross-repo, budget-capped task intake system. It lives in a single `tasks.yaml` that every agent reads, and provides a CLI + SaaS dashboard for managing the pipeline.
+Limen is a cross-agent, cross-repo, budget-capped task intake system. Every AI agent reads a single `tasks.yaml` to discover work. TABVLARIVS is the deterministic state authority and lease keeper. The CLI + SaaS dashboard provide unified visibility, budget management, and lifecycle control across your entire agent fleet.
 
 ## Usage
 
 ### Install
 
 ```bash
-# One-liner (clones repo, installs CLI to venv, sets up PATH)
-curl -fsSL https://raw.githubusercontent.com/4444J99/limen/main/install.sh | bash
+#One-liner (clones repo, installs CLI to venv, sets up PATH)
+curl -fsSL https://raw.githubusercontent.com/organvm/limen/main/install.sh | bash
 source ~/.zshenv
 ```
 
@@ -24,36 +24,53 @@ brew install ./limen.rb
 ### Quick start
 
 ```bash
-# Initialize a task board
-limen init
+#Point the CLI at the authenticated conduct owner, then inspect live capabilities
+export LIMEN_CONDUCT_URL=https://<authenticated-conduct-endpoint>
+#LIMEN_CONDUCT_TOKEN is injected by the credential wall; never commit or paste it.
+limen conduct capabilities
 
-# Add tasks by editing tasks.yaml directly
-# (see tasks.yaml for the schema)
+#Submit bounded work; the remote keeper owns tasks.yaml projection
+limen conduct submit --packet path/to/work-packet.json
 
-# Check readiness and stale claims before dispatching
+#Check readiness and stale claims before dispatching
 limen doctor --agent jules
 limen release-stale --agent jules --hours 24
 limen release-stale --agent jules --hours 24 --apply
 
-# Dispatch open tasks (default: dry-run preview; add --live to run for real)
+#Dispatch open tasks (default: dry-run preview; add --live to run for real)
 limen dispatch --agent jules --limit 100
 limen dispatch --agent jules --limit 100 --live
 
-# Check the board and budget
+#Check the board and budget
 limen status
 
-# Inspect partial board progress, source readiness, and work-loan metadata
+#Inspect partial board progress, source readiness, and work-loan metadata
 limen progress
 limen progress --view workstream --scope financial --all
 
-# Harvest results from completed dispatches
+#Harvest results from completed dispatches
 limen harvest
+```
+
+### Session streams — open, exit, reopen
+
+The declared work domains ([`institutio/governance/session-streams.yaml`](institutio/governance/session-streams.yaml),
+with the operator's people × project lanes derived from the constellation register) open as one
+tmux window per stream. The round trip:
+
+```bash
+limen streams                 # open + REOPEN every openable lane, up to the RAM-derived bound
+limen streams --status        # one line per stream: live (pid) / dormant / ready / blocked / …
+tmux attach -t limen-streams  # go to the windows; Ctrl-b d detaches without stopping anything
+# exit the agent in a window (/exit) — the window is kept, the stream turns `dormant`,
+# and the next `limen streams` run reopens it (labelled REOPEN).
+limen streams --lane claude   # choose the native lane; --family all adds governance domains
 ```
 
 ### Run API & Dashboard locally
 
 ```bash
-# FastAPI backend (port 8000) + Next.js dashboard (port 3000)
+#FastAPI backend (port 8000) + Next.js dashboard (port 3000)
 docker compose up
 ```
 
@@ -63,15 +80,18 @@ Mounts `./tasks.yaml` into the API container.
 
 | Command | Flags | Description |
 |---------|-------|-------------|
-| `limen init` | `--root`, `--budget` (default 100) | Scaffold a new tasks.yaml in LIMEN_ROOT or current directory. |
-| `limen dispatch` | `--agent`, `--budget`, `--dry-run/--live`, `--task`, `--limit` | Read tasks.yaml and dispatch open tasks to agents. |
+| `limen init` | `--root`, `--budget` | Retired local bootstrap; fails closed with the authenticated remote-owner hydration instruction. |
+| `limen conduct` | `capabilities`, `register`, `submit`, `split`, `graph`, `heartbeat`, `report`, `harvest`, `adopt`, `cancel`, `request-stop` | Use the symmetric authenticated conduct protocol. |
+| `limen fanout` | `plan`, `start`, `status`, `harvest` | Plan and run board-independent, remote-first work graphs through the authenticated keeper. |
+| `limen dispatch` | `--agent`, `--budget`, `--dry-run/--live`, `--task`, `--limit` | Inspect the local cache and submit eligible lifecycle work to the conduct keeper. |
 | `limen release-stale` | `--hours` (default 24), `--agent`, `--dry-run/--apply`, `--json-output`, `--report-file` | Reopen dispatched/in-progress tasks whose latest event is stale. |
 | `limen doctor` | `--agent` (default jules), `--json-output`, `--report-file` | Report local readiness for dispatch and stale-claim recovery. |
 | `limen qa` | `--agent` (default jules), `--json-output`, `--report-file` | Report QA lifecycle gates and steering queues without mutating tasks. |
 | `limen status` | `--agent`, `--status` | Show the task board. |
 | `limen progress` | `--view`, `--scope`, `--level`, `--all`, `--json-output`, `--report-file`, `--ascii` | Inspect the partial board-progress and source-coverage lens. |
 | `limen harvest` | `--agent` | Check for completed dispatches and update task states. |
-| `limen workstream` | `--from`, `--prompt`, `--prompt-file`, `--codex`, `--shell` | Create/reuse a repo worktree plus a private `.limen-workstream/README.md` and `kickstart.sh`. |
+| `limen workstream` | `--from`, `--prompt`, `--prompt-file`, `--agent auto\|LANE`, `--conduct`, `--shell` | Create/reuse a repo worktree plus a private agent-neutral `.limen-workstream/README.md` and `kickstart.sh`; optionally register a protected direct conductor session. |
+| `limen streams` | `--status`, `--family`, `--lane`, `--dry-run`, `--max-parallel`, `--unbounded`, `--session` | Open (and reopen) every openable session stream, one tmux window each; delegates to `scripts/open-streams.sh`. |
 
 The installer also creates a terminal-neutral shortcut in `~/.local/bin`:
 
@@ -245,4 +265,8 @@ nothing here is paywalled.
 - [Quickstart](QUICKSTART.md)
 - [Schema](SCHEMA.md)
 - [Agent Protocol](AGENTS.md)
-- [GitHub](https://github.com/4444J99/limen)
+- [GitHub](https://github.com/organvm/limen)
+
+## Contact
+
+For questions, issues, and collaboration, visit the [organvm GitHub](https://github.com/4444J99) or open an issue in this repository.

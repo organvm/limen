@@ -124,14 +124,39 @@ sensitive=0
 [ "$STALE" = 1 ] && sensitive=1   # fail-safe: uncertain classification ⇒ treat as a live deploy
 
 # CI rollup: count failing / pending across CheckRuns (conclusion/status) and StatusContexts (state).
-failing=$(jq '[.statusCheckRollup[]? | (.conclusion // .state // "" | ascii_upcase)
+# Dedupe to the LATEST run per check name first. GitHub attaches every re-run of a check (a
+# concurrency-cancel, a flaky-test retry, a manual re-run) to the same commit, so the rollup can
+# carry both a stale CANCELLED/FAILURE run and a fresh SUCCESS run of the same check name. GitHub's
+# own mergeability uses latest-run-per-check; without this dedupe merge-policy is stricter in the
+# WRONG direction — a superseded failure counts forever and false-HOLDs a genuinely green PR (the
+# claude-review self-cancel jam, #1218 era: review=[CANCELLED@t0, SUCCESS@t1] read as 1 failing).
+# Key on .name (CheckRun) or .context (StatusContext); recency by .completedAt then .startedAt.
+LATEST='[.statusCheckRollup[]? | . + {_k:(.name // .context // ""), _t:(.completedAt // .startedAt // "")}]
+        | group_by(._k) | map(max_by(._t))'
+failing=$(jq "$LATEST"' | [.[] | (.conclusion // .state // "" | ascii_upcase)
              | select(.=="FAILURE" or . =="CANCELLED" or . =="TIMED_OUT" or . =="ERROR"
                       or . =="ACTION_REQUIRED" or . =="STARTUP_FAILURE")] | length' "$j")
-pending=$(jq '[.statusCheckRollup[]?
+pending=$(jq "$LATEST"' | [.[]
              | ((.status // "" | ascii_upcase) as $s | (.state // "" | ascii_upcase) as $st
                 | select($s=="QUEUED" or $s=="IN_PROGRESS" or $s=="PENDING" or $st=="PENDING" or $st=="EXPECTED"))]
              | length' "$j")
-total_checks=$(jq '[.statusCheckRollup[]?] | length' "$j")
+total_checks=$(jq "$LATEST"' | length' "$j")
+
+# Required-vs-advisory discrimination (2026-07-24 insights lineage: deliverables held
+# hostage behind non-required checks). The rollup above carries EVERY check; branch
+# protection enforces only the required subset. For NON-DEPLOY verdicts the hold/clear
+# decision counts required checks alone — advisory checks are reported, never blocking.
+# Website-sensitive PRs still demand the FULL rollup green: merging IS the deploy, so
+# the standing guardrail deliberately stays stricter than the required set.
+# Fail toward caution: when the required set cannot be derived (older gh, API hiccup,
+# stubbed environment), req_* falls back to the all-checks counts above.
+req_scope="all"; req_failing=$failing; req_pending=$pending
+req_json="$(gh pr checks "$PR" "${repo_args[@]+"${repo_args[@]}"}" --required --json name,state,bucket 2>/dev/null || true)"
+if [ -n "$req_json" ] && printf '%s' "$req_json" | jq -e 'type == "array"' >/dev/null 2>&1; then
+  req_scope="required"
+  req_failing=$(printf '%s' "$req_json" | jq '[.[] | select(.bucket == "fail" or .bucket == "cancel")] | length')
+  req_pending=$(printf '%s' "$req_json" | jq '[.[] | select(.bucket == "pending")] | length')
+fi
 
 echo "PR #$PR — $title"
 echo "  $url"
@@ -148,6 +173,7 @@ else
   echo "  non-deploy — merging will NOT trigger a live website/API deploy"
 fi
 echo "  checks: total=$total_checks failing=$failing pending=$pending"
+echo "  required checks: scope=$req_scope failing=$req_failing pending=$req_pending"
 
 # --- verdict ---
 # GitHub's mergeStateStatus is authoritative on whether a merge is even POSSIBLE. Handle every
@@ -165,8 +191,8 @@ case "$mss" in
     # BLOCKED means branch protection won't merge yet — but it covers two cases. If a required
     # check is still RUNNING, the remedy is simply to wait (HOLD); only when nothing is pending is
     # it genuinely stuck (required check never ran, or a required review is missing → action needed).
-    if [ "$pending" -gt 0 ]; then
-      echo "VERDICT: HOLD — branch protection is waiting on $pending required check(s) still running. Wait for green, then re-run."; exit 2
+    if [ "$req_pending" -gt 0 ]; then
+      echo "VERDICT: HOLD — branch protection is waiting on $req_pending required check(s) still running ($req_scope scope). Wait for green, then re-run."; exit 2
     fi
     echo "VERDICT: BLOCKED — branch protection won't allow the merge: a required check never ran, or a required review is missing. For a PR opened before a required check was added this is almost always the missing 'pr-gate' context, which only runs after the head is pushed/rebased — rebase onto origin/$base to retrigger it, then re-run. If it persists after a rebase with green checks, a required review or admin merge is needed: surface to human, don't force it."; exit 3 ;;
   UNKNOWN) echo "VERDICT: HOLD — GitHub is still computing mergeability (mergeState=UNKNOWN); this is transient. Re-run in a few seconds."; exit 2 ;;
@@ -174,8 +200,11 @@ esac
 if [ "$draft" = "true" ]; then
   echo "VERDICT: HOLD — PR is a draft. Mark ready, then re-run."; exit 2
 fi
-if [ "$failing" -gt 0 ]; then
-  echo "VERDICT: HOLD — $failing CI check(s) failing. Fix before merge."; exit 2
+if [ "$sensitive" = 1 ] && [ "$failing" -gt 0 ]; then
+  echo "VERDICT: HOLD — $failing CI check(s) failing and the merge deploys the live site. Fix before merge."; exit 2
+fi
+if [ "$sensitive" != 1 ] && [ "$req_failing" -gt 0 ]; then
+  echo "VERDICT: HOLD — $req_failing required check(s) failing ($req_scope scope). Fix before merge."; exit 2
 fi
 # --- optional review gate (LIMEN_REVIEW_GATE=1; DEFAULT OFF) ---
 # The merge half of the multi-agent review engine: HOLD while unresolved review threads remain.
@@ -219,8 +248,11 @@ if [ "$sensitive" = 1 ]; then
   echo "MERGE-HEAD: $head (use gh pr merge --match-head-commit $head)"
   exit 0
 fi
+if [ "$req_pending" -gt 0 ]; then
+  echo "VERDICT: HOLD — ${req_pending} required check(s) still running ($req_scope scope). Merge once green."; exit 2
+fi
 if [ "$pending" -gt 0 ]; then
-  echo "VERDICT: HOLD — ${pending} non-deploy check(s) still running. Merge once green."; exit 2
+  echo "  note: $pending advisory (non-required) check(s) still running — reported, not blocking."
 fi
 if [ "$queue_capability" = "active" ]; then
   if [ "$total_checks" -eq 0 ]; then

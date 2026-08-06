@@ -1,14 +1,14 @@
 # Overnight Watch
 
 - Status: `alert`
-- Updated: `2026-07-21T21:05:25+00:00`
-- Log age: `1` seconds
+- Updated: `2026-08-06T18:46:36+00:00`
+- Log age: `11` seconds
 - Launchd: `active`
-- Latest tick: `tick emitted: 2026-07-21T20:53:29+00:00 total=3019 open=745 spent=4/600`
-- Latest async: `async: reaped 0 dead · harvested 0 · 0 still running · launched 0`
-- Stale tick samples: `1`
+- Latest tick: `tick emitted: 2026-08-06T18:07:14+00:00 total=3111 open=829 spent=8/600`
+- Latest async: `None`
+- Stale tick samples: `5`
 - Active workers: `0`
-- Heartbeat child processes: `2`
+- Heartbeat child processes: `1`
 
 ## Overnight Summary
 
@@ -17,23 +17,22 @@
 - Stale handoff: `false`.
 - Gate action: `stop_no_durable_progress` (exit `20`).
 - Dispatch allowed: `false`.
-- Lane switch: `blocked`; owner packet: `none`; tickets: `0`.
-- Lane blocker: `overnight-owner-packets-gated`.
-- Next command: `python3 scripts/always-working.py --write`.
+- Lane switch: `blocked`; owner packet: `AW-VALUE-REPOS-77d88c87bfb2`; tickets: `0`.
+- Lane blocker: `overnight-owner-conduct-unavailable`.
+- Next command: `PYTHONPATH=cli/src limen conduct capabilities`.
 
 ## Gate Checks
 
-- Handoff refresh: `0`; check: `0`.
+- Handoff refresh: `1`; check: `0`.
 - Value gate: `20`; action: `stop_no_durable_progress`.
-- Dispatch control: all bounded owner packets are closed by current capability, owner, resource gate(s).
+- Dispatch control: authenticated conduct is unavailable for exact owner packet AW-VALUE-REPOS-77d88c87bfb2: conduct broker is not configured; set LIMEN_CONDUCT_URL and LIMEN_CONDUCT_TOKEN (LIMEN_CONDUCT_STATE is an explicit local test adapter).
 - Selected owner: `organvm/limen`.
 
 ## Throughput
 
-- Recent per-60min completions: `[0, 0, 0]` (derived floor `0.0`, median `0`).
+- Recent per-60min completions: `[0, 0, 0]` (derived floor `0.0`, median `0.0`).
 - Below floor: `false`; suppressed: `no`.
-  - child `5159` `S` `00:02` `/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python /Users/4jp/Workspace/limen/scripts/credential-wall.py --sync`
-  - child `5160` `S` `00:02` `tail -1`
+  - child `2720` `S` `03-07:30:37` `/bin/bash /Users/4jp/Workspace/limen/scripts/heartbeat-loop.sh`
 
 ## WATCH_ALERT
-- `overnight-lane-switch-blocked`: blocker=overnight-owner-packets-gated owner=organvm/limen reason=all bounded owner packets are closed by current capability, owner, resource gate(s)
+- `overnight-lane-switch-blocked`: blocker=overnight-owner-conduct-unavailable owner=organvm/limen reason=authenticated conduct is unavailable for exact owner packet AW-VALUE-REPOS-77d88c87bfb2: conduct broker is not configured; set LIMEN_CONDUCT_URL and LIMEN_CONDUCT_TOKEN (LIMEN_CONDUCT_STATE is an explicit local test adapter)

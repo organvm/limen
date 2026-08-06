@@ -64,8 +64,13 @@ YAML
 }
 
 # ── Case 0: the REAL committed estate passes (drift == ∅ at the parity level) ──
+#    (runs with the REAL access.yaml too — the committed registries must be green together)
 FIX="$ROOT/institutio/github/estate.yaml"
 expect 0 "drift == ∅" "case0 real estate passes"
+
+# Fixture estates don't declare the real access.yaml's never_grant classes — point ACCESS at an
+# absent file for the estate fixtures so they evaluate exactly as before the registry existed.
+export LIMEN_GITVS_ACCESS="$work/absent-access.yaml"
 
 # ── Case 1: a minimal valid fixture passes ──
 FIX="$work/valid.yaml"; valid_estate "$FIX"
@@ -293,12 +298,17 @@ estate = {
                  "seo": {"description": "required", "topics_min": 2, "homepage": "required"}},
     },
     "repo_overrides": {
-        "o/candidate": {"class": "pub", "why": "wave", "publish_candidate": True},
+        "o/candidate-private": {"class": "priv", "why": "wave", "publish_candidate": True},
+        "o/candidate-public": {"class": "priv", "why": "wave", "publish_candidate": True},
         "o/leak": {"class": "priv", "why": "vault"},
     },
 }
 rows = [
-    {"full_name": "o/candidate", "private": True},                       # desired pub, cand -> CITE
+    {"full_name": "o/candidate-private", "private": True},               # cand, private -> CITE (wave pending)
+    {"full_name": "o/candidate-public", "private": False},               # cand, PUBLIC -> CITE (2026-07-30:
+                                                                         # was read "converged"; candidacy is a
+                                                                         # gated desire, so an un-gated public
+                                                                         # is a posture question, not silence)
     {"full_name": "o/leak", "private": False},                           # desired priv, public -> FAIL
     {"full_name": "o/fork", "private": True, "fork": True},              # any -> exempt
     {"full_name": "o/ok", "private": False, "description": "d", "topics_count": 3, "homepage": "h"},
@@ -307,16 +317,49 @@ rows = [
 fails, cites = g.visibility_drift(rows, estate)
 gaps = g.seo_floor_gaps(rows, estate)
 print(len(fails), len(cites), len(gaps))
-print("leak" in fails[0], "candidate" in cites[0])
+print("leak" in fails[0], "candidate-private" in cites[0], "candidate-public" in cites[1])
 print(gaps[0].startswith("o/bare:") and "description" in gaps[0] and "topics<2" in gaps[0] and "homepage" in gaps[0])
 PY
 )"
-if [ "$out" = "1 1 1
-True True
+if [ "$out" = "1 2 1
+True True True
 True" ]; then
   pass=$((pass+1))
 else
   echo "  MISMATCH (case18 G/K pure rungs): got:"; echo "$out" | sed 's/^/    /'; fail=$((fail+1))
+fi
+
+# ── Case 18b: the metadata effector fills the declared topic floor without replacing human topics ──
+out="$(python3 - <<PY
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("repo_metadata", "$ROOT/scripts/repo-metadata-sync.py")
+m = importlib.util.module_from_spec(spec); sys.modules["repo_metadata"] = m
+spec.loader.exec_module(m)
+row = {
+    "full_name": "o/plain",
+    "description": "kept",
+    "homepage": "",
+    "topics_count": 1,
+    "_current_topics": ["human-topic"],
+    "language": "Python",
+}
+want = m.desired_for(
+    row, {}, {}, "https://example.test", ["open-source", "developer-tools", "organvm"],
+    {"topics_min": 3, "homepage": "optional"},
+)
+print(want["description"])
+print(want["homepage"] == "")
+print(want["topics"])
+print(len(want["topics"]) >= 3 and want["topics"][0] == "human-topic")
+PY
+)"
+if [ "$out" = "kept
+True
+['human-topic', 'plain', 'python', 'open-source', 'developer-tools', 'organvm']
+True" ]; then
+  pass=$((pass+1))
+else
+  echo "  MISMATCH (case18b metadata topic floor): got:"; echo "$out" | sed 's/^/    /'; fail=$((fail+1))
 fi
 
 # ── Case 19: a well-formed `orgs:` (ACCOUNT-layer) row passes ──
@@ -341,6 +384,98 @@ d["orgs"] = {"reserved": {"match": ["organvm-*"], "plan_ok": "free", "repos": 0,
 open(sys.argv[1], "w").write(yaml.safe_dump(d))
 PY
 expect 1 "plan_ok must be a non-empty string list" "case20 malformed orgs row reddens"
+
+# ── ACCESS (the partner-partition registry) — parity must bite on every violation class ──
+FIX="$work/access-estate.yaml"; valid_estate "$FIX"
+valid_access() {  # a complete, ceiling-respecting access fixture against the fixture estate
+  cat > "$1" <<'YAML'
+schema_version: 0.1
+owner: gitvs
+note: "fixture"
+policy:
+  role_ceiling: push
+  never_grant_classes: []
+  never_grant_repos: [organvm/engine]
+  owner: gitvs
+  note: "fixture"
+grants:
+  organvm/example:
+    - {login: friend, person: pal, role: push, granted: 2026-07-23, why: "their one project repo"}
+YAML
+}
+
+# ── Case 21: a valid access registry passes ──
+export LIMEN_GITVS_ACCESS="$work/access-ok.yaml"; valid_access "$LIMEN_GITVS_ACCESS"
+expect 0 "drift == ∅" "case21 valid access registry passes"
+
+# ── Case 22: a grant on a never_grant repo → red (engine repos never carry grants) ──
+export LIMEN_GITVS_ACCESS="$work/access-engine.yaml"; valid_access "$LIMEN_GITVS_ACCESS"
+python3 - "$LIMEN_GITVS_ACCESS" <<'PY'
+import sys, yaml
+d = yaml.safe_load(open(sys.argv[1]))
+d["grants"]["organvm/engine"] = [
+    {"login": "friend", "person": "pal", "role": "pull", "granted": "2026-07-23", "why": "x"}
+]
+open(sys.argv[1], "w").write(yaml.safe_dump(d))
+PY
+expect 1 "never carries a grant" "case22 grant on never_grant repo reddens"
+
+# ── Case 23: a role above the policy ceiling → red, and admin is undeclarable outright ──
+export LIMEN_GITVS_ACCESS="$work/access-ceiling.yaml"; valid_access "$LIMEN_GITVS_ACCESS"
+python3 - "$LIMEN_GITVS_ACCESS" <<'PY'
+import sys, yaml
+d = yaml.safe_load(open(sys.argv[1]))
+d["grants"]["organvm/example"][0]["role"] = "maintain"
+d["grants"]["organvm/other"] = [
+    {"login": "boss", "person": "pal", "role": "admin", "granted": "2026-07-23", "why": "x"}
+]
+open(sys.argv[1], "w").write(yaml.safe_dump(d))
+PY
+expect 1 "exceeds the policy ceiling" "case23 ceiling breach reddens"
+out="$(LIMEN_GITVS_ESTATE="$FIX" python3 "$GITVS" doctor --parity-only 2>&1)" || true
+echo "$out" | grep -q "admin is undeclarable" \
+  && pass=$((pass+1)) || { echo "  MISMATCH (case23b admin undeclarable)"; fail=$((fail+1)); }
+
+# ── Case 24: a grant without a why → red (a judgment without a rationale is not durable) ──
+export LIMEN_GITVS_ACCESS="$work/access-nowhy.yaml"; valid_access "$LIMEN_GITVS_ACCESS"
+python3 - "$LIMEN_GITVS_ACCESS" <<'PY'
+import sys, yaml
+d = yaml.safe_load(open(sys.argv[1]))
+del d["grants"]["organvm/example"][0]["why"]
+open(sys.argv[1], "w").write(yaml.safe_dump(d))
+PY
+expect 1 "missing 'why'" "case24 grant missing why reddens"
+
+# ── Case 25: a grant whose repo classifies into a never_grant class → red (structural) ──
+export LIMEN_GITVS_ACCESS="$work/access-nevercls.yaml"; valid_access "$LIMEN_GITVS_ACCESS"
+python3 - "$LIMEN_GITVS_ACCESS" <<'PY'
+import sys, yaml
+d = yaml.safe_load(open(sys.argv[1]))
+d["policy"]["never_grant_classes"] = ["governed_public"]  # the fixture estate's only class
+open(sys.argv[1], "w").write(yaml.safe_dump(d))
+PY
+expect 1 "structurally ungrantable" "case25 never_grant class reddens"
+
+# ── Case 26: the offline doctor names the N rung as a skipped live rung (never a faked pass) ──
+export LIMEN_GITVS_ACCESS="$work/access-n.yaml"; valid_access "$LIMEN_GITVS_ACCESS"
+out="$(LIMEN_GITVS_ESTATE="$FIX" python3 "$GITVS" doctor --offline 2>&1)" || true
+echo "$out" | grep -q "N collaborator-drift" \
+  && pass=$((pass+1)) || { echo "  MISMATCH (case26 offline lists class N)"; fail=$((fail+1)); }
+
+# ── Case 27: collab-sync --apply without the double-dark env refuses outright ──
+out="$(LIMEN_GITVS_ESTATE="$FIX" LIMEN_COLLAB_APPLY= python3 "$ROOT/scripts/collab-sync.py" --apply 2>&1)"; rc=$?
+[ "$rc" = "3" ] && echo "$out" | grep -q "REFUSED" \
+  && pass=$((pass+1)) || { echo "  MISMATCH (case27 unarmed apply refused): rc=$rc"; fail=$((fail+1)); }
+
+# ── Case 28: collab-sync offline degrades to a loud SKIP, never a clean verdict ──
+out="$(LIMEN_GITVS_ESTATE="$FIX" python3 "$ROOT/scripts/collab-sync.py" 2>&1)"; rc=$?
+[ "$rc" = "2" ] && echo "$out" | grep -q "census unavailable" \
+  && pass=$((pass+1)) || { echo "  MISMATCH (case28 offline plan skips): rc=$rc"; fail=$((fail+1)); }
+
+# ── Case 29: collab-sync with no ACCESS registry skips (sparse by design) ──
+out="$(LIMEN_GITVS_ACCESS="$work/absent-access.yaml" LIMEN_GITVS_ESTATE="$FIX" python3 "$ROOT/scripts/collab-sync.py" 2>&1)"; rc=$?
+[ "$rc" = "2" ] && echo "$out" | grep -q "no ACCESS registry" \
+  && pass=$((pass+1)) || { echo "  MISMATCH (case29 absent access skips): rc=$rc"; fail=$((fail+1)); }
 
 echo
 if [ "$fail" -eq 0 ]; then

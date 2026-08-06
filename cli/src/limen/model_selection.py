@@ -21,6 +21,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+from collections.abc import Iterable, Mapping
 
 # The ladder rungs, cheapest-first. Shared with dispatch's earned-tier ladder. Fable is a
 # reserved top tier above Opus, not a new default escalation target.
@@ -40,6 +41,22 @@ _CLAUDE_FABLE_CLASSES_DEFAULT = (
     "ambiguous-root-cause",
     "final-canonical-decision",
 )
+
+# Phase (mode:*) labels — planning is the Opus-reserved phase; building is capped cheap
+# (docs/fable-allotment.md: "Fable plans, cheaper tiers build"). plan_handoff.py imports these
+# two so the label vocabulary has ONE home; this module is pure-stdlib and imports nothing,
+# so the dependency direction is legal. Deliberately NOT members of _CLAUDE_OPUS_CLASSES_DEFAULT:
+# that set is work-DOMAIN vocabulary (check-session-streams gate G validates job_class against
+# it), and an LIMEN_CLAUDE_OPUS_CLASSES override must not be able to drop the phase guarantee.
+_PLAN_ONLY_CLASS = "mode:plan-only"
+_BUILD_FROM_PLAN_CLASS = "mode:build-from-plan"
+
+
+def _build_max_tier() -> str:
+    """The CEILING for mode:build-from-plan work. Env-tunable (LIMEN_CLAUDE_BUILD_MAX_TIER,
+    default sonnet) but hard-capped at opus: building on Fable is prohibited by doctrine —
+    no env value can grant it."""
+    return _cap_tier(os.environ.get("LIMEN_CLAUDE_BUILD_MAX_TIER", "sonnet"), "opus")
 
 
 def _claude_opus_classes() -> set[str]:
@@ -175,6 +192,52 @@ def _fable_or_downgrade(fable_tier: str = "fable") -> str:
     top of the accept-time receipt gate."""
     downgrade = _fable_capped_tier(_fable_reserve_receipt_present())
     return downgrade if downgrade is not None else fable_tier
+
+
+def tier_for_classes(
+    classes: Iterable[str],
+    *,
+    waste_classes: Iterable[str] = (),
+    overrides: Mapping[str, Iterable[str]] | None = None,
+) -> str:
+    """THE class -> tier sort, cheapest-first. Default = haiku (verifiable, so the existing cascade
+    escalates); a higher rung is pre-assigned ONLY where failure is undetectable.
+
+    Extracted from ``dispatch._claude_tier_for`` so a THIRD consumer — the STREAMS registry's
+    ``job_class`` -> ``--model`` derivation — can reach the ladder without importing ``dispatch``
+    (which drags in the whole ``limen`` package and would break this module's pure-stdlib contract,
+    see the module docstring). Callers supply the two lane-local inputs rather than this module
+    reaching for them: ``waste_classes`` (ledger-DISCOVERED) and ``overrides``
+    (``logs/model-tiers.json``). ``dispatch`` keeps its per-task pin and its ``Task`` plumbing and
+    calls this for the sort, so there is exactly one ladder, not a second copy.
+
+    Phase rules (docs/fable-allotment.md — "Fable plans, cheaper tiers build"):
+    ``mode:plan-only`` floors the sort at opus (Fable still needs its acceptance receipt; an
+    un-accepted fable class on PLANNING lands on opus, the plan rung, not the cheap fallback).
+    ``mode:build-from-plan`` caps the result at :func:`_build_max_tier` (default sonnet, hard
+    cap opus) — cap-wins unconditionally, even over plan-only residue or an ACCEPTED fable
+    class, because build authorization means execution and building above the ceiling is the
+    doctrine violation this sort exists to prevent.
+    """
+    wanted = set(classes)
+    override = dict(overrides or {})
+    plan_only = _PLAN_ONLY_CLASS in wanted
+    if wanted & (_claude_fable_classes() | set(override.get("fable") or [])):
+        if _claude_fable_acceptance_present():
+            tier = _fable_or_downgrade()
+        else:
+            # Un-accepted fable-class PLANNING still belongs on the plan-phase rung; the cheap
+            # fallback is for build-ish work that overstated its class.
+            tier = "opus" if plan_only else _fable_fallback_tier()
+    elif plan_only or wanted & (_claude_opus_classes() | set(override.get("opus") or [])):
+        tier = "opus"
+    elif wanted & (set(waste_classes) | set(override.get("sonnet") or [])):
+        tier = "sonnet"
+    else:
+        tier = "haiku"
+    if _BUILD_FROM_PLAN_CLASS in wanted:
+        tier = _cap_tier(tier, _build_max_tier())  # cap-wins, unconditionally
+    return tier
 
 
 def _claude_model_is_fable(model: str | None) -> bool:

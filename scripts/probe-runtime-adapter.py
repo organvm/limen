@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 import urllib.error
@@ -97,6 +98,13 @@ def assert_status(response: Response, expected: int, label: str) -> None:
         if expected == 200 and is_resource_limit(response):
             raise ResourceLimited(label)
         fail(f"{label}: expected HTTP {expected}, got {response.status}: {response.text[:300]}")
+
+
+def assert_broker_unavailable(response: Response, label: str) -> None:
+    assert_status(response, 503, label)
+    detail = str(response.payload.get("detail") or "")
+    if "authenticated conduct broker is required" not in detail:
+        fail(f"{label}: wrong broker-unavailable detail: {detail[:300]}")
 
 
 def load_schema(name: str) -> dict[str, Any]:
@@ -258,7 +266,15 @@ def main() -> None:
     parser.add_argument("--verify-task-id", default=None, help="Optional active task id to verify as done with the owner token")
     parser.add_argument("--assign-task-id", default=None, help="Optional open/attention task id to assign with the owner token")
     parser.add_argument("--archive-task-id", default=None, help="Optional done task id to archive with the owner token")
+    parser.add_argument(
+        "--expect-mutations-unavailable",
+        action="store_true",
+        help="Require owner mutations to fail closed because no authenticated conduct broker is configured",
+    )
     args = parser.parse_args()
+    mutation_task_ids = (args.verify_task_id, args.assign_task_id, args.archive_task_id)
+    if args.expect_mutations_unavailable and not any(mutation_task_ids):
+        fail("--expect-mutations-unavailable requires at least one owner mutation task id")
 
     # Warm the board cache before asserting so cold-isolate 1102/503 flakes on the
     # first parse don't fail the whole probe (see warm_isolate).
@@ -400,19 +416,57 @@ def main() -> None:
         )
 
     if args.verify_task_id:
+        verification_task = get_task(args.api_url, args.owner_token, args.verify_task_id)
+        receipt_target = verification_task.get("receipt_target")
+        predicate = verification_task.get("predicate")
+        if not isinstance(receipt_target, str) or not receipt_target:
+            fail("owner verify mutation task lacks a durable receipt target")
+        if not isinstance(predicate, str) or not predicate:
+            fail("owner verify mutation task lacks an executable predicate")
+        verification_context_digest = hashlib.sha256(
+            json.dumps(
+                {
+                    "predicate": predicate,
+                    "receipt_target": receipt_target,
+                    "task_id": args.verify_task_id,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
         response = request(
             args.api_url,
             f"/api/tasks/{args.verify_task_id}/verify",
             token=args.owner_token,  # allow-secret
             method="POST",
-            body={"status": "done", "note": "Runtime probe verification", "session_id": "runtime-probe"},
+            body={
+                "status": "done",
+                "note": "Runtime probe verification",
+                "session_id": "runtime-probe",
+                "predicate_exit_code": 0,
+                "receipt_target": receipt_target,
+                "receipt_verified": True,
+                "verification_context_digest": verification_context_digest,
+            },
         )
-        assert_status(response, 200, "owner verify mutation")
-        if response.payload.get("status") != "verified" or response.payload.get("verified_status") != "done":
-            fail("owner verify mutation returned wrong status")
-        task = get_task(args.api_url, args.owner_token, args.verify_task_id)
-        if task.get("status") != "done":
-            fail("owner verify mutation did not move task to done")
+        if args.expect_mutations_unavailable:
+            assert_broker_unavailable(response, "owner verify mutation without broker")
+        else:
+            assert_status(response, 200, "owner verify mutation")
+            if response.payload.get("status") != "verified" or response.payload.get("verified_status") != "done":
+                fail("owner verify mutation returned wrong status")
+            task = get_task(args.api_url, args.owner_token, args.verify_task_id)
+            if task.get("status") != "done":
+                fail("owner verify mutation did not move task to done")
+            if task.get("receipt_verified") is not True:
+                fail("owner verify mutation did not persist verified receipt credit")
+            log = (task.get("dispatch_log") or [{}])[-1]
+            if (
+                log.get("predicate_exit_code") != 0
+                or log.get("remote_receipt") != receipt_target
+                or log.get("verification_context_digest") != verification_context_digest
+            ):
+                fail("owner verify mutation did not persist predicate and receipt evidence")
 
     if args.assign_task_id:
         assignment_task = get_task(args.api_url, args.owner_token, args.assign_task_id)
@@ -436,12 +490,15 @@ def main() -> None:
                 "session_id": "runtime-probe",
             },
         )
-        assert_status(response, 200, "owner assign mutation")
-        if response.payload.get("status") != "assigned":
-            fail("owner assign mutation returned wrong status")
-        task = get_task(args.api_url, args.owner_token, args.assign_task_id)
-        if task.get("target_agent") != "jules" or task.get("priority") != "high" or task.get("budget_cost") != 2:
-            fail("owner assign mutation did not persist assignment fields")
+        if args.expect_mutations_unavailable:
+            assert_broker_unavailable(response, "owner assign mutation without broker")
+        else:
+            assert_status(response, 200, "owner assign mutation")
+            if response.payload.get("status") != "assigned":
+                fail("owner assign mutation returned wrong status")
+            task = get_task(args.api_url, args.owner_token, args.assign_task_id)
+            if task.get("target_agent") != "jules" or task.get("priority") != "high" or task.get("budget_cost") != 2:
+                fail("owner assign mutation did not persist assignment fields")
 
     if args.archive_task_id:
         response = request(
@@ -451,14 +508,17 @@ def main() -> None:
             method="POST",
             body={"note": "Runtime probe archive", "session_id": "runtime-probe"},
         )
-        assert_status(response, 200, "owner archive mutation")
-        if response.payload.get("status") != "archived":
-            fail("owner archive mutation returned wrong status")
-        task = get_task(args.api_url, args.owner_token, args.archive_task_id)
-        if task.get("status") != "archived":
-            fail("owner archive mutation did not persist archived status")
+        if args.expect_mutations_unavailable:
+            assert_broker_unavailable(response, "owner archive mutation without broker")
+        else:
+            assert_status(response, 200, "owner archive mutation")
+            if response.payload.get("status") != "archived":
+                fail("owner archive mutation returned wrong status")
+            task = get_task(args.api_url, args.owner_token, args.archive_task_id)
+            if task.get("status") != "archived":
+                fail("owner archive mutation did not persist archived status")
 
-    if args.verify_task_id or args.assign_task_id or args.archive_task_id:
+    if any(mutation_task_ids) and not args.expect_mutations_unavailable:
         mutated_qa_status = request(args.api_url, "/api/qa-status", token=args.owner_token)  # allow-secret
         assert_status(mutated_qa_status, 200, "qa status after owner mutations")
         lifecycle = mutated_qa_status.payload.get("lifecycle", {})

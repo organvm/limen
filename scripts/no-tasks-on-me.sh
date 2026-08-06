@@ -88,7 +88,6 @@ PY
 #    (Enumerate all branch refs and grep-filter: a for-each-ref glob does NOT
 #     cross the '/' in 'heal/...', so it would silently match nothing.)
 # ---------------------------------------------------------------------------
-reg_text="$(cat "$REGISTRY")"
 staged_refs="$(git for-each-ref --format='%(refname:short)' refs/heads/ | grep -- '-staged-' || true)"
 if [ -z "$staged_refs" ]; then
   ok "no '*-staged-*' preserve refs present (nothing to strand)"
@@ -98,7 +97,10 @@ else
     sha="$(git rev-parse "$name")"; short="$(git rev-parse --short "$name")"
     if git merge-base --is-ancestor "$sha" origin/main 2>/dev/null; then
       ok "preserve ref $name merged into origin/main"
-    elif printf '%s' "$reg_text" | grep -qiE -- "$name|${short}|${sha:0:7}"; then
+    # grep the file directly — a `printf | grep -q` pipeline under pipefail false-fails
+    # via SIGPIPE (exit 141) once the registry outgrows the pipe buffer: grep -q exits
+    # at first match and the still-writing printf poisons the pipeline's status.
+    elif grep -qiE -- "$name|${short}|${sha:0:7}" "$REGISTRY"; then
       ok "preserve ref $name cited by a registry lever (durable pointer)"
     else
       bad "preserve ref $name ($short) is STRANDED — not on origin/main and not cited by any lever. Merge it, cite it in a lever's source_task, or delete it."
@@ -197,7 +199,7 @@ PY
 #    their OWN git-tracked home (docs/branch-hygiene.md), never here.
 # ---------------------------------------------------------------------------
 if ! python3 "$ROOT/scripts/reap-branches.py" --check; then
-  bad "spent branches are lingering — review docs/branch-reap-acceptance.md, then write docs/branch-reap-acceptance.jsonl with archive + redaction proof before any scripts/reap-branches.py --apply"
+  bad "spent branches are lingering — see the [reap-branches] lines above: branches marked 'authorized' are already covered by the acceptance ledger (standing grant or per-branch event) and need only scripts/reap-branches.py --apply; only 'needs-acceptance' branches require a new docs/branch-reap-acceptance.jsonl event"
 fi
 
 # ---------------------------------------------------------------------------

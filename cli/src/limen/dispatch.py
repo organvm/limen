@@ -6,10 +6,12 @@ import re
 import secrets
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import threading
 import time
+from collections.abc import Mapping
 from contextlib import ExitStack, contextmanager
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
@@ -26,6 +28,7 @@ from limen.capacity import (
     capacity_census,
     format_capacity_census,
     github_issue_ref,
+    lane_throughput_cap,
     local_floor_classes,
     local_floor_enabled,
     ollama_model,
@@ -33,7 +36,7 @@ from limen.capacity import (
 )
 from limen.dispatch_ownership import ACTIVE_OWNER_STATUSES
 from limen.execution_contract import execution_contract_hash
-from limen.io import load_limen_file, save_limen_file, queue_lock as _queue_lock
+from limen.io import load_limen_file, queue_lock as _queue_lock
 from limen.intake import IntakeContractError, normalize_selected_legacy_task, validate_intake_contract
 from limen.host_admission import AdmissionDenied, hold_lease
 from limen.jules_remote import (
@@ -43,7 +46,17 @@ from limen.jules_remote import (
     probe_jules_remote_session_absences,
     task_jules_session_id,
 )
-from limen.models import BudgetTrack, DispatchLogEntry, LimenFile, Task, has_jules_landing_hold
+from limen.models import (
+    BudgetTrack,
+    DispatchLogEntry,
+    LimenFile,
+    Task,
+    dispatch_agent,
+    dispatch_session_id,
+    has_jules_landing_hold,
+)
+from limen.partition_lanes import heuristics_may_promote
+from limen.tabularius import apply_limen_file_sync
 from limen.runtime_requirements import task_execution_ready
 from limen.doctor import stale_tasks
 from limen.provider_selection import (
@@ -54,6 +67,28 @@ from limen.provider_selection import (
     execution_profile_for,
     paid_service_block_reason,
     select_opencode_model,
+)
+from limen.provider_health import (
+    ProviderOutcome,
+    TRANSIENT_TERMINALS,
+    append_provider_outcome,
+    classify_provider_terminal,
+    execution_profile_hash,
+    load_provider_outcomes,
+    project_provider_health,
+    provider_for_model,
+    provider_health_policy,
+    provider_outcome_ledger_path,
+)
+from limen.plan_handoff import (
+    PlanHandoffResult,
+    PlanReceiptError,
+    build_plan_receipt,
+    builder_task_from_receipt,
+    is_build_from_plan,
+    is_plan_only,
+    select_live_builder,
+    validate_receipt_for_task,
 )
 from limen.remote_execution import (
     GitHubWorkflowAdapter,
@@ -66,6 +101,7 @@ from limen.remote_execution import (
     verification_context_for_task,
 )
 from limen.model_selection import (  # the shared model vocabulary — also used by the non-bypassable `claude` shim
+    _BUILD_FROM_PLAN_CLASS,
     _CLAUDE_TIER_ORDER,
     _claude_fable_acceptance_present,
     _claude_fable_classes,
@@ -75,6 +111,7 @@ from limen.model_selection import (  # the shared model vocabulary — also used
     _fable_reserve_receipt_present,
     _guard_fable_model_pin,
     _resolve_claude_model,
+    tier_for_classes,
 )
 from limen.worktree_debt import (
     IMPACT_DEBT_CREATING,
@@ -83,11 +120,18 @@ from limen.worktree_debt import (
     admission_blocks,
     take_admission_snapshot,
 )
+from limen.worktree_initialization import WorktreeInitializationError, initialize_worktree
 from limen.worktree_roots import dispatch_clone_cache_root, effective_worktree_root
+from limen.work_loan import task_work_loan_readiness
 from limen.workstream_contract import (
     ContractError as WorkstreamContractError,
     WORKSTREAM_SUCCESSOR_REQUIRED_LABEL,
     validate_packet_contract,
+)
+from limen.work_loan_journal import (
+    WorkLoanJournalError,
+    default_store as default_work_loan_journal_store,
+    work_loan_selection_key,
 )
 
 
@@ -264,23 +308,44 @@ def _oauth_unreachable_lanes() -> set[str]:
     return down
 
 
+def _provider_health_dead_lanes() -> set[str]:
+    """Bench OpenCode only when every observed provider is in auth/rate cooldown.
+
+    Exact-model health is task-profile dependent and remains enforced by
+    ``_opencode_model`` after live capability filtering.
+    """
+
+    try:
+        now = datetime.now(timezone.utc)
+        snapshot = project_provider_health(
+            load_provider_outcomes(provider_outcome_ledger_path()),
+            provider_health_policy(),
+            now=now,
+        )
+    except (OSError, TypeError, ValueError):
+        return set()
+    providers = list(snapshot.providers.values())
+    return {"opencode"} if providers and all(entry.blocked(now) for entry in providers) else set()
+
+
 def _down_lanes() -> set[str]:
-    """Lanes currently DOWN/unproductive. Three sources, unioned:
+    """Lanes currently DOWN/unproductive. Four sources, unioned:
       1. logs/lanes-down.txt — a manual override file (one lane per line, '#' comments ok) for
          lanes a human knows are dead (e.g. agy bin missing); NOT pinned in code.
       2. the LIVE usage meter (_usage_dead_lanes) — lanes token-exhausted or rate-limited RIGHT NOW.
       3. browser-OAuth lanes whose silent-auth endpoint is unreachable this beat (_oauth_unreachable_lanes)
          — so agy/antigravity can't spawn a Google sign-in tab while the Mac is asleep/offline.
+      4. append-only provider outcome health (_provider_health_dead_lanes), which benches OpenCode
+         when every observed provider is in auth/rate cooldown.
     Rebalance + dispatch + route skip these so tasks aren't wasted on a lane that can't produce.
-    Sources 2 & 3 self-heal (a lane rejoins when its window refills / the network returns); remove a line
-    from source 1 when that lane is healthy again (e.g. a paid GEMINI_API_KEY)."""
+    Sources 2–4 self-heal; remove a line from source 1 when that lane is healthy again."""
     f = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen"))) / "logs" / "lanes-down.txt"
     manual: set[str] = set()
     try:
         manual = {ln.split("#")[0].strip() for ln in f.read_text().splitlines() if ln.split("#")[0].strip()}
     except OSError:
         pass
-    return manual | _usage_dead_lanes() | _oauth_unreachable_lanes()
+    return manual | _usage_dead_lanes() | _oauth_unreachable_lanes() | _provider_health_dead_lanes()
 
 
 def _run_capture(
@@ -297,6 +362,10 @@ def _run_capture(
     pipes so the timeout actually fires. Still raises TimeoutExpired so callers' handlers run."""
     import signal
 
+    lifetime_fds = _stable_agent_host_lifetime_fds(
+        os.environ if env is None else env,
+    )
+
     proc = subprocess.Popen(
         cmd,
         cwd=cwd,
@@ -306,6 +375,7 @@ def _run_capture(
         stderr=subprocess.PIPE,
         stdin=subprocess.DEVNULL,
         start_new_session=True,
+        pass_fds=lifetime_fds,
     )
     try:
         out, err = proc.communicate(timeout=timeout)
@@ -436,9 +506,31 @@ def _short_proc_output(proc: subprocess.CompletedProcess[str] | None, limit: int
     return f"{text[:limit]}...[truncated]" if len(text) > limit else text
 
 
-def _first_command(payload: dict[str, Any]) -> str:
-    commands = payload.get("next_commands") if isinstance(payload.get("next_commands"), list) else []
-    return str(commands[0]) if commands else ""
+# The relay only READS logs/usage.json (_provider_headroom); its own producer is the
+# usage-telemetry sensor (institutio/governance/sensors.yaml, source: [metabolize]).
+# Without that first, a "provider headroom stale" failure can never clear and re-running
+# the relay loops forever.
+HANDOFF_RELAY_REMEDIATION = (
+    "python3 scripts/usage-telemetry.py && python3 scripts/handoff-relay.py && python3 scripts/handoff-relay.py --check"
+)
+
+
+def _remediation_command(payload: dict[str, Any]) -> str:
+    """Every command the gate named, in order — not just the first.
+
+    The value gate emits ``next_commands`` as a LIST because clearing one block can take
+    more than one producer: ``stop_missing_inputs`` names a writer per missing input, and
+    for ``batch_review_index`` the producer is the SECOND entry. Collapsing to
+    ``commands[0]`` printed a command that could not clear the block, so the gate re-fired
+    identically and the operator looped. Chained with ``&&`` to match the multi-step
+    remediation form already used for the handoff relay below.
+    """
+    # Bound once, then narrowed: the isinstance() guard has to test the SAME object that gets
+    # iterated. Guarding a second payload.get() call left the bound value typed
+    # `Any | list[Any] | None`, which mypy correctly refuses to iterate.
+    raw = payload.get("next_commands")
+    commands: list[Any] = raw if isinstance(raw, list) else []
+    return " && ".join(text for text in (str(command).strip() for command in commands) if text)
 
 
 def _run_handoff_relay(root: Path, *, refresh: bool) -> dict[str, Any]:
@@ -639,7 +731,7 @@ def _session_value_admission_gate(
     gate = _parse_json_stdout(proc.stdout)
     gate["returncode"] = proc.returncode
     gate["output"] = _short_proc_output(proc)
-    gate["next_command"] = _first_command(gate)
+    gate["next_command"] = _remediation_command(gate)
     if proc.returncode == 0:
         gate["allow"] = True
         return gate
@@ -705,7 +797,7 @@ def dispatch_admission_check(
                     "status": "alert",
                     "exit_code": 20,
                     "reason": "handoff relay check failed; refresh handoff before launching workers",
-                    "next_command": "python3 scripts/handoff-relay.py && python3 scripts/handoff-relay.py --check",
+                    "next_command": HANDOFF_RELAY_REMEDIATION,
                 }
             )
             return result
@@ -813,7 +905,7 @@ def _has_pr_open_transition(task: Task) -> bool:
     """
     return any(
         str(entry.status or "") == "pr_open"
-        or (str(entry.status or "") == "dispatched" and "/pull/" in str(entry.session_id or "").lower())
+        or (str(entry.status or "") == "dispatched" and "/pull/" in dispatch_session_id(entry).lower())
         for entry in (task.dispatch_log or [])
     )
 
@@ -867,6 +959,7 @@ def _restore_done_status(
             agent=agent,
             session_id=session_id,
             status="done",
+            lifecycle_repair="prior-done",
             output=output,
         )
     )
@@ -885,7 +978,34 @@ def _dispatchable(task: Task) -> bool:
         return False
     if "needs-human" in (task.labels or []):
         return False
-    return task_execution_ready(task)
+    return task_work_loan_readiness(task).ready and task_execution_ready(task)
+
+
+def _effective_target_agent(task: Task) -> str:
+    """Return the live claim lane without mutating durable ownership metadata.
+
+    ``target_agent`` is the task's durable eligibility/ownership constraint. A
+    bounded provider failure may route the next claim through the latest OPEN
+    receipt; that executor lives in ``dispatch_log.route_to`` and does not
+    rewrite the task itself.
+    """
+
+    if task.status == "open" and is_build_from_plan(task) and task.plan_receipt is not None:
+        try:
+            validate_receipt_for_task(task, task.plan_receipt)
+            return select_live_builder(task.plan_receipt) or "__plan_builder_unavailable__"
+        except PlanReceiptError:
+            return "__plan_builder_invalid__"
+    if task.status == "open" and task.dispatch_log:
+        latest = task.dispatch_log[-1]
+        if latest.status == "open" and latest.route_to:
+            return canonical_agent(latest.route_to)
+    return canonical_agent(task.target_agent)
+
+
+def _task_targets_agent(task: Task, agent: str) -> bool:
+    target = _effective_target_agent(task)
+    return target in {canonical_agent(agent), "any"}
 
 
 def _entry_text(entry: DispatchLogEntry) -> str:
@@ -894,9 +1014,9 @@ def _entry_text(entry: DispatchLogEntry) -> str:
         for part in (
             entry.status,
             entry.route_to,
-            entry.session_id,
+            dispatch_session_id(entry),
             entry.output,
-            entry.agent,
+            dispatch_agent(entry),
         )
     ).lower()
 
@@ -921,7 +1041,7 @@ def _has_fresh_owner_state(task: Task) -> bool:
     for entry in (task.dispatch_log or [])[-4:]:
         text = _entry_text(entry)
         if str(entry.status or "") in {"done", "pr_open"} or (
-            str(entry.status or "") == "dispatched" and "/pull/" in str(entry.session_id or "").lower()
+            str(entry.status or "") == "dispatched" and "/pull/" in dispatch_session_id(entry).lower()
         ):
             return True
         if "pull/" in text or "new head" in text or "checks green" in text or "check passed" in text:
@@ -951,8 +1071,8 @@ def chronic_dispatch_reason(task: Task) -> str | None:
     missing_session_entries = [
         entry
         for entry in last_two
-        if not str(entry.session_id or "").strip()
-        or str(entry.session_id or "").strip().lower() in {"none", "null", "undefined", "undefined#undefined"}
+        if not dispatch_session_id(entry).strip()
+        or dispatch_session_id(entry).strip().lower() in {"none", "null", "undefined", "undefined#undefined"}
     ]
     if len(missing_session_entries) == 2:
         return "missing-session-id-loop"
@@ -1102,7 +1222,21 @@ def _dispatch_focus_bucket(task: Task, value_repos: set[str]) -> int:
     labels = {str(label).strip().lower() for label in (task.labels or [])}
     workstream = str(task.workstream or "").strip().lower()
     if repo and repo in value_repos:
+        # EXPLICIT funding, checked first and never vetoed: a value-repos.json row is the
+        # operator deciding, which is not the accidental overlap the partner boundary blocks.
         return 0
+    if not heuristics_may_promote(task.repo):
+        # THE EXCLUSION AXIS. Everything below this line is a guess -- a label, an id prefix, a
+        # lifecycle term, or a substring of English prose -- and a guess may never promote work
+        # across a partner boundary (operator directive 2026-08-02: "there shouldn't be ANY
+        # possibility of overlap between my work and client work").
+        #
+        # This function had no way to express that: it was pure inclusion, five ways to return 0
+        # and none to refuse. So VIC-CONTRACT-002, a client engagement in a private repo, reached
+        # the top of the personal fleet queue because its prompt boilerplate contained the word
+        # "blocker", and VIC-CLIENT-STORY-001 followed on "custody". Pruning those two terms would
+        # only move the collision to the next English word the client's text happens to contain.
+        return 1
     if labels & _VALUE_LABELS or workstream in _VALUE_WORKSTREAMS:
         return 0
     if str(task.id or "").startswith(("AW-", "REV-")):
@@ -1131,6 +1265,14 @@ def _value_gate_configured(value_repos: set[str]) -> bool:
 
 def task_passes_value_gate(task: Task, value_repos: set[str] | None = None) -> bool:
     value_repos = value_repos if value_repos is not None else _value_tier_repos()
+    repo = _normalize_repo_slug(task.repo)
+    if not (repo and repo in value_repos) and not heuristics_may_promote(task.repo):
+        # Checked BEFORE _value_gate_configured, so LIMEN_VALUE_GATE=0 (and an empty
+        # value-repos.json) cannot open the partner boundary. A confidentiality boundary an env
+        # var can switch off is not a boundary. An explicit `--task <id>` still reaches a partner
+        # lane -- _explicit_task_source bypasses this gate by design, and naming the id IS the
+        # operator deciding -- but nothing automatic selects one.
+        return False
     if not _value_gate_configured(value_repos):
         return True
     return _dispatch_focus_bucket(task, value_repos) == 0
@@ -1145,7 +1287,18 @@ def sort_value_gate_candidates(
     value_repos = value_repos if value_repos is not None else _value_tier_repos()
     gated = [task for task in candidates if task_passes_value_gate(task, value_repos)]
     if not _value_gate_configured(value_repos):
-        gated = list(candidates)
+        # An unconfigured value gate must not NARROW dispatch -- but "do not narrow" is a
+        # statement about PRIORITY, never about the partner boundary. Restoring `candidates`
+        # wholesale readmitted precisely the tasks task_passes_value_gate had just vetoed, so the
+        # veto was computed and discarded one line later.
+        #
+        # It stayed invisible because _value_tier_repos() defaults its file to
+        # ~/Workspace/limen/value-repos.json: on the operator's host that file exists, the gate
+        # reads CONFIGURED, and the filter survives. On a CI runner or any fresh clone it does
+        # not, the gate reads UNCONFIGURED, and client work walked back into the candidate list.
+        # A confidentiality boundary that holds only where a home-directory path happens to
+        # resolve is not a boundary.
+        gated = [task for task in candidates if heuristics_may_promote(task.repo)]
     if disk_pressure:
         focused = [task for task in gated if _dispatch_focus_bucket(task, value_repos) == 0]
         if focused:
@@ -1155,6 +1308,7 @@ def sort_value_gate_candidates(
         key=lambda task: (
             _dispatch_focus_bucket(task, value_repos),
             _PRIORITY_ORDER.get(task.priority, 99),
+            *work_loan_selection_key(task),
             str(task.id),
         ),
     )
@@ -1504,6 +1658,8 @@ def _record_model_selection(
     selected_model: str | None,
     source: str,
     fingerprint: str | None = None,
+    health_snapshot_hash: str | None = None,
+    health_evidence: dict[str, object] | None = None,
 ) -> None:
     if task is None:
         return
@@ -1512,18 +1668,23 @@ def _record_model_selection(
         "selected_model": selected_model,
         "selection_source": source,
         "catalog_hash": fingerprint,
+        "health_snapshot_hash": health_snapshot_hash,
+        "provider_health_evidence": health_evidence,
     }
 
 
 def resolve_agent() -> str:
-    return canonical_agent(os.environ.get("LIMEN_AGENT", "claude"))
+    agent = canonical_agent(os.environ.get("LIMEN_AGENT"))
+    if not agent:
+        raise RuntimeError("LIMEN_AGENT identity is required for generic dispatch")
+    return agent
 
 
 def session_id() -> str:
     return os.environ.get("CLAUDE_SESSION_ID", os.environ.get("GEMINI_SESSION_ID", "cli"))
 
 
-def call_agent_dispatch(agent: str, task: Task, dry_run: bool) -> bool | str:
+def call_agent_dispatch(agent: str, task: Task, dry_run: bool) -> bool | str | PlanHandoffResult:
     agent = canonical_agent(agent)
     try:
         workstream_packet = _workstream_packet_for(task)
@@ -1561,14 +1722,6 @@ def call_agent_dispatch(agent: str, task: Task, dry_run: bool) -> bool | str:
         owner = f"limen-dispatch-{agent}-{task_key}-{os.getpid()}"
         try:
             with ExitStack() as leases:
-                if agent == "codex":
-                    leases.enter_context(
-                        hold_lease(
-                            "execution",
-                            owner=owner,
-                            surface="limen-codex-dispatch",
-                        )
-                    )
                 leases.enter_context(
                     hold_lease(
                         "heavy",
@@ -1581,6 +1734,52 @@ def call_agent_dispatch(agent: str, task: Task, dry_run: bool) -> bool | str:
             reasons = ",".join(exc.decision.get("reasons") or ["host-admission-denied"])
             return _blocked_result(f"host admission denied local {agent} execution: {reasons}")
     return _run_cmd(["agent-dispatch", agent, _build_prompt(task)], task, dry_run)
+
+
+def _journaled_agent_dispatch(
+    agent: str,
+    task: Task,
+    dry_run: bool,
+    reservation_id: str,
+    journal_root: Path | None = None,
+) -> bool | str | PlanHandoffResult:
+    """Run one provider only after its work-capacity reservation is durable."""
+
+    if dry_run:
+        return call_agent_dispatch(agent, task, dry_run=True)
+    store = default_work_loan_journal_store() if journal_root is None else default_work_loan_journal_store(journal_root)
+    try:
+        store.record_reservation(task, agent=canonical_agent(agent), reservation_id=reservation_id)
+    except WorkLoanJournalError as exc:
+        return _blocked_result(f"work-loan reservation failed: {exc}")
+    started = time.monotonic()
+    try:
+        result = call_agent_dispatch(agent, task, dry_run=False)
+    except Exception:
+        elapsed_seconds = max(0.0, time.monotonic() - started)
+        store.record_actual(
+            task,
+            agent=canonical_agent(agent),
+            reservation_id=reservation_id,
+            elapsed_seconds=elapsed_seconds,
+            local_host=canonical_agent(agent) in LOCAL_CHECKOUT_AGENTS,
+            metrics={"runs": 1},
+        )
+        raise
+    elapsed_seconds = max(0.0, time.monotonic() - started)
+    launched_runs = 0 if _is_blocked_result(result) or _is_workstream_successor_result(result) else 1
+    try:
+        store.record_actual(
+            task,
+            agent=canonical_agent(agent),
+            reservation_id=reservation_id,
+            elapsed_seconds=elapsed_seconds,
+            local_host=canonical_agent(agent) in LOCAL_CHECKOUT_AGENTS,
+            metrics={"runs": launched_runs},
+        )
+    except WorkLoanJournalError as exc:
+        return _blocked_result(f"work-loan actual accounting failed after provider launch: {exc}")
+    return result
 
 
 def _remote_receipt_store() -> ReceiptStore:
@@ -1848,6 +2047,14 @@ def _build_prompt(task: Task, task_first: bool = False) -> str:
             "For PR-fix/rebase tasks, inspect that PR before editing; when available, dispatch "
             "bases this isolated branch on the PR head and targets the repair PR back to that head."
         )
+    if is_plan_only(task):
+        parts.append(
+            "\n\n--- PLAN-ONLY AUTHORITY ---\n"
+            "Do not edit, create, delete, move, or format files; do not commit, push, open a PR, "
+            "or mutate external state. Inspect the isolated checkout and return a concrete, "
+            "ordered implementation plan as stdout. The dispatcher will reject the handoff if "
+            "the worktree changes. Do not select or recommend a named model."
+        )
     body = f"{''.join(parts)}\n\n{_value_gate_discipline(task)}\n\n{_verification_discipline()}"
     flame = _flame_preamble()
     if not flame:
@@ -1910,6 +2117,10 @@ def _run_cmd(cmd: list[str], task: Task, dry_run: bool, cwd: str | None = None) 
     except FileNotFoundError:
         print(f"  dispatch command not found: {cmd[0]}")
         return False
+    except StableAgentHostError as exc:
+        reason = str(exc)
+        print(f"  BLOCKED {task.id}: {reason}; refusing an unstable TCC principal")
+        return _blocked_result(reason)
     except subprocess.TimeoutExpired:
         print(f"  timed out: {task.id}")
         return False
@@ -2083,7 +2294,7 @@ def _call_warp_oz(agent: str, task: Task, dry_run: bool) -> bool | str:
     dispatch_repo = os.environ.get("LIMEN_WARP_OZ_REPO", "organvm/limen")
     intent = (
         "Planning only: return a build packet and do not implement."
-        if requested_profile.planning_only and plan_accepted
+        if requested_profile.planning_only
         else "Execute the task and verify the narrow acceptance predicate."
     )
     prompt = (
@@ -2150,26 +2361,120 @@ def _opencode_model(task: Task | None = None) -> str | None:
     )
     requested = execution_profile_for(task)
     profile = effective_profile(requested, plan_accepted=_claude_fable_acceptance_present())
+    policy = provider_health_policy()
+    health = project_provider_health(
+        load_provider_outcomes(provider_outcome_ledger_path()),
+        policy,
+    )
+    health_hash = health.snapshot_hash()
     override = os.environ.get("LIMEN_OPENCODE_MODEL")
     if override:
-        selected = next((model for model in models if model.model_id == override and model.satisfies(profile)), None)
+        selected = next(
+            (
+                model
+                for model in models
+                if model.model_id == override
+                and model.satisfies(profile)
+                and health.allows(model.model_id, now=datetime.now(timezone.utc))
+            ),
+            None,
+        )
         _record_model_selection(
             task,
             profile=profile.as_dict(),
             selected_model=selected.model_id if selected else None,
-            source="opencode_override" if selected else "opencode_override_missing",
+            source="opencode_override" if selected else "opencode_override_missing_or_unhealthy",
             fingerprint=catalog_hash(models),
+            health_snapshot_hash=health_hash,
+            health_evidence=health.evidence_for(override),
         )
         return selected.model_id if selected else None
-    selected = select_opencode_model(models, profile)
+    selected = select_opencode_model(models, profile, health)
     _record_model_selection(
         task,
         profile=profile.as_dict(),
         selected_model=selected.model_id if selected else None,
-        source="opencode_live_catalog" if selected else "opencode_no_capable_model",
+        source="opencode_live_catalog_health" if selected else "opencode_no_healthy_capable_model",
         fingerprint=catalog_hash(models),
+        health_snapshot_hash=health_hash,
+        health_evidence=health.evidence_for(selected.model_id) if selected else None,
     )
     return selected.model_id if selected else None
+
+
+def _record_opencode_outcome(
+    task: Task,
+    *,
+    terminal_class: str,
+    started_at: datetime,
+    retry_count: int,
+    receipt_reference: str | None = None,
+) -> None:
+    """Append one redacted runtime outcome and enrich the task's selection receipt."""
+
+    selection = _MODEL_SELECTION_RECEIPTS.get(task.id)
+    if not selection:
+        return
+    model_id = str(selection.get("selected_model") or "")
+    fingerprint = str(selection.get("catalog_hash") or "")
+    profile = selection.get("execution_profile")
+    if not model_id or not re.fullmatch(r"[0-9a-f]{64}", fingerprint) or not isinstance(profile, dict):
+        return
+    finished_at = datetime.now(timezone.utc)
+    outcome = ProviderOutcome(
+        provider=provider_for_model(model_id),
+        runtime_model=model_id,
+        catalog_hash=fingerprint,
+        execution_profile_hash=execution_profile_hash(profile),
+        terminal_class=terminal_class,
+        started_at=started_at,
+        finished_at=finished_at,
+        retry_count=retry_count,
+        receipt_reference=receipt_reference or f"task:{task.id}",
+    )
+    path = provider_outcome_ledger_path()
+    try:
+        append_provider_outcome(path, outcome)
+        health = project_provider_health(
+            load_provider_outcomes(path),
+            provider_health_policy(),
+            now=finished_at,
+        )
+    except (OSError, TypeError, ValueError):
+        return
+    entry = health.models.get(model_id) or health.providers.get(provider_for_model(model_id))
+    selection.update(
+        {
+            "provider_terminal_class": terminal_class,
+            "provider_retry_count": retry_count,
+            "provider_cooldown_until": (entry.cooldown_until.isoformat() if entry and entry.cooldown_until else None),
+            "health_snapshot_hash": health.snapshot_hash(),
+            "provider_health_evidence": health.evidence_for(model_id),
+        }
+    )
+
+
+def _opencode_run_metadata(task: Task) -> tuple[datetime, int]:
+    selection = _MODEL_SELECTION_RECEIPTS.get(task.id) or {}
+    raw_started = str(selection.get("_provider_run_started_at") or "")
+    try:
+        started_at = datetime.fromisoformat(raw_started)
+    except ValueError:
+        started_at = datetime.now(timezone.utc)
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=timezone.utc)
+    return started_at, int(selection.get("_provider_retry_count") or 0)
+
+
+def _record_opencode_success(task: Task, receipt_reference: str) -> None:
+    started_at, retry_count = _opencode_run_metadata(task)
+    _record_opencode_outcome(
+        task,
+        terminal_class="success",
+        started_at=started_at,
+        retry_count=retry_count,
+        receipt_reference=receipt_reference,
+    )
 
 
 _LOCAL_AGENTS: dict[str, list[str]] = {
@@ -2261,6 +2566,159 @@ class WorkstreamLaunchContractError(RuntimeError):
 
 class ProviderSelectionError(RuntimeError):
     """A provider override cannot be validated against live provider metadata."""
+
+
+class StableAgentHostError(RuntimeError):
+    """A macOS local lane cannot enter the fixed responsibility identity."""
+
+
+def _stable_agent_host_lifetime_fds(
+    env: Mapping[str, str],
+    *,
+    required: bool = False,
+) -> tuple[int, ...]:
+    lifetime_raw = env.get("DOMUS_AGENT_HOST_LIFETIME_FD")
+    if not lifetime_raw:
+        if required:
+            raise StableAgentHostError("Domus agent host marker has no lifetime descriptor")
+        return ()
+    identity = env.get("DOMUS_AGENT_HOST_LIFETIME_ID")
+    if not identity:
+        raise StableAgentHostError("Domus agent host marker has no lifetime identity")
+    try:
+        lifetime_fd = int(lifetime_raw)
+        metadata = os.fstat(lifetime_fd)
+    except (OSError, TypeError, ValueError) as exc:
+        raise StableAgentHostError("Domus agent host lifetime descriptor is invalid") from exc
+    identity_parts = identity.rsplit(":", 2)
+    try:
+        handle, device_raw, inode_raw = identity_parts
+        device = int(device_raw)
+        inode = int(inode_raw)
+    except (TypeError, ValueError) as exc:
+        raise StableAgentHostError("Domus agent host lifetime identity is invalid") from exc
+    if (
+        len(identity_parts) != 3
+        or not re.fullmatch(r"[0-9a-fA-F]{16}", handle)
+        or not stat.S_ISFIFO(metadata.st_mode)
+        or metadata.st_dev != device
+        or metadata.st_ino != inode
+    ):
+        raise StableAgentHostError("Domus agent host lifetime identity is invalid")
+    return (lifetime_fd,)
+
+
+def _validate_stable_agent_host_contract(host_path: Path) -> None:
+    try:
+        completed = subprocess.run(
+            [str(host_path), "status", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        payload = json.loads(completed.stdout or "")
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
+        raise StableAgentHostError(f"stable Domus agent host contract is invalid: {host_path}") from exc
+    if not isinstance(payload, dict):
+        raise StableAgentHostError(f"stable Domus agent host contract is invalid: {host_path}")
+    try:
+        resolved_host = host_path.resolve(strict=True)
+        reported_executable = Path(str(payload.get("executable_path", ""))).resolve(strict=True)
+        application = Path(str(payload.get("bundle_path", ""))).resolve(strict=True)
+        if (
+            resolved_host != reported_executable
+            or resolved_host.parent.name != "MacOS"
+            or resolved_host.parent.parent.name != "Contents"
+            or resolved_host.parents[2] != application
+            or application.suffix != ".app"
+        ):
+            raise OSError("stable-host status paths disagree")
+        receipt = application.parent / f".{application.stem}.designated-requirement"
+        receipt_lines = receipt.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise StableAgentHostError(f"stable Domus agent host contract is invalid: {host_path}") from exc
+    designated_requirement = str(payload.get("designated_requirement", "")).strip()
+    if (
+        completed.returncode != 0
+        or payload.get("schema") != "domus.agent_host_status.v1"
+        or payload.get("ok") is not True
+        or payload.get("bundle_id") != "org.organvm.domus.agent-host"
+        or payload.get("stable_path") is not True
+        or payload.get("signature_valid") is not True
+        or not designated_requirement
+        or len(receipt_lines) != 1
+        or receipt_lines[0].strip() != designated_requirement
+        or not re.fullmatch(r"[0-9a-fA-F]{40,128}", str(payload.get("cdhash", "")))
+    ):
+        raise StableAgentHostError(f"stable Domus agent host contract is invalid: {host_path}")
+
+
+def _stable_agent_host_path(values: Mapping[str, str]) -> Path:
+    configured = values.get("LIMEN_AGENT_HOST_BIN") or values.get("DOMUS_AGENT_HOST_BIN")
+    host = configured or shutil.which("domus-agent-host", path=values.get("PATH"))
+    if not host:
+        host = str(
+            Path(values.get("HOME", str(Path.home()))) / "Applications/DomusAgentHost.app/Contents/MacOS/DomusAgentHost"
+        )
+    if host == "~":
+        return Path(values.get("HOME", str(Path.home())))
+    if host.startswith("~/"):
+        return Path(values.get("HOME", str(Path.home()))) / host[2:]
+    return Path(host).expanduser()
+
+
+def _validate_stable_agent_host_lifetime(
+    host_path: Path,
+    env: Mapping[str, str],
+    lifetime_fds: tuple[int, ...],
+) -> None:
+    try:
+        completed = subprocess.run(
+            [str(host_path), "verify-lifetime"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+            env=dict(env),
+            pass_fds=lifetime_fds,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise StableAgentHostError("Domus agent host lifetime identity is invalid") from exc
+    if completed.returncode != 0:
+        raise StableAgentHostError("Domus agent host lifetime identity is invalid")
+
+
+def _stable_agent_host_command(
+    command: list[str],
+    env: Mapping[str, str] | None = None,
+    *,
+    platform_name: str | None = None,
+) -> list[str]:
+    """Wrap one local provider launch in the stable macOS responsibility host.
+
+    The native host inherits Limen's process group and supervises providers in
+    its own child group, so ``_run_capture`` retains whole-tree timeout semantics
+    through native signal forwarding. A process already below the host is
+    returned unchanged; nested hosts would obscure lifecycle receipts.
+    """
+
+    values = os.environ if env is None else env
+    observed_platform = sys.platform if platform_name is None else platform_name
+    if observed_platform != "darwin":
+        return list(command)
+    host_path = _stable_agent_host_path(values)
+    if values.get("DOMUS_AGENT_HOST_ACTIVE") == "1":
+        lifetime_fds = _stable_agent_host_lifetime_fds(values, required=True)
+        if not host_path.is_file() or not os.access(host_path, os.X_OK):
+            raise StableAgentHostError(f"stable Domus agent host is unavailable: {host_path}")
+        _validate_stable_agent_host_contract(host_path)
+        _validate_stable_agent_host_lifetime(host_path, values, lifetime_fds)
+        return list(command)
+    if not host_path.is_file() or not os.access(host_path, os.X_OK):
+        raise StableAgentHostError(f"stable Domus agent host is unavailable: {host_path}")
+    _validate_stable_agent_host_contract(host_path)
+    return [str(host_path), "run", "--", *command]
 
 
 def _option_values(argv: list[str], *names: str) -> list[str]:
@@ -3303,7 +3761,7 @@ def _isolated_safe_task(task: Task) -> bool:
 
 def _agent_timed_out_on_task(agent: str, task: Task) -> bool:
     return any(
-        canonical_agent(str(entry.agent or "")) == agent
+        canonical_agent(dispatch_agent(entry)) == agent
         and (
             str(entry.status or "").startswith("timeout->")
             or (bool(getattr(entry, "route_to", None)) and "timeout" in str(entry.output or "").lower())
@@ -3312,9 +3770,17 @@ def _agent_timed_out_on_task(agent: str, task: Task) -> bool:
     )
 
 
+def _control_host_task(task: Task) -> bool:
+    """Whether execution must mutate or inspect this control host rather than a remote clone."""
+
+    return "execution:control-host" in (task.labels or [])
+
+
 def agent_can_run_task(agent: str, task: Task) -> bool:
     agent = canonical_agent(agent)
     if _agent_timed_out_on_task(agent, task):
+        return False
+    if _control_host_task(task) and agent not in _LOCAL_AGENTS:
         return False
     if agent == "github_actions" and not (
         str(task.type or "").lower() == "verification"
@@ -3373,11 +3839,11 @@ def _blocked_result(reason: str) -> str:
     return _FAILED_BLOCKED_PREFIX + " ".join((reason or "blocked").split())[:500]
 
 
-def _is_blocked_result(result: bool | str) -> bool:
+def _is_blocked_result(result: object) -> bool:
     return isinstance(result, str) and result.startswith(_FAILED_BLOCKED_PREFIX)
 
 
-def _blocked_reason(result: bool | str) -> str:
+def _blocked_reason(result: object) -> str:
     if not _is_blocked_result(result):
         return ""
     return str(result)[len(_FAILED_BLOCKED_PREFIX) :]
@@ -3387,11 +3853,11 @@ def _workstream_successor_result(reason: str) -> str:
     return _WORKSTREAM_SUCCESSOR_PREFIX + " ".join((reason or "workstream boundary reached").split())[:500]
 
 
-def _is_workstream_successor_result(result: bool | str) -> bool:
+def _is_workstream_successor_result(result: object) -> bool:
     return isinstance(result, str) and result.startswith(_WORKSTREAM_SUCCESSOR_PREFIX)
 
 
-def _workstream_successor_reason(result: bool | str) -> str:
+def _workstream_successor_reason(result: object) -> str:
     if not _is_workstream_successor_result(result):
         return ""
     return str(result)[len(_WORKSTREAM_SUCCESSOR_PREFIX) :]
@@ -4107,39 +4573,117 @@ def _run_isolated_agent(
     wt: Path,
     agent_cmd: list[str],
     lane_timeout: int,
-) -> bool | str:
+    *,
+    retry_count: int = 0,
+) -> bool | str | PlanHandoffResult:
     try:
         run_env = _lane_run_env(agent, wt, task)
         if agent == "opencode":
             run_env["LIMEN_OPENCODE_CLOCK"] = "1"
             run_env["LIMEN_TASK_ID"] = task.id
         _assert_final_workstream_launch(agent, task, agent_cmd[1:-1], run_env, wt)
+        supervised_cmd = _stable_agent_host_command(agent_cmd, run_env)
+    except StableAgentHostError as exc:
+        reason = str(exc)
+        print(f"  BLOCKED {task.id}: {reason}; refusing an unstable TCC principal")
+        return _blocked_result(reason)
     except WorkstreamLaunchContractError as exc:
         reason = str(exc)
         print(f"  BLOCKED {task.id}: {reason}; refusing provider launch so the lane can successor-route")
         return _workstream_successor_result(reason)
-    try:
-        run = _run_capture(agent_cmd, cwd=str(wt), timeout=lane_timeout, env=run_env)
-        # SELF-HEAL the credential-refresh race (#48786): if claude lost the token rotation,
-        # a fresh process re-reads the now-rotated token. ONE retry only.
-        if agent == "claude" and run.returncode != 0 and _is_auth_blip((run.stderr or "") + (run.stdout or "")):
-            print(f"  AUTH-BLIP {task.id}: claude credential-refresh race — re-reading token, one retry")
-            try:
-                run_env = _lane_run_env(agent, wt, task)
-                _assert_final_workstream_launch(agent, task, agent_cmd[1:-1], run_env, wt)
-            except WorkstreamLaunchContractError as exc:
-                reason = str(exc)
-                print(f"  BLOCKED {task.id}: {reason}; refusing auth retry so the lane can successor-route")
-                return _workstream_successor_result(reason)
-            run = _run_capture(agent_cmd, cwd=str(wt), timeout=lane_timeout, env=run_env)
-    except subprocess.TimeoutExpired:
-        print(f"  TIMEOUT {task.id} after {lane_timeout}s — too big for sync local → routing to jules (async)")
-        return _TIMEOUT
+    started_at = datetime.now(timezone.utc)
+    max_retries = provider_health_policy().same_model_retries if agent == "opencode" else retry_count
+    while True:
+        try:
+            run = _run_capture(
+                supervised_cmd,
+                cwd=str(wt),
+                timeout=lane_timeout,
+                env=run_env,
+            )
+            # SELF-HEAL the credential-refresh race (#48786): if claude lost the token rotation,
+            # a fresh process re-reads the now-rotated token. ONE retry only.
+            if agent == "claude" and run.returncode != 0 and _is_auth_blip((run.stderr or "") + (run.stdout or "")):
+                print(f"  AUTH-BLIP {task.id}: claude credential-refresh race — re-reading token, one retry")
+                try:
+                    run_env = _lane_run_env(agent, wt, task)
+                    _assert_final_workstream_launch(agent, task, agent_cmd[1:-1], run_env, wt)
+                    supervised_cmd = _stable_agent_host_command(
+                        agent_cmd,
+                        run_env,
+                    )
+                except StableAgentHostError as exc:
+                    reason = str(exc)
+                    print(f"  BLOCKED {task.id}: {reason}; refusing an unstable auth-retry TCC principal")
+                    return _blocked_result(reason)
+                except WorkstreamLaunchContractError as exc:
+                    reason = str(exc)
+                    print(f"  BLOCKED {task.id}: {reason}; refusing auth retry so the lane can successor-route")
+                    return _workstream_successor_result(reason)
+                run = _run_capture(
+                    supervised_cmd,
+                    cwd=str(wt),
+                    timeout=lane_timeout,
+                    env=run_env,
+                )
+        except StableAgentHostError as exc:
+            reason = str(exc)
+            print(f"  BLOCKED {task.id}: {reason}; refusing an unstable TCC principal")
+            return _blocked_result(reason)
+        except subprocess.TimeoutExpired:
+            if agent == "opencode":
+                _record_opencode_outcome(
+                    task,
+                    terminal_class="timeout",
+                    started_at=started_at,
+                    retry_count=retry_count,
+                )
+                if retry_count < max_retries:
+                    retry_count += 1
+                    print(f"  RETRY {task.id}: OpenCode timeout; same runtime model attempt {retry_count + 1}")
+                    continue
+            print(f"  TIMEOUT {task.id} after {lane_timeout}s — too big for sync local → routing to jules (async)")
+            return _TIMEOUT
+        if agent == "opencode" and run.returncode != 0:
+            terminal = classify_provider_terminal(
+                returncode=run.returncode,
+                output=(run.stderr or "") + (run.stdout or ""),
+            )
+            _record_opencode_outcome(
+                task,
+                terminal_class=terminal,
+                started_at=started_at,
+                retry_count=retry_count,
+            )
+            if terminal in TRANSIENT_TERMINALS and retry_count < max_retries:
+                retry_count += 1
+                print(f"  RETRY {task.id}: OpenCode {terminal}; same runtime model attempt {retry_count + 1}")
+                continue
+        break
 
     if agent == "opencode":
         _show_opencode_clock_after_run(task)
     if run.returncode != 0:
         return _failed_agent_result(agent, task, run)
+    if is_plan_only(task):
+        status = _git(["status", "--porcelain", "-z"], wt)
+        if status.returncode != 0:
+            return _blocked_result("plan-only worktree status is unreadable")
+        if status.stdout:
+            return _blocked_result("plan-only worker mutated the isolated worktree")
+        try:
+            receipt = build_plan_receipt(task, run.stdout or "", planner_agent=agent)
+        except PlanReceiptError as exc:
+            return _blocked_result(f"invalid plan-only result: {exc}")
+        if agent == "opencode":
+            _record_opencode_outcome(
+                task,
+                terminal_class="success",
+                started_at=started_at,
+                retry_count=retry_count,
+                receipt_reference=f"plan:{receipt['receipt_digest']}",
+            )
+        return PlanHandoffResult(receipt=receipt)
     if agent in ("agy", "antigravity"):
         _bridge_agy_scratch(task, wt)
     if agent == "ollama":
@@ -4151,6 +4695,9 @@ def _run_isolated_agent(
             reports = wt / "reports"
             reports.mkdir(exist_ok=True)
             (reports / f"{task.id}.md").write_text(out + "\n")
+    if agent == "opencode" and (selection := _MODEL_SELECTION_RECEIPTS.get(task.id)) is not None:
+        selection["_provider_run_started_at"] = started_at.isoformat()
+        selection["_provider_retry_count"] = retry_count
     return True
 
 
@@ -4433,7 +4980,7 @@ def _isolated_local_run(
     task: Task,
     dry_run: bool,
     base_agent_args: list[str] | None = None,
-) -> bool | str:
+) -> bool | str | PlanHandoffResult:
     binary = _resolve_agent_binary(agent)
     repo_dir = _resolve_repo_dir(task)
     if repo_dir is None and not dry_run:
@@ -4496,7 +5043,8 @@ def _isolated_local_run(
     # 1) fresh base from origin — never the user's possibly-dirty working tree.
     # Hold the git-plumbing lock only for these fast parent-repo ops so concurrent
     # same-repo dispatches don't collide on index.lock (the slow run is unlocked).
-    add = subprocess.CompletedProcess([], 1, "", "worktree add was not attempted")
+    initialization_error = "worktree initialization was not attempted"
+    initialized = False
     for attempt in range(6):
         if attempt:
             suffix = secrets.token_hex(4)
@@ -4512,15 +5060,30 @@ def _isolated_local_run(
                 if wt.exists():
                     print(f"  retrying worktree add {task.id}: preserved existing worktree at {wt}")
                     continue
-            add = _git_plumbing(["worktree", "add", "-b", branch, str(wt), checkout_ref], repo_dir, timeout=120)
-        if add.returncode == 0:
+            try:
+                initialize_worktree(
+                    repo_dir,
+                    wt,
+                    branch=branch,
+                    checkout_ref=checkout_ref,
+                    task_id=task.id,
+                )
+            except WorktreeInitializationError as exc:
+                initialization_error = str(exc)
+            else:
+                initialized = True
+        if initialized:
             break
-        if re.search(r"branch .* already exists|is already checked out", add.stderr or "", re.IGNORECASE):
+        if re.search(
+            r"branch .* already exists|is already checked out",
+            initialization_error,
+            re.IGNORECASE,
+        ):
             print(f"  retrying worktree add {task.id}: stale branch collision on {branch}")
             continue
         break
-    if add.returncode != 0:
-        print(f"  FAILED worktree add {task.id}: {add.stderr.strip()[:300]}")
+    if not initialized:
+        print(f"  FAILED transactional worktree initialization {task.id}: {initialization_error[:300]}")
         return False
     _record_worktree_birth(task, wt, branch, checkout_ref, pr_base, existing_pr=bool(pr_head))
     _mark_machine_admission_born(task.id)
@@ -4531,15 +5094,45 @@ def _isolated_local_run(
         agent_cmd = [binary, *agent_args, prompt]
         start_head_result = _git(["rev-parse", "HEAD"], wt)
         start_head = start_head_result.stdout.strip() if start_head_result.returncode == 0 else ""
-        run_result = _run_isolated_agent(agent, task, wt, agent_cmd, lane_timeout)
-        if run_result is not True:
-            return run_result
+        retry_count = 0
+        while True:
+            if agent == "opencode":
+                run_result = _run_isolated_agent(
+                    agent,
+                    task,
+                    wt,
+                    agent_cmd,
+                    lane_timeout,
+                    retry_count=retry_count,
+                )
+            else:
+                run_result = _run_isolated_agent(agent, task, wt, agent_cmd, lane_timeout)
+            if isinstance(run_result, PlanHandoffResult):
+                return run_result
+            if run_result is not True:
+                return run_result
 
-        commit_result = _commit_isolated_changes(task, wt)
-        if pr_head:
+            commit_result = _commit_isolated_changes(task, wt)
+            current_retry = _opencode_run_metadata(task)[1] if agent == "opencode" else retry_count
             current_head_result = _git(["rev-parse", "HEAD"], wt)
             current_head = current_head_result.stdout.strip() if current_head_result.returncode == 0 else ""
             agent_committed = bool(start_head and current_head and current_head != start_head)
+            no_output = commit_result == _NOOP and not agent_committed
+            if agent == "opencode" and no_output:
+                started_at, _ = _opencode_run_metadata(task)
+                _record_opencode_outcome(
+                    task,
+                    terminal_class="no_output",
+                    started_at=started_at,
+                    retry_count=current_retry,
+                )
+                if current_retry < provider_health_policy().same_model_retries:
+                    retry_count = current_retry + 1
+                    print(f"  RETRY {task.id}: OpenCode no_output; same runtime model attempt {retry_count + 1}")
+                    continue
+            break
+
+        if pr_head:
             if commit_result == _NOOP and not agent_committed:
                 return commit_result
             if commit_result is not True and not (commit_result == _NOOP and agent_committed):
@@ -4550,6 +5143,8 @@ def _isolated_local_run(
             url = _existing_pr_url(pr_head)
             print(f"  dispatched: {task.id} → existing PR {url}")
             _arm_auto_merge(task, wt, url)
+            if agent == "opencode":
+                _record_opencode_success(task, url)
             return url
 
         if commit_result is not True:
@@ -4558,7 +5153,10 @@ def _isolated_local_run(
         if not _push_isolated_branch(task, wt, branch):
             return False
         pushed = True
-        return _create_isolated_pr(task, wt, pr_base, branch)
+        result = _create_isolated_pr(task, wt, pr_base, branch)
+        if agent == "opencode" and isinstance(result, str):
+            _record_opencode_success(task, result)
+        return result
     finally:
         # leave the user's checkout pristine: drop the worktree, and the local
         # branch too once its commits are safely on the remote, or when the attempt
@@ -4567,7 +5165,7 @@ def _isolated_local_run(
             _cleanup_isolated_worktree(repo_dir, wt, branch, checkout_ref, pushed=pushed, task=task)
 
 
-def _call_local_agent(agent: str, task: Task, dry_run: bool) -> bool | str:
+def _call_local_agent(agent: str, task: Task, dry_run: bool) -> bool | str | PlanHandoffResult:
     if not agent_can_run_task(agent, task):
         print(f"  SKIP {task.id}: {agent} is gated for Limen registry discovery tasks")
         return False
@@ -4585,7 +5183,7 @@ def _call_local_agent(agent: str, task: Task, dry_run: bool) -> bool | str:
         print(f"  BLOCKED {task.id}: {exc}; refusing provider launch so the lane can cascade")
         return False
     if agent == "opencode" and "-m" not in agent_args:
-        reason = "no code-capable model is exposed by the live OpenCode catalog"
+        reason = "no healthy code-capable model is exposed by the live OpenCode catalog"
         if dry_run:
             print(f"  would BLOCK {task.id}: {reason}")
             return True
@@ -4608,6 +5206,13 @@ def _call_local_agent(agent: str, task: Task, dry_run: bool) -> bool | str:
         print(f"  BLOCKED {task.id}: {reason}")
         return False
     cmd = [binary, *agent_args, _build_prompt(task)]
+    if not dry_run:
+        try:
+            cmd = _stable_agent_host_command(cmd)
+        except StableAgentHostError as exc:
+            reason = str(exc)
+            print(f"  BLOCKED {task.id}: {reason}; refusing an unstable TCC principal")
+            return _blocked_result(reason)
     return _run_cmd(cmd, task, dry_run, cwd=str(cwd))
 
 
@@ -4661,18 +5266,61 @@ def _reset_budget_if_needed(limen: LimenFile, now: datetime) -> bool:
     return cleared_nonzero
 
 
+def _throughput_governor_receipt(cap: dict[str, object], base_remaining: int, clamped_remaining: int) -> None:
+    """Append one JSONL evidence row when the throughput clamp binds — never silent."""
+    try:
+        root = Path(os.environ.get("LIMEN_ROOT", str(Path.home() / "Workspace" / "limen")))
+        path = root / "logs" / "throughput-governor.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        row = {
+            "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "agent": cap.get("agent"),
+            "mode": cap.get("mode"),
+            "cap": cap.get("cap"),
+            "target": cap.get("target"),
+            "dispatched": cap.get("dispatched"),
+            "landed": cap.get("landed"),
+            "rate": cap.get("rate"),
+            "base_remaining": base_remaining,
+            "clamped_remaining": clamped_remaining,
+            "reason": cap.get("reason"),
+        }
+        with open(path, "a") as fh:
+            fh.write(json.dumps(row) + "\n")
+        print(
+            f"  throughput-governor: {cap.get('agent')} clamped {base_remaining} -> {clamped_remaining} "
+            f"({cap.get('mode')}: {cap.get('reason')})"
+        )
+    except Exception:
+        pass
+
+
 def _remaining_budget(limen: LimenFile, agent: str, budget: int) -> int:
     """The per-vendor cadence cap is the binding gate (each refills on its own window); the
-    global daily is only a backstop for agents that have no per-agent cap."""
+    global daily is only a backstop for agents that have no per-agent cap. On top of either,
+    the throughput governor clamps volume to LANDED evidence (capacity.lane_throughput_cap):
+    a lane earns its full daily target only while landing rate holds — raw dispatch at ~15%
+    completion is the 308-blocked-PR failure, not progress."""
     agent = canonical_agent(agent)
     track = limen.portal.budget.track
     agent_limit = limen.portal.budget.per_agent.get(agent)
     if agent_limit is not None:
-        return max(0, agent_limit - track.per_agent.get(agent, 0))
-    return max(0, budget - track.spent)
+        remaining = max(0, agent_limit - track.per_agent.get(agent, 0))
+    else:
+        remaining = max(0, budget - track.spent)
+    if remaining <= 0:
+        return remaining
+    cap = lane_throughput_cap(limen, agent)
+    if cap["mode"] == "disabled":
+        return remaining
+    governed = max(0, int(cap["cap"]) - track.per_agent.get(agent, 0))
+    if governed < remaining:
+        _throughput_governor_receipt(dict(cap), remaining, governed)
+        return governed
+    return remaining
 
 
-DispatchResult = tuple[str, str, bool | str, str, str]
+DispatchResult = tuple[str, str, bool | str | PlanHandoffResult, str, str]
 
 
 def _clear_result_receipts(task_id: str) -> None:
@@ -4770,7 +5418,7 @@ def _commit_dispatch_results(
                 _apply_result(ft, agent, res, now, ftrack)
             finally:
                 _clear_result_receipts(tid)
-        save_limen_file(tasks_path, fresh)
+        apply_limen_file_sync(tasks_path, fresh, agent="dispatch", session_id="serial-results")
 
 
 def dispatch_tasks(
@@ -4838,7 +5486,7 @@ def dispatch_tasks(
     for t in tasks:
         if not _dispatchable(t):
             continue
-        if t.target_agent != agent_filter and t.target_agent != "any":
+        if not _task_targets_agent(t, agent_filter):
             continue
         if not agent_can_run_task(agent_filter, t):
             continue
@@ -4903,7 +5551,13 @@ def dispatch_tasks(
         selected_contract_hash = execution_contract_hash(task)
         selected_lifecycle_token = _lifecycle_ownership_token(task)
         try:
-            result = call_agent_dispatch(agent_filter, task, dry_run)
+            result = _journaled_agent_dispatch(
+                agent_filter,
+                task,
+                dry_run,
+                selected_lifecycle_token,
+                tasks_path.parent,
+            )
         finally:
             if not dry_run:
                 _release_machine_admission(task.id)
@@ -4935,7 +5589,7 @@ def dispatch_tasks(
 def _apply_result(
     task: Task,
     agent: str,
-    result: bool | str,
+    result: bool | str | PlanHandoffResult,
     now: datetime,
     track: BudgetTrack,
     *,
@@ -4944,6 +5598,10 @@ def _apply_result(
 ) -> None:
     """Apply one dispatch result to a task (same semantics as the serial path):
     success → dispatched + spend; no-op/fail → recoverable failed; rate-limit → cascade."""
+    prior_status = task.status
+    prior_entry = task.dispatch_log[-1] if task.dispatch_log else None
+    prior_reservation = dispatch_session_id(prior_entry) if prior_entry is not None else ""
+    prior_contract_hash = str(prior_entry.execution_contract_hash or "") if prior_entry is not None else ""
     if task.status in {"done", "archived"} and _has_done_transition(task):
         return
     if _restore_done_status(
@@ -4960,10 +5618,13 @@ def _apply_result(
     # same failure would violate the fixed-point contract.
     if successor_held:
         return
-    successful_result = bool(result) and result not in {_NOOP, _RATELIMIT, _TIMEOUT}
-    successful_result = (
-        successful_result and not _is_blocked_result(result) and not _is_workstream_successor_result(result)
-    )
+    if isinstance(result, PlanHandoffResult):
+        successful_result = True
+    else:
+        successful_result = bool(result) and result not in {_NOOP, _RATELIMIT, _TIMEOUT}
+        successful_result = (
+            successful_result and not _is_blocked_result(result) and not _is_workstream_successor_result(result)
+        )
     if (
         not successor_held
         and not successful_result
@@ -4977,7 +5638,38 @@ def _apply_result(
         return
 
     entry = DispatchLogEntry(timestamp=now, agent=agent, session_id=session_id(), status="dispatched")
-    if result == _NOOP:
+    if isinstance(result, PlanHandoffResult):
+        try:
+            builder = select_live_builder(result.receipt)
+            builder_view = builder_task_from_receipt(
+                task,
+                result.receipt,
+                builder=builder or "__plan_builder_unavailable__",
+            )
+        except PlanReceiptError as exc:
+            entry.status = "failed_blocked"
+            entry.output = f"plan receipt rejected: {exc}"
+            task.status = "failed_blocked"
+            if "blocked:plan-receipt" not in task.labels:
+                task.labels.append("blocked:plan-receipt")
+        else:
+            task.target_agent = builder_view.target_agent
+            task.labels = builder_view.labels
+            task.context = builder_view.context
+            task.claude_tier = None
+            task.plan_receipt = result.receipt
+            task.status = "open"
+            entry.status = "open"
+            entry.route_to = builder
+            entry.output = (
+                "validated plan receipt recorded; builder will be selected again from live capabilities at claim time"
+            )
+            if builder is None:
+                entry.output += "; no capable builder is currently reachable"
+            if charge_budget:
+                track.spent += task.budget_cost
+                track.per_agent[agent] = track.per_agent.get(agent, 0) + task.budget_cost
+    elif result == _NOOP:
         entry.status = "failed"
         entry.output = "No-op result; failed for recovery instead of archived."
         task.status = "failed"
@@ -4988,17 +5680,30 @@ def _apply_result(
         entry.status = "open"
         entry.route_to = nxt
         entry.output = f"rate limited on {agent}; reopened to live fleet route"
-        task.target_agent = nxt
         task.status = "open"
     elif result == _TIMEOUT:
-        # too big for a sync local lane → hand to jules (async, no wall-clock cap)
-        entry.status = "open"
-        entry.route_to = "jules"
-        entry.output = f"timeout on {agent}; reopened to asynchronous lane"
-        task.target_agent = "jules"
-        task.status = "open"
-        if "slow" not in task.labels:
-            task.labels.append("slow")
+        if _control_host_task(task):
+            # A remote clone cannot execute a control-host mutation.  The old unconditional
+            # timeout->Jules fallback sent disk cleanup off-box, where it waited for feedback,
+            # was healed open, and then permanently blocked the correct local lane because its
+            # history contained a local timeout.  Fail this bounded unit and require a successor
+            # instead of manufacturing an impossible route.
+            entry.status = "failed"
+            entry.output = (
+                f"timeout on {agent}; control-host work cannot route off-machine; "
+                "a smaller bounded successor packet is required"
+            )
+            task.status = "failed"
+            if WORKSTREAM_SUCCESSOR_REQUIRED_LABEL not in task.labels:
+                task.labels.append(WORKSTREAM_SUCCESSOR_REQUIRED_LABEL)
+        else:
+            # too big for a sync local lane → hand to jules (async, no wall-clock cap)
+            entry.status = "open"
+            entry.route_to = "jules"
+            entry.output = f"timeout on {agent}; reopened to asynchronous lane"
+            task.status = "open"
+            if "slow" not in task.labels:
+                task.labels.append("slow")
     elif _is_workstream_successor_result(result):
         entry.status = "failed"
         entry.output = f"successor workstream required: {_workstream_successor_reason(result)}"
@@ -5027,22 +5732,43 @@ def _apply_result(
             entry.status = "open"
             entry.route_to = fallback
             entry.output = "remote/service lane failed; reopened to healthy fleet cascade"
-            task.target_agent = fallback
             task.status = "open"
         elif next_lane := _next_lane(agent):
             entry.status = "open"
             entry.route_to = next_lane
             entry.output = f"{agent} lane failed; reopened to healthy fleet cascade"
-            task.target_agent = next_lane
             task.status = "open"
         else:
             entry.status = "failed"
             task.status = "failed"
+    if (
+        prior_status == "dispatched"
+        and entry.status in {"done", "failed", "failed_blocked"}
+        and prior_entry is not None
+        and prior_entry.status == "dispatched"
+        and prior_reservation
+        and re.fullmatch(r"[0-9a-f]{64}", prior_contract_hash)
+    ):
+        entry.lifecycle_repair = "provider-terminal"
+        entry.execution_started = True
+        entry.execution_contract_hash = prior_contract_hash
+        entry.execution_reservation_id = prior_reservation
+        if entry.status == "done":
+            entry.execution_result_kind = "done"
+        elif entry.status == "failed":
+            entry.execution_result_kind = "failed"
+        else:
+            entry.execution_result_kind = "failed_blocked"
     if consume_receipts and (selection := _MODEL_SELECTION_RECEIPTS.pop(task.id, None)):
         entry.execution_profile = selection.get("execution_profile")
         entry.selected_model = selection.get("selected_model")
         entry.selection_source = selection.get("selection_source")
         entry.catalog_hash = selection.get("catalog_hash")
+        entry.health_snapshot_hash = selection.get("health_snapshot_hash")
+        entry.provider_terminal_class = selection.get("provider_terminal_class")
+        entry.provider_retry_count = selection.get("provider_retry_count")
+        entry.provider_cooldown_until = selection.get("provider_cooldown_until")
+        entry.provider_health_evidence = selection.get("provider_health_evidence")
     if consume_receipts and (remote := _REMOTE_SUBMISSION_RECEIPTS.get(task.id)):
         entry.provider_run_id = remote.get("provider_run_id")
         entry.provider_url = remote.get("provider_url")
@@ -5280,17 +6006,14 @@ def _claude_tier_for(task: Task | None) -> str:
         if pin == "fable":
             return _earned_fable_tier()
         return str(pin)
-    classes = _task_classes(task)
-    override = _claude_tier_overrides()
-    if classes & (_claude_fable_classes() | set(override.get("fable") or [])):
-        return _earned_fable_tier() if _claude_fable_acceptance_present() else _fable_fallback_tier()
-    if classes & (_claude_opus_classes() | set(override.get("opus") or [])):
-        return "opus"
-    lane_data = _ledger_lanes().get("claude") or {}
-    waste = set(lane_data.get("waste_classes") or [])
-    if classes & (waste | set(override.get("sonnet") or [])):
-        return "sonnet"
-    return "haiku"
+    # The class sort itself lives in model_selection.tier_for_classes — the ONE ladder, so the
+    # STREAMS registry can derive a job_class's tier without importing dispatch. This function
+    # keeps what is genuinely task-local: the per-task pin above, and the two lane inputs below.
+    return tier_for_classes(
+        _task_classes(task),
+        waste_classes=(_ledger_lanes().get("claude") or {}).get("waste_classes") or (),
+        overrides=_claude_tier_overrides(),
+    )
 
 
 def _bump_tier(tier: str, task: Task | None) -> str:
@@ -5305,8 +6028,12 @@ def _bump_tier(tier: str, task: Task | None) -> str:
         return tier
     i = _CLAUDE_TIER_ORDER.index(tier)
     bumped = _CLAUDE_TIER_ORDER[min(i + 1, len(_CLAUDE_TIER_ORDER) - 1)]
-    if bumped == "fable" and not (
-        os.environ.get("LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE") == "1" and _claude_fable_acceptance_present()
+    if bumped == "fable" and (
+        # Building on Fable is prohibited (docs/fable-allotment.md) — the earned bump may exceed
+        # the build cap up to opus (a DETECTED failure is where the cheap-tier rationale expires),
+        # but never onto the plan-only rung.
+        _BUILD_FROM_PLAN_CLASS in _task_classes(task)
+        or not (os.environ.get("LIMEN_CLAUDE_RETRY_BUMP_TO_FABLE") == "1" and _claude_fable_acceptance_present())
     ):
         return "opus"
     return bumped
@@ -5360,7 +6087,7 @@ def _select_parallel_reservations(
         for t in limen.tasks:
             if not _dispatchable(t):
                 continue
-            if t.target_agent != agent and t.target_agent != "any":
+            if not _task_targets_agent(t, agent):
                 continue
             if not agent_can_run_task(agent, t):
                 continue
@@ -5451,6 +6178,7 @@ def _select_parallel_reservations(
             if dry_run:
                 picked.append((agent, t.id))
                 continue
+            selected_contract_hash = execution_contract_hash(t)
             t.status = "dispatched"  # reserve so nothing else grabs it
             t.updated = now
             t.dispatch_log.append(
@@ -5459,6 +6187,7 @@ def _select_parallel_reservations(
                     agent=agent,
                     session_id="reserve",
                     status="dispatched",
+                    execution_contract_hash=selected_contract_hash,
                     output="dispatch-parallel: reserved before agent execution",
                 )
             )
@@ -5479,6 +6208,7 @@ def dispatch_parallel(
     process (serial), the slow agent runs happen concurrently in a thread pool, and a
     lane that hits its real rate-limit is cooled (its remaining reserved tasks re-queued)."""
     now = datetime.now(timezone.utc)
+    reservation_materialized_local = False
     admission = dispatch_admission_check(tasks_path)
     if not admission.get("allow", False):
         print_dispatch_admission_block("dispatch-parallel", admission)
@@ -5531,11 +6261,28 @@ def dispatch_parallel(
             )
             if not picked:
                 if reset:
-                    save_limen_file(tasks_path, fresh)
+                    apply_limen_file_sync(
+                        tasks_path,
+                        fresh,
+                        agent="dispatch-parallel",
+                        session_id="reserve-reset",
+                    )
                 print(f"── PARALLEL: nothing to dispatch for {agents} within budget")
                 return
             try:
-                save_limen_file(tasks_path, fresh)  # reserve commit (atomic vs supervisor writes)
+                reservation = apply_limen_file_sync(
+                    tasks_path,
+                    fresh,
+                    agent="dispatch-parallel",
+                    session_id="reserve",
+                )
+                projected = getattr(reservation, "projected_tasks", None)
+                reservation_materialized_local = bool(getattr(reservation, "wrote", False))
+                if isinstance(projected, dict) and projected:
+                    fresh.tasks = [
+                        Task.model_validate(projected.get(task.id, task.model_dump(mode="json")))
+                        for task in fresh.tasks
+                    ]
             except Exception:
                 for agent, tid in picked:
                     if canonical_agent(agent) in LOCAL_CHECKOUT_AGENTS:
@@ -5552,7 +6299,13 @@ def dispatch_parallel(
     def run_one(at: tuple[str, str]) -> DispatchResult:
         agent, tid = at
         try:
-            res = call_agent_dispatch(agent, id2task[tid], dry_run=False)
+            res = _journaled_agent_dispatch(
+                agent,
+                id2task[tid],
+                False,
+                selected_lifecycle_tokens[tid],
+                tasks_path.parent,
+            )
         except Exception as e:  # never let one task kill the pool
             print(f"  ERROR {agent} {tid}: {str(e)[:160]}")
             res = False
@@ -5581,7 +6334,8 @@ def dispatch_parallel(
                 "harvest reconciles from PR state (self-corrects next beat)"
             )
             return
-        fresh = load_limen_file(tasks_path)
+        fresh = load_limen_file(tasks_path) if reservation_materialized_local else limen.model_copy(deep=True)
+        commit_base = fresh.model_copy(deep=True)
         fid = {t.id: t for t in fresh.tasks}
         ftrack = fresh.portal.budget.track
         for agent, tid, res, selected_contract_hash, selected_lifecycle_token in results:
@@ -5612,7 +6366,13 @@ def dispatch_parallel(
                 n_pr += 1
             else:
                 n_fail += 1
-        save_limen_file(tasks_path, fresh)
+        apply_limen_file_sync(
+            tasks_path,
+            fresh,
+            agent="dispatch-parallel",
+            session_id="results",
+            before=commit_base,
+        )
     print(
         f"── PARALLEL done: {len(results)} ran · {n_pr} dispatched/PR · {n_noop} no-op · "
         f"{n_fail} failed→cascade · {n_successor} successor-required · {n_blocked} blocked · "
@@ -5832,7 +6592,12 @@ def release_stale_tasks(
                 released.append(task.id)
                 print(f"  RELEASE: {task.id} remote={remote_status} — {task.title}")
             if released or restored_done:
-                save_limen_file(tasks_path, fresh)
+                apply_limen_file_sync(
+                    tasks_path,
+                    fresh,
+                    agent="release-stale",
+                    session_id="release-stale",
+                )
     else:
         for task in candidates:
             if has_jules_landing_hold(task):

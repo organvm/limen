@@ -22,21 +22,47 @@ set -uo pipefail
 
 export HOME="${HOME:-/Users/4jp}"
 LIMEN_ROOT="${LIMEN_ROOT:-$HOME/Workspace/limen}"
-UMA_ROOT="${UMA_ROOT:-$HOME/Workspace/universal-mail--automation}"
+# The resolver is located from THIS FILE, never from $LIMEN_ROOT. LIMEN_ROOT is the runtime data
+# root and a caller may legitimately point it at a directory with no scripts/ (the census tests do
+# exactly that) — resolving a sibling script through it silently yields nothing.
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
+# The checkout is resolved by the ONE resolver, not by a default written out a fifth time. The old
+# default here (and in four Python rungs) was $HOME/Workspace/universal-mail--automation — a path
+# that does not exist; the real checkout sits one directory deeper. Every `[ -f "$UMA_ROOT/x.py" ]`
+# guard below was therefore silently false, and the beat skipped the whole mail organ without a
+# word. The resolver still honours an explicit $UMA_ROOT — and rejects it loudly when it is wrong.
+UMA_ROOT="$("${LIMEN_PY:-python3}" "$SELF_DIR/_uma_root.py" --path 2>/dev/null || true)"
+if [ -z "$UMA_ROOT" ]; then
+  echo "  mail-beat: UMA checkout unresolved — $("${LIMEN_PY:-python3}" "$SELF_DIR/_uma_root.py" --explain 2>&1)" >&2
+fi
 LEDGER="${LIMEN_OBLIGATIONS_LEDGER:-$LIMEN_ROOT/obligations-ledger.json}"
 PY="${LIMEN_PY:-python3}"
 STATUS_OUT="${LIMEN_MAIL_STATUS_OUT:-$LIMEN_ROOT/logs/uma-mail-status.json}"
 OPS_REPORT="${UMA_OPS_REPORT_PATH:-$HOME/System/Reports/mail-triage/latest.json}"
 HISTORY_REPORT="${UMA_HISTORICAL_MAIL_PATH:-$HOME/System/Reports/mail-history/latest.json}"
 MAX_AGE_HOURS="${LIMEN_MAIL_STATUS_MAX_AGE_HOURS:-24}"
+STATUS_TIMEOUT="${LIMEN_MAIL_STATUS_TIMEOUT:-120}"
 
 # DAEMON-SAFETY: never let a hung/slow Mail AppleScript block the heartbeat beat. Two
-# structural bounds: (1) the sweep reads only the most-recent N messages (new arrivals —
-# the full backlog was already swept), so each account is a couple of paged reads, not the
-# whole inbox; (2) every step runs under `timeout` when available (homebrew coreutils on the
-# daemon PATH). Without `timeout`, the small --limit + the provider's per-call 30s AppleScript
-# cap keep it bounded anyway.
+# structural bounds: (1) the sweep reads only messages received in the last N days (new
+# arrivals — the full backlog was already swept), so each account is a couple of paged reads,
+# not the whole inbox; (2) every step runs under `timeout` when available (homebrew coreutils
+# on the daemon PATH).
+#
+# BOUND (1) IS --since-days, NOT --limit, and the difference hung Mail for 421 seconds
+# (Mail_2026-08-02-101334.hang, escalating 1/day → 4/day over the preceding week). `messages of
+# targetMailbox` is not a cursor: Mail materializes a scripting object for EVERY message in the
+# store on its MAIN THREAD before AppleScript slices anything, so --limit bounded the Python
+# slice and nothing else. Only --since-days reaches the `whose date received > cutoff` predicate
+# that bounds what Mail actually builds.
+#
+# AND `timeout` DOES NOT COVER THIS. It kills the osascript CLIENT; it cannot cancel an Apple
+# Event already executing inside Mail. Mail keeps churning after this beat moves on and reports
+# healthy — which is exactly how a 421s beachball happened under a 240s timeout. The window is
+# the only real bound; the timeout only protects the beat.
 SWEEP_LIMIT="${LIMEN_MAIL_SWEEP_LIMIT:-80}"
+SWEEP_SINCE_DAYS="${LIMEN_MAIL_SWEEP_SINCE_DAYS:-14}"
 TIMEOUT_BIN="$(command -v timeout || command -v gtimeout || true)"
 bounded() {  # bounded <secs> <cmd...>  — time-box if a timeout binary exists, else run plain
   if [ -n "$TIMEOUT_BIN" ]; then "$TIMEOUT_BIN" "$@"; else shift; "$@"; fi
@@ -46,23 +72,21 @@ run_tmp() {  # run_tmp <secs> <cmd...>  — run with cwd=/tmp (avoids the platfo
   bounded "$secs" bash -c 'cd /tmp && exec "$@"' _ "$@" 2>&1 | tail -1 || true
 }
 
+# Same resolver as the Python rungs, so shell and Python can never disagree about which checkout is
+# live. Emits `[]` when unresolved — never `["umail"]`, a binary installed nowhere, which is how a
+# missing checkout used to reach subprocess.run and raise FileNotFoundError out of a fail-open rung.
 uma_cmd_json() {
-  if [ -n "${UMA_BIN:-}" ]; then
-    printf '%s\n' "[\"$UMA_BIN\"]"
-  elif [ -f "$UMA_ROOT/cli.py" ]; then
-    "$PY" - "$PY" "$UMA_ROOT/cli.py" <<'PY'
-import json
-import sys
-
-print(json.dumps([sys.argv[1], sys.argv[2]]))
-PY
-  else
-    printf '%s\n' '["umail"]'
-  fi
+  "$PY" "$SELF_DIR/_uma_root.py" --command 2>/dev/null || printf '%s\n' '[]'
 }
 
 run_status() {
-  "$PY" - "$STATUS_OUT" "$OPS_REPORT" "$HISTORY_REPORT" "$MAX_AGE_HOURS" "$(uma_cmd_json)" <<'PY'
+  local cmd_json
+  cmd_json="$(uma_cmd_json)"
+  if [ "$cmd_json" = "[]" ]; then
+    echo "  mail-status: skipped — $("$PY" "$SELF_DIR/_uma_root.py" --explain 2>&1)" >&2
+    return 0
+  fi
+  "$PY" - "$STATUS_OUT" "$OPS_REPORT" "$HISTORY_REPORT" "$MAX_AGE_HOURS" "$STATUS_TIMEOUT" "$cmd_json" <<'PY'
 import json
 import subprocess
 import sys
@@ -72,7 +96,8 @@ out = Path(sys.argv[1])
 ops = sys.argv[2]
 history = sys.argv[3]
 max_age = sys.argv[4]
-cmd = json.loads(sys.argv[5])
+timeout_seconds = max(1.0, float(sys.argv[5]))
+cmd = json.loads(sys.argv[6])
 command = [
     *cmd,
     "mail-status",
@@ -85,7 +110,24 @@ command = [
     "--output",
     str(out),
 ]
-proc = subprocess.run(command, text=True, capture_output=True, check=False)
+try:
+    proc = subprocess.run(
+        command,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=timeout_seconds,
+    )
+except subprocess.TimeoutExpired as exc:
+    timed_stdout = exc.stdout or ""
+    if isinstance(timed_stdout, bytes):
+        timed_stdout = timed_stdout.decode("utf-8", errors="replace")
+    proc = subprocess.CompletedProcess(
+        command,
+        124,
+        stdout=timed_stdout,
+        stderr=f"mail-status exceeded {timeout_seconds:g}s timeout",
+    )
 if proc.returncode not in (0, 2):
     out.parent.mkdir(parents=True, exist_ok=True)
     detail = (proc.stderr.strip() or proc.stdout.strip() or "unknown failure")[:500]
@@ -166,6 +208,27 @@ PY
   exit 0
 fi
 
+# 0) SYNC the UMA checkout so the beat never runs stale mail code. The beat executes scripts
+#    straight out of $UMA_ROOT, and nothing kept that checkout current — it drifted commits
+#    behind origin (the archived-scan feature merged while the beat ran the pre-merge tree).
+#    ONLY a clean, on-`main`, fast-forwardable checkout is advanced: a dirty tree or a work
+#    branch is left untouched (never a merge/rebase — fail-open). Untracked files (e.g. a local
+#    .worktrees/) don't count as dirty. Opt out with LIMEN_MAIL_UMA_SYNC=0.
+if [ "${LIMEN_MAIL_UMA_SYNC:-1}" = "1" ] && [ -d "$UMA_ROOT/.git" ]; then
+  uma_branch="$(git -C "$UMA_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+  uma_dirty="$(git -C "$UMA_ROOT" status --porcelain --untracked-files=no 2>/dev/null)"
+  if [ "$uma_branch" = "main" ] && [ -z "$uma_dirty" ]; then
+    if bounded 60 git -C "$UMA_ROOT" fetch --quiet origin main 2>/dev/null \
+       && bounded 30 git -C "$UMA_ROOT" merge --ff-only --quiet origin/main 2>/dev/null; then
+      echo "mail-beat: UMA checkout fast-forwarded to origin/main"
+    else
+      echo "mail-beat: UMA sync skipped (offline, non-fast-forward, or busy) — running current checkout"
+    fi
+  else
+    echo "mail-beat: UMA checkout off-main ($uma_branch) or dirty — sync skipped, running as-is"
+  fi
+fi
+
 # 1) SWEEP — reversible flag+archive per account (mutating; needs the Automation grant).
 #    Account names come straight from Mail (no creds, no python import). The futile Gmail
 #    archive is skipped; iCloud/Outlook (folder stores) archive reliably; fires flag
@@ -178,7 +241,8 @@ if [ "${LIMEN_MAIL_SWEEP:-1}" = "1" ]; then
     for a in $accts; do
       a="${a#"${a%%[![:space:]]*}"}"; a="${a%"${a##*[![:space:]]}"}"   # trim
       [ -z "$a" ] && continue
-      run_tmp 240 "$PY" "$UMA_ROOT/inbox_sweep.py" --account "$a" --apply --flag-only-gmail --limit "$SWEEP_LIMIT"
+      run_tmp 240 "$PY" "$UMA_ROOT/inbox_sweep.py" --account "$a" --apply --flag-only-gmail \
+        --limit "$SWEEP_LIMIT" --since-days "$SWEEP_SINCE_DAYS"
     done
     IFS="$OLDIFS"
   else
@@ -202,6 +266,39 @@ if [ "${LIMEN_MAIL_SWEEP:-1}" = "1" ] && [ "${LIMEN_MAIL_GMAIL_ARCHIVE:-1}" = "1
       --limit "$SWEEP_LIMIT" --receipt "$LIMEN_ROOT/logs/gmail-archive-latest.json"
   else
     echo "mail-beat: Gmail IMAP archive SKIPPED — GMAIL_APP_PASSWORD/GMAIL_USER not hydrated; the Gmail inbox will NOT auto-clean (creds-hydrate --verify flags this; root cause: op:// item unreadable by the service account, Wall #320)"
+  fi
+fi
+
+# 1c) ARCHIVED-SCAN — surface archived-but-UNANSWERED threads the INBOX-only sweep can't see (a
+#     reply owed on a thread that was archived drops out of the ledger silently). READ-ONLY +
+#     count-first: it FLAGS/MOVES nothing, just writes a per-account receipt (audit/archived_scan-
+#     *.json) that step 2's obligations_build folds in. Runs BEFORE the build so the receipt is
+#     fresh. It's expensive (AppleScript over Archive + Sent), so exactly ONE account per beat,
+#     round-robin via a persisted cursor — every account is covered over a full cycle without ever
+#     fanning out. Independent of the mutation gate (read-only); gated by its own
+#     LIMEN_MAIL_ARCHIVED_SCAN=1 (default on), fail-open, bounded. No grant / no accounts ⇒ skipped.
+if [ "${LIMEN_MAIL_ARCHIVED_SCAN:-1}" = "1" ] && [ -f "$UMA_ROOT/archived_scan.py" ]; then
+  scan_accts="$(bounded 20 osascript -e 'tell application "Mail" to get name of every account' 2>/dev/null || true)"
+  if [ -n "$scan_accts" ]; then
+    CURSOR_FILE="${LIMEN_MAIL_ARCHIVED_CURSOR:-$LIMEN_ROOT/logs/.mail-archived-scan-cursor}"
+    OLDIFS="$IFS"; IFS=','; set -f
+    ACCT_LIST=()
+    for a in $scan_accts; do
+      a="${a#"${a%%[![:space:]]*}"}"; a="${a%"${a##*[![:space:]]}"}"   # trim
+      [ -z "$a" ] && continue
+      ACCT_LIST+=("$a")
+    done
+    IFS="$OLDIFS"; set +f
+    n="${#ACCT_LIST[@]}"
+    if [ "$n" -gt 0 ]; then
+      last="$(cat "$CURSOR_FILE" 2>/dev/null || echo -1)"
+      case "$last" in ''|*[!0-9-]*) last=-1 ;; esac   # non-numeric cursor ⇒ restart the cycle
+      next=$(( (last + 1) % n ))
+      target="${ACCT_LIST[$next]}"
+      printf '%s\n' "$next" > "$CURSOR_FILE" 2>/dev/null || true
+      echo "mail-beat: archived-scan account $((next + 1))/$n — $target"
+      run_tmp 240 "$PY" "$UMA_ROOT/archived_scan.py" --account "$target" --limit "${LIMEN_MAIL_ARCHIVED_LIMIT:-500}"
+    fi
   fi
 fi
 

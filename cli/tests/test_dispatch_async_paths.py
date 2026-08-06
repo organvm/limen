@@ -69,14 +69,22 @@ def _task(task_id: str, agent: str) -> Task:
         repo="organvm/example",
         target_agent=agent,
         created=datetime.date(2026, 7, 9),
+        origin="human_prompt",
+        horizon="present",
+        value_case="Verify async reservation arithmetic under the enforced underwriting regime.",
+        budget_cost=1,
+        predicate="python3 scripts/check.py",
+        receipt_target="github:organvm/example:pull-request:ASYNC-RESERVE",
     )
 
 
 def test_async_reservation_uses_live_usage_not_stale_board_caps(monkeypatch, tmp_path):
     monkeypatch.setenv("LIMEN_ROOT", str(tmp_path))
     # This test owns provider usage arithmetic; dedicated admission tests own host-custody probes.
+    monkeypatch.setenv("LIMEN_DISK_PRESSURE_VALUE_ONLY", "0")
     monkeypatch.setenv("LIMEN_WORKTREE_DEBT_GATE", "0")
     dispatch_async = _load_script("dispatch_async_usage_math_test", "scripts/dispatch-async.py")
+    monkeypatch.setattr(dispatch_async, "current_required_free_gib", lambda: 0.0)
     dispatch_async.RUNS.mkdir(parents=True)
 
     board = LimenFile(

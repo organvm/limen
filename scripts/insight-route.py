@@ -9,7 +9,11 @@ monthly, from logs/insight-cadence/) to its durable owner:
                        board itself (source == "tasks.yaml", e.g. "Task failed:
                        <id>") are SKIPPED: the board already owns that failure —
                        a heal-twin task would just echo it back onto the board.
-  owner "<organ>"    → logs/<organ>-residual.json (the organ's durable inbox)
+  owner "<organ>"    → logs/<organ>-residual.json (the organ's live inbox: warnings
+                       are appended idempotently by THIS script — the file is not a
+                       beat-regenerated projection — and cleared again when the drift
+                       lineage marks the friction resolved, via the `resolves` field
+                       insight-cadence stamps on resolution insights)
 
 Gated behind LIMEN_INSIGHT_ROUTE_APPLY=1 (dry-run prints otherwise). New board
 tasks are capped per pass (LIMEN_INSIGHT_ROUTE_MAX, default 5); the overflow is
@@ -80,6 +84,9 @@ def _task_for(insight, tid, repo):
         priority="medium",
         budget_cost=1,
         status="open",
+        origin="system_debt",
+        horizon="present",
+        value_case=f"Remove the recurring insight failure owned by {repo}",
         context=f"Suggested action: {insight.get('suggested_action', '')}\nSource: {insight.get('source', '')}\nSeverity: {insight.get('severity', '')}",
         created=date.today(),
         **contract,
@@ -123,6 +130,25 @@ def route_repo_insight(insight, apply, stats=None):
 def route_organ_insight(insight, apply):
     organ = insight["owner"]
     residual_file = LOGS_DIR / f"{organ}-residual.json"
+
+    # A resolution insight names the warning it clears (`resolves`, stamped at the
+    # source by insight-cadence — the twin id is a different _gen_id hash, so it is
+    # not derivable here). Remove the warning instead of appending an info marker:
+    # the residual file is the organ's LIVE inbox, the lineage is the durable record,
+    # and the removal is what lets sync-censor-issues auto-close the mirrored issue.
+    resolves = insight.get("resolves")
+    if resolves:
+        if not apply:
+            print(f"Would clear residual {resolves} from {residual_file} (resolved in lineage)")
+            return
+        data = load_json(residual_file, [])
+        if not isinstance(data, list):
+            data = []
+        kept = [item for item in data if item.get("id") != resolves]
+        if len(kept) != len(data):
+            save_json(residual_file, kept)
+            print(f"Cleared residual {resolves} from {organ} (resolved in lineage)")
+        return
 
     if not apply:
         print(f"Would route to organ residual {residual_file} for organ {organ}")

@@ -2,8 +2,8 @@
 
 Operating discipline for every Claude Code session in this repo. Complements (does **not** duplicate):
 
-- `AGENTS.md` — the dispatch/task contract and `dispatch_log` done-recording.
-- `GEMINI.md` — the swarm worktree-isolation and PR-babysitting lifecycle.
+- `AGENTS.md` — the dispatch/task contract, Peer Conductor Contract, and receipt rules.
+- `GEMINI.md` — Gemini's native transport adapter.
 
 When a rule below also lives in those files, **they are the source of truth** and this charter points to them.
 If prose and executable predicates disagree, the executable predicate wins; update the prose to match
@@ -11,11 +11,11 @@ the script/schema/code rather than trusting memory.
 
 ## Instruction File Maintenance
 
-- `AGENTS.md` owns operating modes, task states, dispatch protocol, budget semantics, safety, and
-  `dispatch_log` shape.
-- `CLAUDE.md` owns Claude-specific execution discipline: closeout, merge cadence, credential
-  handling, output style, worktree isolation, and compliant gate reroutes.
-- `GEMINI.md` owns conductor/MCP workflow details and PR babysitting mechanics.
+- `AGENTS.md` owns operating modes, task states, the Peer Conductor Contract, budget semantics,
+  safety, and receipt/projection rules.
+- `CLAUDE.md` owns Claude-specific execution discipline: session phase entry, closeout, merge
+  cadence, credential handling, output style, worktree isolation, and compliant gate reroutes.
+- `GEMINI.md` owns only Gemini-specific conduct/MCP transport details.
 - `CONTRIBUTING.md` owns human contributor guidance.
 - `docs/agent-instruction-standard.md` owns the rationale and cross-surface standard.
 - If you change task states, precedence, agent names, referenced scripts, or status examples, update
@@ -26,13 +26,24 @@ How the agent-instruction files (this charter, `AGENTS.md`, `GEMINI.md`, and the
 
 ## Architecture & Orientation
 
-Limen is a **cross-agent, cross-repo, budget-capped task intake system**. The single source of truth is `tasks.yaml` at `$LIMEN_ROOT` (fallback `./tasks.yaml`); every AI agent reads it at session start, claims a task, executes, and writes results back via a `dispatch_log` (the contract is `AGENTS.md`). Around that core file are a CLI, a published SaaS surface, and a fleet of self-keeping "organs."
+Limen is a **cross-agent, cross-repo, budget-capped task intake system**. TABVLARIVS is the
+deterministic state, lease, and budget authority; `tasks.yaml` at `$LIMEN_ROOT` (fallback
+`./tasks.yaml`) is its local read-only projection. Every native lane submits bounded work and
+receipts through the authenticated conduct broker under `AGENTS.md` → **Peer Conductor Contract**.
+Around that kernel are a CLI, a published SaaS surface, and a fleet of self-keeping "organs."
 
-In a direct human-request session, do not claim unrelated queue work or mutate `tasks.yaml` unless
-the request explicitly asks for Limen queue execution. `AGENTS.md` → **Operating Modes** is the
-authoritative rule.
+In a direct human-request session, do not claim unrelated queue work. Submit any requested task
+transition through the broker; never change the projection directly. `AGENTS.md` → **Operating
+Modes** is the authoritative rule.
 
-**The lifecycle is the durable contract — providers are replaceable adapters.** A task moves `open → dispatched → in_progress → done → archived`; from `in_progress` it may instead go `failed`, `failed_blocked`, or `needs_human`, and a stale claim is released back to `open`. The canonical state set, the cross-agent precedence ladder, and the startup checklist live in `AGENTS.md` (**Task States** / **Precedence** / **Startup Checklist**) and are enforced by `scripts/check-agent-docs.py`. Surfaces are gated by persona (owner / client / public) via bearer tokens. Firebase hosting serves only public-safe static shells + public contracts; everything internal loads at runtime from a Cloudflare Worker (or the FastAPI adapter). Keep the lifecycle + persona-sanction semantics intact and any of Firebase/Cloud Run/Next.js/FastAPI can be swapped.
+**The lifecycle and peer-conductor protocol are durable; providers are native adapters.** The
+canonical states, transitions, authority attenuation, protected-session rules, and startup
+checklist live in `AGENTS.md` and are enforced by `scripts/check-agent-docs.py`. Claude has no
+special rank: conductor is a temporary capability. Surfaces are gated by persona (owner / client /
+public) via bearer tokens. Firebase hosting serves only public-safe static shells + public
+contracts; everything internal loads at runtime from a Cloudflare Worker (or the FastAPI adapter).
+Keep the lifecycle + persona-sanction semantics intact and any of Firebase/Cloud
+Run/Next.js/FastAPI can be swapped.
 
 **Components** (each owns its remaining work — see [Closeout Definition](#closeout-definition)):
 
@@ -42,14 +53,17 @@ authoritative rule.
 | `web/api/` | FastAPI runtime adapter (`main.py`). Same HTTP contract as the Worker. | `uvicorn main:app` / Docker; tests in `web/api/tests/` |
 | `web/worker/` | Cloudflare Worker — the **live** runtime, GitHub-Contents storage. Deploys on-demand via wrangler (not on merge). | `npm run dev` / `npm run deploy`; lint `npm run check` |
 | `web/app/` | Next.js dashboard (static export → Cloudflare Pages `limen-dashboard.pages.dev`; the Firebase Hosting step is dormant — its GCP credential exists nowhere, road-not-taken). Surfaces `/` (owner), `/qa`, `/client`, `/public`. | `npm run dev`; `npm run build` (prebuild generates static data + validates surfaces) |
-| `mcp/` | MCP server exposing limen over the Model Context Protocol (`mcp/src/limen_mcp/server.py`). | `pip install -e mcp/` |
+| `mcp/` | MCP adapter exposing the same authenticated conduct protocol and task-compatibility events (`mcp/src/limen_mcp/server.py`). | `pip install -e mcp/` |
 | `ianva/` | MCP doorway/aggregator package. | `pip install -e ianva/` |
 | `moneta/` | **MONETA** — the sovereign cash organ (sibling of `quaestor`: quaestor *finds* money, MONETA *intakes* it). Self-hosted Bitcoin licence mint: takes BTC to an owner-controlled address, confirms against a **keyless** public explorer (mempool.space/Esplora), and signs each product's own offline ECDSA-P256 Pro licence — **no processor in the path**. Unconfigured, it *pools* demand as `reserved` orders (the valve) and auto-opens them the moment a receive address is set. `Dockerfile`-ready for a $0 deploy. | `cd moneta && npm test` (vitest + `tsc`); tests in `moneta/src/__tests__/` |
 | `spec/contracts/` + `spec/*.schema.json` | Portable JSON Schemas the generated surface contracts must satisfy. | `node scripts/validate-contract-schemas.mjs` |
 | `scripts/` (~120 files) | The operational fleet: `metabolize.sh`/`heartbeat-loop.sh` (the beat), `verify-whole.sh` (whole-system predicate), `merge-policy.sh` (merge decision), `organ-health.py` (liveness), `creds-hydrate.py` (credential organ), plus per-organ generators. | run directly |
 | `organs/`, `organ-ladder.json`, `pillars.yaml`, `his-hand-levers.json` | Declarative registries: the self-* organ ladder, platform pillars, and the owned human-gated lever registry. | data files |
 
-**Storage modes** (`io.py`): local file (`LIMEN_TASKS=/path`) for dev; GitHub Contents (`LIMEN_GITHUB_REPO`, `LIMEN_GITHUB_TOKEN`, optional `_BRANCH`/`_PATH`) for the hosted runtime. Persona tokens: `LIMEN_OWNER_TOKEN`/`LIMEN_API_TOKEN`, `LIMEN_CLIENT_TOKEN`; absent → local owner-scoped dev mode.
+**Storage modes** (`io.py`): local files are development projections; the authenticated Worker
+plus GitHub Contents projection is the durable hosted keeper. Agents never treat a local
+`LIMEN_TASKS` file as an independent writer. Persona tokens: `LIMEN_OWNER_TOKEN`/
+`LIMEN_API_TOKEN`, `LIMEN_CLIENT_TOKEN`; absent → local owner-scoped dev mode.
 
 **Common commands** (beyond the [CI Gate Matrix](#worktree-isolation--ci-gate-matrix)):
 
@@ -61,6 +75,58 @@ python -m ruff check cli/src cli/tests web/api mcp   # lint (py311, line-length 
 scripts/verify-whole.sh                              # whole-system predicate (exit 0 ⟺ green)
 limen dispatch --agent jules         # dry-run preview; add --live to dispatch for real
 ```
+
+## Session Phase Entry
+
+**A session opens in the PLAN phase.** `.claude/settings.json` sets `permissions.defaultMode:
+"plan"`, so every interactive session in this repo starts read-only, in stage SHAPE, and reaches
+BUILD by deciding to — not by default. This is the *entry binding* for the canonical cross-agent
+lifecycle declared in `~/.config/ai-context/session-phases.yaml` (`explore → plan → branch → code →
+verify → push → wait → review → amend → merge → closeout`), which shipped advisory-only in its
+Phase 1 and named this as its Phase-2 gate. Every other phase in that registry remains advisory;
+advancing one joint is not a licence to hard-block the lifecycle.
+
+**The fleet is unaffected, structurally.** Headless lanes launch with an explicit
+`--permission-mode dontAsk` that `dispatch.py` *validates* before the provider process starts
+(`ClaudeLaunchContractError`). A CLI flag outranks a settings default, so no beat rung, scheduled
+agent, or dispatched build can be stalled by this. Do not add an exemption mechanism for them.
+
+**"Unless it is illogical" is an exit, not a carve-out list.** A read-only session pays nothing —
+it never needs to leave the phase. A genuinely trivial change leaves in one action (`shift+tab`, or
+ExitPlanMode). Enumerating exempt session shapes would be hand-maintained prose that decays; the
+transcript records every `permissionMode` transition instead, and `scripts/harness-root-probe.py`
+already reads that field. The default binds, the exit is cheap, and the exit is observable.
+
+**A plan carries an issue and a PR — via one command.** The `plan` phase's product is not a file,
+it is a *chain*: plan artifact → labelled GitHub issue → implementing PR. Open it with
+
+```bash
+scripts/session-plan.py open <slug> --title "..." --issue <N>   # plan file + branch + PR
+scripts/session-plan.py close <slug> --pr <N>                   # stamp the implementing PR
+scripts/session-plan.py audit                                    # chain state for every plan
+```
+
+The organ **never writes to GitHub in-process**: `open` without `--issue` prints the exact
+`gh issue create` and exits 2, and `close` prints the `gh issue close`, so every outward write stays
+on the Bash rail where `PreToolUse` hooks can reach it. That is not ceremony — `check-effectors.py`
+Class C failed this organ's first cut for building `gh` argv inside Python, and its baseline is
+shrink-only. Do not "fix" a future Class C finding by moving the call into a shell helper: the
+scanner walks Python only, so that hides the finding without removing the blindness.
+
+Plans live at `docs/plans/YYYY-MM-DD-<slug>.md` (this repo's home; the canonical registry names
+`.claude/plans/`, and the divergence is deliberate — `docs/` is what publishes and what
+`check-session-streams.py` reads). Never overwrite a plan; a same-day re-plan is `-v2`. `Issue:` is
+the tracked issue; `PR:` is the PR that **implements** the plan — not the PR that ships the plan
+document. `PR: (pending)` is a legitimate state between `open` and `close`; a *missing* `PR:` line
+is not, because silence about implementation is what let 18 plans accumulate with no answer to
+"was this built?".
+
+**The predicate decides — not your memory.** `scripts/check-session-phase.py` (gate `session-phase`
+in the GATES registry, so `verify-scoped.sh` runs it on any `docs/plans/**` change) exits `0` ⟺
+every non-baselined dated plan declares `Issue: #N` and a `PR:` state. Plans predating the chain are
+listed in `institutio/governance/session-plan-baseline.txt` — the same ratchet this registry already
+uses six times over. A line leaves that baseline only by retro-fitting a real header, never to
+silence a fresh violation.
 
 ## Closeout Definition
 
@@ -109,10 +175,59 @@ correction (censor precedent `PREC-2026-07-04-friction-shallow-first`):
 Do **not** declare work "done" or "fully done" until verified end-to-end:
 
 - **Run the real gates locally**, never from memory: `python -m ruff check cli/src cli/tests web/api mcp`, `python -m pytest web/api/tests cli/tests -q`, and `scripts/verify-whole.sh`.
+- **Read the predicate's OWN exit code, never a pipeline's.** `predicate | tail` makes `$?` report *tail's* status — which is essentially always `0` — so a gate that printed `FAIL` is read as green. Run the predicate bare and filter a saved copy, or use `${PIPESTATUS[0]}`. (2026-08-05: a closeout reported `EXIT=0` from a `scripts/no-tasks-on-me.sh` run that had printed `FAIL` and truly exited `1`.) The committed scripts get this right; the defect enters through **ad-hoc verification shell**, which is precisely where a false green has no second reader to catch it — so this is a standing behavioral rule, not a lint.
 - **Confirm the loop/driver actually runs** — that the entrypoint executes, not merely that files compile.
 - **Check for regressions introduced by merges**: dropped imports, dumped/abandoned lanes, silently overwritten files. After any branch reconcile, diff against the prior green state.
 - **Reconcile divergent branches against authoritative data** — GitHub redirect/PR state via `gh`, or `scripts/verify-dispatch.py` — never against heuristics or guesses.
 - Report status terse and factual: if tests fail, say so with the output; if a step was skipped, say so; call something done only when the predicate proves it.
+
+## Data Grounding
+
+Before drawing ANY conclusion from a dataset — a message export, a mail archive, a review window,
+a log trawl — establish the ground truth of the *input* first (2026-07-24 insights lineage: two
+confidently-wrong message analyses from a received-only export and a too-narrow window; the
+domain instances are `docs/student-email-reply-grounding.md` and the outreach sent-state memory —
+this section is their generalization):
+
+- **Enumerate the CHANNELS before analyzing any one of them.** A missing channel does not widen
+  the error bars — it **inverts the conclusion's sign**. Before concluding anything about an
+  interaction, a relationship, or a sequence of events, list every channel that could carry it
+  (text messages, voice/video calls, a second messaging app, email, transfers, in-person) and
+  state in the output which you queried and which you did not. (2026-08-05: "three hours of
+  silence" and "detonating into an empty room" were both produced by never opening the call
+  database — it held seven calls inside that window, three of them minutes before the message
+  being interpreted; in the same analysis a second messaging app carrying the day's most decisive
+  exchange went unopened. Both conclusions reversed on contact with the missing channel.) **No
+  scope, window, or count check catches this**, because every count *within* the queried channel
+  was correct — which is why channel enumeration precedes all of them.
+- **State the scope up front, in the output**: the exact date/window boundaries, the direction of
+  the records (sent AND received? one side only?), any export filters, and the **total record
+  count** — before the first conclusion, so a scope error surfaces immediately.
+- **Window = the last human review point, never the last automated run.** An automation's
+  timestamp is not evidence a human saw anything.
+- **Suspicious-count self-check**: if a count looks too low or too high against the requester's
+  stated expectation or the surrounding evidence, treat that as a data-scope bug in YOUR input
+  until proven otherwise — re-derive it by a second independent method before presenting.
+- **When a file could be a queue or a record, assume RECORD** — verify live sent-state/channel
+  state before acting on a file's title or presence.
+- **A conversation corpus records SPEECH ACTS, not EVENTS.** "I sent you $150" is evidence that a
+  sentence was typed. Ideas floated, contracts drafted, plans proposed, dates agreed and amounts
+  negotiated are *conversation* — most are never executed. A claim of the form "X happened"
+  sourced only from message text is **asserted-in-conversation**, never **occurred**, unless a
+  NON-conversational channel corroborates it: commits, transactions, calendar, filesystem
+  artifacts, or the operator. Mark the distinction in the output. (2026-07-31: summing every
+  dollar figure in a thread was reported as "$103,309 funded" and a proposed arrangement as an
+  executed one; the contracts went unsigned and the job was never left.)
+- **A window is not the corpus — never state a sample's finding in the corpus's language.** Report
+  the denominator you actually read, next to the denominator that exists, every time. The failure
+  is silent and it scales: a 435-message / 10-day slice of a 65,872-message / 34-month record is
+  0.7% of it, and conclusions drawn there were written as "never once" and "in six months." If the
+  full extent is unknown, that is itself the first finding — establish it before analyzing.
+- **Corpus retrieval fails silently and looks like absence.** Before concluding a corpus holds
+  nothing about a subject, verify the resolver reached a real store: `python3
+  scripts/corpus_resolve.py` must name a populated home. The estate has now twice reported "no
+  populated corpus" with hundreds of MB on disk (registry header, and again 2026-07-31 from a
+  relocated store) — "I found nothing" and "I read nothing" are indistinguishable in the output.
 
 ## Edits Policy
 
@@ -140,6 +255,10 @@ Tokens, secrets, API keys, logins, env vars are **system burden, not the human o
 
 For any search or recon whose scope spans multiple domains, **fan out parallel read-only workers — one per distinct domain** (each remote, each local floor, each repo), launched in a single batch.
 
+- **Reserve every child before launch.** Call `limen conduct split` or `conduct_split` before
+  invoking Task/Workflow subagents, teams, or any separate capacity. Pass the returned root,
+  parent, run, lease generation, task, conductor, and execution-hash identities into the native
+  child. Hidden fanout is rejected; native tooling does not broaden the parent's authority.
 - Give each worker a **strict read-only scope** and require a **structured packet**: `{ found: [...], not_found: [...], confidence }`.
 - **Wait for ALL workers**, then **merge into one ground-truth report that flags conflicts** between packets.
 - **Never park the search early, and never guess a timeframe** — verify every location and timeframe explicitly before reporting. Default to ~3 parallel explorers for non-trivial recon.
@@ -149,6 +268,13 @@ For any search or recon whose scope spans multiple domains, **fan out parallel r
 ## Worktree Isolation & CI Gate Matrix
 
 Isolate work in a **git worktree so the live fleet is untouched** (see `GEMINI.md` for the swarm protocol). Then verify before pushing — **scoped to the diff, never the whole world by default**:
+
+**Session streams** (the operator's declared work domains) have their own launcher: `limen streams`
+(→ `scripts/open-streams.sh`) opens and **reopens** every openable domain, one tmux window each;
+`limen streams --status` shows each stream's derived state. The rows and cartridges are owned by
+[`institutio/governance/session-streams.yaml`](institutio/governance/session-streams.yaml) — the
+constellation lanes in it are DERIVED from the constellation register (check M holds parity; edit
+the register and rerun `organs/consulting/constellation/derive-streams.py --write`, never the rows).
 
 - **`scripts/verify-scoped.sh` is the default push gate.** It maps the changed paths (branch diff vs `origin/main` plus uncommitted/untracked work) to only the gates they implicate, runs those, and names every gate it skipped. A docs append must never pay for a Next.js build, a wrangler boot, and 1,200+ tests.
 - **The full matrix below is a pre-merge event, not a per-session tax.** Run it — or let CI run it — only when the diff touches deploy-trigger paths (the website guardrail `merge-policy.sh` enforces at merge time), when scoping cannot attribute the change, or on explicit request.
@@ -222,6 +348,15 @@ automatic delete. `main` is the trunk **and** the live deploy source.
 
 **Chunking.** A branch is **one concern, not one session.** When a session produces multiple concerns, cut a fresh branch per concern off `origin/main` — finish → push → PR → next branch — never accumulate heterogeneous commits on a single session branch. And the **live checkout rests on `main`**: parking it on a work branch pins the running fleet to stale code and entangles every autonomic capture into that branch (the 2026-06-29 jules-capfill park: 5 days, 65 behind, a feature slice + daemon receipts fused onto one ref). `scripts/sync-release.sh` auto-unparks a fully-pushed, clean park each beat and fails open loudly otherwise — do session work in a worktree, never in the live checkout.
 
+**Settling a session stream.** If a PR completes a domain declared in
+[`institutio/governance/session-streams.yaml`](institutio/governance/session-streams.yaml), claim it
+with an anchored trailer at **column 0** of the merge commit message — `Settles: <stream-id>` (comma-separated
+for several). That claim is the *only* thing that marks a domain settled, and the claiming commit must
+change something outside the registry and `docs/{plans,continuations}/`: bookkeeping records an outcome,
+it cannot produce one. A passing mention no longer counts — the old unanchored `git log --grep=<id>` rule
+settled `s10-axis-coverage` off a docs commit whose whole subject was that s10 owns work a plan should
+*not* do. `scripts/check-session-streams.py` is the predicate.
+
 **No side doors — docs included.** The branch cadence applies to *every* tracked change, including
 one-file docs appends (the `docs: review … run` class, which was landing as direct `main` commits —
 35 of 40 at its worst). Ship those with **`scripts/ship-docs.sh <slug> "<msg>" <file…>`**: it stages
@@ -232,15 +367,17 @@ so the PR path is never harder than the side door. The system's own findings are
 githubbed the same way: **`scripts/sync-censor-issues.py`** (beat-wired, dry-run until
 `LIMEN_CENSOR_ISSUES_APPLY=1` arms it) mirrors live censor residuals to public `censor`-labelled
 issues and auto-closes them when the lineage clears — so insight→correction work arrives as an
-issue and leaves as a PR that cites it. Machine board writes (`tasks.yaml` via the keeper/worker)
-are not a side door: Tabularius keeps the local projection dirty, publishes only through the stable
-`tabularius/board-projection` branch, and opens an exact-head PR for the normal merge queue. The
-remote no-bypass `pull_request` rule rejects every direct `main` push, including automation and
-admins.
+issue and leaves as a PR that cites it. TABVLARIVS is the only logical board-projection writer:
+the keeper commits accepted events with SHA compare-and-swap and publishes only through the stable
+`tabularius/board-projection` branch, whose exact head enters the normal merge queue. Agent sessions
+never push `tasks.yaml`, and the keeper never pushes `main`; the remote no-bypass `pull_request`
+rule rejects every direct default-branch push, including automation and admins.
 
 **Merge authority (standing grant).** Claude merges its own PRs into `main` *without asking*, the moment they are green and mergeable. Do not defer routine merges to the human operator. The grant has exactly one guardrail.
 
 **The website guardrail.** A merge to `main` **auto-deploys** the live public site/API — but *only* when the diff touches a deploy-trigger path. The trigger paths are **declared once** in the `deploy_triggers` block of [`institutio/governance/gates.yaml`](institutio/governance/gates.yaml) (dashboard → `deploy.yml` → Cloudflare Pages, Firebase step dormant; API → `deploy-api.yml` → Cloud Run / Worker); `merge-policy.sh` derives its classification from that registry, and `check-gates.py` holds the registry in exact parity with the workflows on every PR — do not restate the path list here or anywhere else.
+
+Classification is **path match AND rail armed**, because the question was never "does this glob match" but "will merging change what is served". A rail whose every effect-bearing step is conditioned on a secret that does not exist deploys nothing — it runs, prints a skip notice, and goes green. The **api rail is dormant** on exactly those grounds (`GCP_SA_KEY` exists nowhere; the live API is the Worker), so `web/api/**` and `cli/**` are non-deploy. Dormancy is declared in each trigger's `arming` block and *proven* by check-gates **K** — offline from the workflow's own step gating, and corroborated against the latest run's step conclusions, which is what catches the secret landing while the registry still says dormant. Absent an `arming` block a trigger is armed: the default over-protects.
 
 For a **website-sensitive** PR, merging *is* the deploy — so it requires **green CI first** (plus a local `web/app` build for dashboard changes). Never blind-merge a live deploy. For every **other** PR (docs, corpus, mcp, ianva, memory, `web/worker`, most of `scripts/**`), merge freely once CLEAN. (`web/worker` is the live runtime but deploys on-demand via wrangler, not on merge — so its merges don't auto-deploy.)
 
@@ -250,7 +387,7 @@ For a **website-sensitive** PR, merging *is* the deploy — so it requires **gre
   `MERGE-MODE: queue|direct` and an exact `MERGE-HEAD`; the waiter binds the effect to both. When
   the queue is active it enqueues once and reports success only after GitHub reports `MERGED`.
   Branch cleanup is receipt-backed and separate from the merge.
-- exit **2 HOLD** → website-sensitive with CI not yet green+complete, a draft, or non-deploy checks still running. Wait for green, then merge.
+- exit **2 HOLD** → website-sensitive with CI not yet green+complete, a draft, or **required** checks still running/failing. Non-deploy verdicts count only the checks branch protection actually requires (derived live via `gh pr checks --required`; fail-toward-caution falls back to all-checks when underivable) — an advisory check never holds a non-deploy merge (2026-07-24 insights lineage: deliverables held hostage behind non-required checks). Website-sensitive PRs still demand the FULL rollup green: merging is the deploy. Wait for green, then merge.
 - exit **3 BLOCKED** → GitHub itself refuses the merge: conflicts (DIRTY), a stale base without a
   proven queue rail, or an unsatisfied protection gate. Repair a real conflict or missing check.
   Do not turn `BEHIND` into a repeated branch-rewrite/full-CI loop; queue-capable stale heads are

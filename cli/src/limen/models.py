@@ -31,6 +31,13 @@ class DispatchLogEntry(BaseModel):
     timestamp: datetime
     agent: str
     session_id: str
+    # The keeper owns ``agent`` and ``session_id`` as authenticated conduct
+    # provenance. Older task workflows used those columns as the logical lane
+    # and as a provider run, reservation nonce, landing token, or PR URL.
+    # Preserve producer correlation separately; it is metadata and never grants
+    # conduct authority.
+    logical_agent: str | None = None
+    logical_session_id: str | None = None
     status: str
     # A status is lifecycle state; a destination is routing metadata.  Historical
     # boards contain composite values such as ``failed->jules``.  Readers preserve
@@ -41,6 +48,11 @@ class DispatchLogEntry(BaseModel):
     selected_model: str | None = None
     selection_source: str | None = None
     catalog_hash: str | None = None
+    health_snapshot_hash: str | None = None
+    provider_terminal_class: str | None = None
+    provider_retry_count: int | None = None
+    provider_cooldown_until: datetime | None = None
+    provider_health_evidence: dict[str, Any] | None = None
     # Provider-neutral remote lifecycle.  Submission is only ``dispatched``; these fields make the
     # exact off-box run recoverable without interpreting a provider-shaped session string.
     provider_run_id: str | None = None
@@ -71,6 +83,38 @@ class DispatchLogEntry(BaseModel):
     landing_prior_updated: datetime | None = None
     landing_attempt_count: int | None = None
     landing_attempt: int | None = None
+    # Exceptional lifecycle transitions remain evidence-bound capabilities,
+    # never additions to the normal state graph. Projection owners validate the
+    # marker, the exact prior row, and the structured evidence below.
+    lifecycle_repair: (
+        Literal[
+            "prior-done",
+            "human-gate-reconcile",
+            "fleet-debt-park",
+            "pr-observed-terminal",
+            "routine-recovered",
+            "provider-terminal",
+            "stale-successor-hold",
+            "recurrence-reopen",
+        ]
+        | None
+    ) = None
+    fleet_debt_source: Literal["dispatch-verify", "prior-chronic-log", "repeated-noop"] | None = None
+    fleet_debt_count: int | None = Field(default=None, ge=1)
+    pr_observed_state: Literal["open", "merged"] | None = None
+    pr_observed_ref: str | None = None
+    routine_name: str | None = None
+    routine_observed_state: Literal["down", "recovered"] | None = None
+    execution_started: bool | None = None
+    execution_contract_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    execution_reservation_id: str | None = None
+    execution_result_kind: Literal["done", "failed", "failed_blocked"] | None = None
+    liveness_evidence: Literal["dead-process", "defunct-process", "markerless-expired", "launch-failed"] | None = None
+    liveness_reservation_id: str | None = None
+    liveness_pid: int | None = Field(default=None, gt=0)
+    liveness_age_seconds: float | None = Field(default=None, ge=0)
+    recurrence_source: Literal["main-green"] | None = None
+    recurrence_head_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     output: str | None = None
 
     @field_validator("status")
@@ -79,6 +123,35 @@ class DispatchLogEntry(BaseModel):
         if value in VALID_STATUSES or value in {"noop", "pr_open"} or "->" in value:
             return value
         raise ValueError("dispatch event status must be canonical (legacy composite rows are read-only)")
+
+
+def dispatch_session_id(entry: object) -> str:
+    """Return a workflow correlation ID without obscuring keeper provenance.
+
+    Pre-conduct history has only ``session_id``. Broker-projected rows keep the
+    authenticated conduct session there and place the producer's logical value
+    in ``logical_session_id``.
+    """
+
+    if isinstance(entry, dict):
+        logical = entry.get("logical_session_id")
+        server_owned = entry.get("session_id")
+    else:
+        logical = getattr(entry, "logical_session_id", None)
+        server_owned = getattr(entry, "session_id", None)
+    return str(logical if logical not in {None, ""} else server_owned or "")
+
+
+def dispatch_agent(entry: object) -> str:
+    """Return the producer lane while leaving authenticated keeper identity intact."""
+
+    if isinstance(entry, dict):
+        logical = entry.get("logical_agent")
+        server_owned = entry.get("agent")
+    else:
+        logical = getattr(entry, "logical_agent", None)
+        server_owned = getattr(entry, "agent", None)
+    return str(logical if logical not in {None, ""} else server_owned or "")
 
 
 class ExecutionRequirement(BaseModel):
@@ -123,12 +196,24 @@ class Task(BaseModel):
     # and keeper seams, and selected legacy work is normalized before dispatch.
     predicate: str | None = None
     receipt_target: str | None = None
+    # WorkLoanV1 source/value collateral. Optional on the storage model so the
+    # historical board stays readable while sanctioned producers adopt it.
+    origin: str | None = None
+    horizon: str | None = None
+    value_case: str | None = None
+    owner_surface: str | None = None
+    external_deadline: bool = False
+    due_at: str | None = None
+    receipt_verified: bool | None = None
     # Optional live prerequisites. Missing/empty keeps legacy tasks dispatchable; an explicit
     # requirement is evaluated dynamically by handoff and every dispatch selector.
     execution_requirements: list[ExecutionRequirement] | None = None
     # Immutable provider-neutral workstream policy carried from a generated packet into
     # the actual adapter launch seam. Historical tasks omit it.
     workstream_contract: dict[str, Any] | None = None
+    # A provider-neutral, digest-bound plan that must select its builder again
+    # from live capability and capacity evidence. Historical tasks omit it.
+    plan_receipt: dict[str, Any] | None = None
     # Optional per-task Claude tier pin ("haiku"|"sonnet"|"opus"|"fable") — an escape hatch that
     # overrides the earned-tier ladder's class-based derivation for THIS task (the env
     # LIMEN_CLAUDE_MODEL still wins above it). Fable still requires LIMEN_FABLE_ACCEPTANCE.
@@ -164,6 +249,15 @@ class Task(BaseModel):
         from limen.workstream_contract import validate_packet_contract
 
         return validate_packet_contract(value)
+
+    @field_validator("plan_receipt")
+    @classmethod
+    def validate_plan_receipt(cls, value: dict[str, Any] | None) -> dict[str, Any] | None:
+        if value is None:
+            return None
+        from limen.plan_handoff import validate_plan_receipt
+
+        return validate_plan_receipt(value)
 
     @field_validator("workstream")
     @classmethod

@@ -5,15 +5,57 @@ on:
     branches: [main]
     paths:
       - "web/app/**"
+      - "scripts/assemble-dashboard-data.py"
       - "firebase.json"
-      - "tasks.yaml"
       - ".github/workflows/deploy.yml"
+  # The cron is the board's freshness rail: tasks.yaml merges no longer trigger a
+  # per-merge deploy (the board fast lane) — the hourly rebake picks them up, and
+  # the Worker serves the live board at runtime in the meantime.
   schedule:
     - cron: "0 * * * *"
   workflow_dispatch:
 
 jobs:
+  precheck:
+    # Cron thrift: an unchanged hour must not pay a cold build+deploy. The
+    # fingerprint covers both build inputs (web/app tree, tasks.yaml blob) plus
+    # the UTC date, so API-derived surface data (pr-status) still refreshes at
+    # most once per idle day. Fail-open by construction: a cache miss or lookup
+    # error deploys exactly as before; only a proven already-deployed
+    # fingerprint skips.
+    runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.decide.outputs.should_deploy }}
+      fingerprint: ${{ steps.fp.outputs.hash }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compute deploy input fingerprint
+        id: fp
+        run: echo "hash=$(git rev-parse HEAD:web/app)-$(git rev-parse HEAD:tasks.yaml)-$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Look up last-deployed fingerprint
+        if: github.event_name == 'schedule'
+        id: seen
+        uses: actions/cache/restore@v4
+        with:
+          path: .deploy-fingerprint
+          key: pages-deploy-${{ steps.fp.outputs.hash }}
+          lookup-only: true
+
+      - name: Decide whether this state is already live
+        id: decide
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "${{ steps.seen.outputs.cache-hit }}" = "true" ]; then
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::hourly cron: deploy inputs unchanged since the last deploy today — skipping build+deploy"
+          else
+            echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+          fi
+
   deploy:
+    needs: precheck
+    if: needs.precheck.outputs.should_deploy == 'true'
     runs-on: ubuntu-latest
     env:
       GCP_SA_KEY_SET: ${{ secrets.GCP_SA_KEY != '' }}
@@ -24,6 +66,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "22"
+          cache: "npm"
+          cache-dependency-path: web/app/package-lock.json
 
       - run: npm ci
         working-directory: web/app
@@ -35,52 +79,7 @@ jobs:
           NEXT_PUBLIC_API_URL: ${{ vars.LIMEN_API_URL }}
 
       - name: Assemble slim dashboard.json into publish dir
-        run: |
-          python3 - <<'PY'
-          import json, pathlib
-          app = pathlib.Path("web/app")
-          g = app / ".generated" / "surfaces"
-          try:
-              i = json.load(open(g / "internal-status.json"))
-              tj = json.load(open(g / "tasks.json"))
-              all_tasks = tj.get("tasks", tj) if isinstance(tj, dict) else tj
-              all_tasks = all_tasks if isinstance(all_tasks, list) else []
-              summary = i.get("summary") or {}
-              # inject dispatch-integrity if available
-              try:
-                  dv = json.load(open("logs/dispatch-verify.json"))
-                  summary["integrity"] = {"counts": dv.get("counts", {}), "chronic": dv.get("chronic", [])}
-              except Exception:
-                  pass
-              # Slim: exclude done/archived (lazy-fetched on demand), truncate dispatch_log to last 3
-              DONE_STATUSES = {"done", "archived"}
-              MAX_LOG = 3
-              def slim_task(t):
-                  dl = t.get("dispatch_log") or []
-                  if len(dl) > MAX_LOG:
-                      dl = sorted(dl, key=lambda e: e.get("timestamp",""), reverse=True)[:MAX_LOG]
-                      t = {**t, "dispatch_log": dl}
-                  return t
-              active = [slim_task(t) for t in all_tasks if t.get("status") not in DONE_STATUSES]
-              done_tasks = [slim_task(t) for t in all_tasks if t.get("status") in DONE_STATUSES]
-              out = {"portal": i.get("portal"), "summary": summary, "tasks": active, "storage": i.get("storage")}
-              done_out = {"generated_at": summary.get("generated_at"), "total_done": len(done_tasks), "tasks": done_tasks}
-              out_dir = app / "out"
-              out_dir.mkdir(exist_ok=True)
-              json.dump(out, open(out_dir / "dashboard.json", "w"))
-              json.dump(done_out, open(out_dir / "done-tasks.json", "w"))
-              slim_bytes = (out_dir / "dashboard.json").stat().st_size
-              done_bytes = (out_dir / "done-tasks.json").stat().st_size
-              slim_kb = slim_bytes // 1024
-              done_kb = done_bytes // 1024
-              print(f"dashboard.json: {slim_kb}KB ({len(active)} active tasks) | done-tasks.json: {done_kb}KB ({len(done_tasks)} done/archived)")
-              LIMIT = 1500 * 1024
-              if slim_bytes > LIMIT:
-                  raise SystemExit(f"dashboard.json exceeds 1500KB ratchet: {slim_kb}KB > 1500KB. Slim the payload before merging.")
-          except Exception as e:
-              print(f"dashboard.json assemble error: {e}")
-              raise
-          PY
+        run: python3 scripts/assemble-dashboard-data.py --app web/app
 
       - name: Check hosting artifact privacy
         env:
@@ -193,3 +192,11 @@ jobs:
             --owner-token "$LIMEN_API_TOKEN" \
             --client-token "$LIMEN_CLIENT_TOKEN" \
             --task-id "${LIMEN_VERIFY_TASK_ID:-LIMEN-015}"
+
+      - name: Record deployed fingerprint (cron thrift marker)
+        run: echo "${{ needs.precheck.outputs.fingerprint }}" > .deploy-fingerprint
+
+      - uses: actions/cache/save@v4
+        with:
+          path: .deploy-fingerprint
+          key: pages-deploy-${{ needs.precheck.outputs.fingerprint }}

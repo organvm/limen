@@ -28,9 +28,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "cli" / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling scripts/ for _human_signals
 from limen.chronic import CHRONIC_FLEET_DEBT_LABEL, chronic_escalated_to_needs_human  # noqa: E402
-from limen.io import load_limen_file, save_limen_file  # noqa: E402
+from limen.io import load_limen_file  # noqa: E402
 from limen.dispatch_ownership import active_typed_pr_owner_id  # noqa: E402
-from limen.models import DispatchLogEntry, Task, has_jules_landing_hold  # noqa: E402
+from limen.intake import contract_fields, github_issue_owner_contract  # noqa: E402
+from limen.models import DispatchLogEntry, Task, dispatch_session_id, has_jules_landing_hold  # noqa: E402
+from limen.tabularius import apply_limen_file_sync  # noqa: E402
 from limen.workstream_contract import WORKSTREAM_SUCCESSOR_REQUIRED_LABEL  # noqa: E402
 
 from _human_signals import is_human_gated, lever_ids  # noqa: E402
@@ -76,6 +78,14 @@ def ensure_heal_singleton(
     """
     tid = heal_task_key(repo, symptom)
     stamp = now.date().isoformat()
+    contract = contract_fields(github_issue_owner_contract(repo, tid))
+    collateral = {
+        "origin": "system_debt",
+        "horizon": "past",
+        "value_case": f"Resolve the recurring {symptom} lifecycle defect for {repo}",
+        "owner_surface": repo,
+        **contract,
+    }
     existing = next((t for t in lf.tasks if t.id == tid), None)
     if existing is not None:
         if has_jules_landing_hold(existing):
@@ -83,11 +93,15 @@ def ensure_heal_singleton(
         if WORKSTREAM_SUCCESSOR_REQUIRED_LABEL in (existing.labels or []):
             return None
         if existing.status in _ACTIVE_STATES:
+            for key, value in collateral.items():
+                setattr(existing, key, value)
             return None  # already being worked — converge, idempotent
         # prior episode closed; reopen the canonical singleton
         existing.status = "open"
         existing.title = title
         existing.context = context
+        for key, value in collateral.items():
+            setattr(existing, key, value)
         existing.updated = now
         existing.dispatch_log.append(
             DispatchLogEntry(
@@ -113,6 +127,7 @@ def ensure_heal_singleton(
             labels=["lifecycle", "heal-dispatch"],
             urls=[],
             context=context,
+            **collateral,
             depends_on=[],
             created=stamp,
             dispatch_log=[],
@@ -133,7 +148,7 @@ def acquire_lock(timeout=15):
 
 def last_session(t):
     log = t.dispatch_log or []
-    return str(log[-1].session_id) if log else ""
+    return dispatch_session_id(log[-1]) if log else ""
 
 
 def main():
@@ -147,10 +162,12 @@ def main():
         return 1
     verify = json.loads(vf.read_text())
     det = verify.get("detail", {})
-    merged_ids = {x["id"] for x in det.get("PR_MERGED", [])}
+    merged_refs = {x["id"]: str(x.get("ref") or "") for x in det.get("PR_MERGED", [])}
+    merged_ids = set(merged_refs)
     closed_ids = {x["id"] for x in det.get("PR_CLOSED", [])}
     nopr_ids = {x["id"] for x in det.get("DISPATCHED_NO_PR", [])}
-    open_pr_ids = {x["id"] for x in det.get("PR_OPEN", [])}
+    open_pr_refs = {x["id"]: str(x.get("ref") or "") for x in det.get("PR_OPEN", [])}
+    open_pr_ids = set(open_pr_refs)
     # CHRONIC: reopened >=3x, never produced a PR (verify-dispatch surfaces these). Re-looping them
     # just burns capacity with zero output — stop them, routed by OWNERSHIP: a human-gated task
     # (lever tag / registered lever / BLD2 / credential cluster — _human_signals, shared with
@@ -159,7 +176,8 @@ def main():
     # (fleet debt; nothing recycles it). The active-owner predicate is re-checked on the freshly
     # loaded board under the lock so a successor created after verification cannot be falsely parked.
     # Reversible status flips. ([[no-never-happens-again]])
-    chronic_ids = {x["id"] for x in verify.get("chronic", [])}
+    chronic_rows = {x["id"]: x for x in verify.get("chronic", [])}
+    chronic_ids = set(chronic_rows)
     levers = lever_ids(ROOT)
 
     if not acquire_lock():
@@ -171,21 +189,34 @@ def main():
         now = datetime.datetime.now(datetime.timezone.utc)
         merged_done, open_pr_done, reopened, parked, rehomed = [], [], [], [], []
 
-        def park_chronic(t, why: str):
+        def park_chronic(t, why: str, *, source: str, count: int):
             """Park chronic fleet-debt in failed_blocked; a human-gated task (his-hand signals or
             the exact `needs-human` label) stays on the human surface. The kept write says "kept",
             never "escalat…", so chronic_escalated_to_needs_human() can never re-home it later."""
             if "needs-human" in (t.labels or []) or is_human_gated(t, levers):
                 t.status = "needs_human"
+                if "needs-human" not in (t.labels or []):
+                    t.labels = list(t.labels or []) + ["needs-human"]
+                lifecycle_repair = "human-gate-reconcile"
                 out = f"heal-dispatch: {why} → needs_human (kept: human-gated)"
             else:
                 t.status = "failed_blocked"
                 if CHRONIC_FLEET_DEBT_LABEL not in (t.labels or []):
                     t.labels = list(t.labels or []) + [CHRONIC_FLEET_DEBT_LABEL]
+                lifecycle_repair = "fleet-debt-park"
                 out = f"heal-dispatch: {why} → failed_blocked (fleet-debt, off the human surface)"
             t.updated = now
             t.dispatch_log.append(
-                DispatchLogEntry(timestamp=now, agent="limen", session_id="heal", status=t.status, output=out)
+                DispatchLogEntry(
+                    timestamp=now,
+                    agent="limen",
+                    session_id="heal",
+                    status=t.status,
+                    lifecycle_repair=lifecycle_repair,
+                    fleet_debt_source=source,
+                    fleet_debt_count=count,
+                    output=out,
+                )
             )
             parked.append(f"{t.id} → {t.status}")
 
@@ -202,7 +233,12 @@ def main():
             ):
                 if active_typed_pr_owner_id(t, lf.tasks) is not None:
                     continue
-                park_chronic(t, "chronic (reopened ≥3×, never a PR)")
+                park_chronic(
+                    t,
+                    "chronic (reopened ≥3×, never a PR)",
+                    source="dispatch-verify",
+                    count=max(1, int(chronic_rows[t.id].get("reopens") or 1)),
+                )
                 continue
             # SELF-MIGRATION: a task the machine previously escalated to needs_human for chronic
             # churn is fleet-debt mis-homed on the human surface — re-home it to failed_blocked,
@@ -226,6 +262,9 @@ def main():
                         agent="limen",
                         session_id="heal",
                         status="failed_blocked",
+                        lifecycle_repair="fleet-debt-park",
+                        fleet_debt_source="prior-chronic-log",
+                        fleet_debt_count=1,
                         output="heal-dispatch: chronic escalation re-homed needs_human → failed_blocked "
                         "(fleet-debt, not a human atom)",
                     )
@@ -243,6 +282,9 @@ def main():
                         agent="limen",
                         session_id="heal",
                         status="done",
+                        lifecycle_repair="pr-observed-terminal",
+                        pr_observed_state="merged",
+                        pr_observed_ref=merged_refs[t.id],
                         output="heal-dispatch: PR merged → done",
                     )
                 )
@@ -259,6 +301,9 @@ def main():
                         agent="limen",
                         session_id="heal",
                         status="done",
+                        lifecycle_repair="pr-observed-terminal",
+                        pr_observed_state="open",
+                        pr_observed_ref=open_pr_refs[t.id],
                         output="heal-dispatch: PR open (awaiting merge) → done",
                     )
                 )
@@ -270,7 +315,12 @@ def main():
                 if t.id in nopr_ids and PR_RE.search(last_session(t)):
                     continue
                 if t.id in chronic_ids:
-                    park_chronic(t, "dispatched with no PR and chronic (reopened ≥3×)")
+                    park_chronic(
+                        t,
+                        "dispatched with no PR and chronic (reopened ≥3×)",
+                        source="dispatch-verify",
+                        count=max(1, int(chronic_rows[t.id].get("reopens") or 1)),
+                    )
                     continue
                 # Reopening the SAME task id is already convergent — two sessions flipping
                 # t.status to "open" land on one canonical entry. The keyed-singleton helpers
@@ -309,7 +359,7 @@ def main():
         for i in rehomed:
             print(f"    rehome: {i}")
         if args.apply:
-            save_limen_file(path, lf)
+            apply_limen_file_sync(path, lf, agent="heal-dispatch", session_id="heal")
             print("  APPLIED -> tasks.yaml")
         else:
             print("  dry-run (pass --apply)")

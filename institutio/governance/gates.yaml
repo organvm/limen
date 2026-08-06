@@ -32,23 +32,89 @@ ratchets:
 
 # 1:1 mirror of deploy*.yml `on.push.paths` — check-gates.py enforces exact set equality.
 # A merge to main touching one of these IS a live deploy. Deploy sensitivity is a property
-# of PATHS, not gates: a docs PR touching tasks.yaml is website-sensitive even though it
-# implicates only cheap gates.
+# of PATHS, not gates: a docs PR touching firebase.json is website-sensitive even though it
+# implicates only cheap gates. tasks.yaml is deliberately NOT a trigger (the board fast
+# lane): the Worker serves the board live at runtime, and deploy.yml's hourly cron rebakes
+# the static dashboard.json when inputs changed — a board publish is data, not a deploy.
+#
+# `build_source` is what the deploy job actually builds and uploads. Check J holds every
+# trigger path to it: a path inside build_source needs no defence, the trigger's own workflow
+# file is self-evident, and ANYTHING ELSE must carry a note saying how it reaches the deployed
+# artifact.
+#
+# That rule exists because `cli/**` sat in the api trigger from the original buildout commit
+# (26b811e7) and misclassified every cli PR as WEBSITE-SENSITIVE. Check C could never catch it:
+# it compares the registry to the workflow, and the WORKFLOW was the thing that was wrong. So
+# parity preserved the defect faithfully for months. A note beginning UNJUSTIFIED records a
+# path that cannot defend itself — check J reports those and does not fail on them, the same
+# baseline shape the rest of this estate uses. Two of them are not the same finding as none.
+#
+# `arming` is the OTHER half of the same question. Check J asks whether a path reaches the
+# built artifact; arming asks whether the job can ship that artifact AT ALL. A rail whose
+# every effect-bearing step is conditioned on a secret that does not exist deploys nothing —
+# it runs, prints a skip notice, and goes green. Classification is `path matches AND rail is
+# armed`, because the guardrail's real question was never "does this glob match" but "will
+# merging change what is served". Absent an `arming` block a trigger is ARMED: the default
+# must over-protect. Dormancy is declared here and PROVEN by check-gates K — never inferred
+# at merge time, so the merge decision stays deterministic and offline.
 deploy_triggers:
   dashboard:
     workflow: .github/workflows/deploy.yml
+    build_source: web/app          # npm ci && npm run build, working-directory: web/app
     paths:
       - "web/app/**"
-      - "firebase.json"
-      - "tasks.yaml"
+      - path: "scripts/assemble-dashboard-data.py"
+        note: "runs as a step inside the deploy job (deploy.yml) to bake the static data"
+      - path: "firebase.json"
+        note: "configures the hosting artifact the job publishes"
       - ".github/workflows/deploy.yml"
   api:
     workflow: .github/workflows/deploy-api.yml
+    build_source: web/api          # gcloud run deploy --source web/api
+    arming:
+      state: dormant
+      secret: GCP_SA_KEY           # allow-secret: the NAME of the secret, never a value
+      var: GCP_SA_KEY_SET          # job env: ${{ secrets.GCP_SA_KEY != '' }}
+      ungated_steps:
+        - step: actions/checkout@v7
+          note: "checks the repo out onto the runner; nothing leaves the job"
+      note: >-
+        The Cloud Run rail is dormant: GCP_SA_KEY exists nowhere, so EVERY effect-bearing
+        step is skipped and the run reports success having deployed nothing. Observed, not
+        assumed — run 31061094764 printed `GCP_SA_KEY_SET: false` from the runner's own env
+        and took the "Note skipped API deploy" branch; today's other seven main runs are the
+        same. This matches the charter: the live runtime API is the Cloudflare Worker.
+        Check K PROVES the shape offline (every step above is gated on `var`, so no secret
+        ⇒ no effect) and corroborates the STATE from the latest run's step conclusions.
+        Consequence: web/api/** and cli/** stop being website-sensitive, because merging
+        them cannot reach a live surface. Landing GCP_SA_KEY arms the rail — flip `state`
+        to `armed` in the same change, and check K fails the PR if you forget.
     paths:
       - "web/api/**"
-      - "cli/**"
-      - "scripts/preflight-cloud-run.sh"
+      - path: "cli/**"
+        note: >-
+          UNJUSTIFIED — recorded, not defended. Nothing under cli/ can reach the deployed
+          artifact: the job runs `gcloud run deploy --source web/api`, web/api/Dockerfile
+          COPYs exactly requirements.txt + main.py + limen_intake.py + limen_work_loan.py,
+          and web/api/main.py imports only stdlib, PyPI, and its two siblings. It rode in
+          with the original buildout (26b811e7) and misclassifies every cli PR as
+          website-sensitive, making it wait on a full green rollup for a deploy that cannot
+          happen. Removal must leave BOTH this file and deploy-api.yml at once (check C is
+          set-equality), and pushing .github/workflows/** needs a `workflow`-scoped
+          credential this fleet does not hold — the push is rejected by GitHub, not skipped.
+          One `gh auth refresh -h github.com -s workflow` unblocks the one-line follow-up.
+      - path: "scripts/preflight-cloud-run.sh"
+        note: "runs as a step inside the deploy job (deploy-api.yml) before the Cloud Run push"
       - ".github/workflows/deploy-api.yml"
+  runtime_worker:
+    workflow: .github/workflows/deploy-worker.yml
+    paths: []                      # workflow_dispatch only — merging never deploys the Worker
+  danse:
+    workflow: .github/workflows/deploy-danse.yml
+    build_source: apps/danse       # wrangler pages deploy apps/danse
+    paths:
+      - "apps/danse/**"
+      - ".github/workflows/deploy-danse.yml"
 
 # Derived file sets — what verify-whole.sh's hardcoded py_compile and bash -n argv lines
 # become (PR4). PR1 transcribes today's curated lists EXACTLY; widening py-syntax to all of
@@ -120,6 +186,16 @@ gates:
     scoped: false
     owner: consulting
     note: "Sovereign Systems engagement records stay schema-clean."
+  constellation-registry:
+    command: "python3 organs/consulting/constellation/validate-constellation.py --quiet"
+    paths: ["organs/consulting/constellation/**", "institutio/github/access.yaml"]
+    owner: consulting
+    note: "The constellation register's Rules #1-7 (completeness, name discipline, PII lint, cross-refs, single-org, overlay parity, access cross-check) run per-diff — previously reachable only via constellation-done.sh. access.yaml implicates it because Rule #7 cross-checks every grant against the granted person's registered project rows."
+  biography-registry:
+    command: "python3 scripts/check-biography.py --quiet"
+    paths: ["institutio/governance/biography.yaml", "scripts/check-biography.py", "scripts/derive-epochs.py", "scripts/corpus_resolve.py"]
+    owner: governance
+    note: "BIOGRAPHY registry drift — schema, provenance legality (`inferred` is not a provenance), derived rows naming declared epoch_signals, and the rule a deriver may never write a meaning. Store parity only where absence is provable (LIMEN_LIFE_HOST); a CI runner with no ~/Workspace reports unverifiable, never drift. `corpus_resolve.py` is in paths because check F and the deriver both import it: renaming a resolver function crashes this gate, and without that path a scoped run went green while the gate was broken."
   artist-records:
     command: "python3 organs/artist/validate-artist.py --fleet --quiet"
     paths: ["organs/artist/**"]
@@ -133,6 +209,13 @@ gates:
     owner: social
     note: "Koinonia relationship-posture briefs stay schema-clean."
 
+  # ── apps (the work itself, not the fleet that keeps it) ─────────────────────
+  danse-invariants:
+    command: "python3 scripts/check-danse.py"
+    paths: ["apps/danse/**", "scripts/check-danse.py"]
+    owner: artist
+    note: "The arithmetic invariants under the generative engine — the 2017 score partitions the frame, the clock is a pure f(seed, t) that returns to flat, every passage partitions its own time and never recurs, entropy lives in exactly one file, the corpus is deliverable at every shipped tier, and sound/rng.py matches engine/rng.js value for value. Python + node, ~0.2s, no GPU: deliberately the half of danse's verification ANY machine and any agent can run (the other half, apps/danse/render/browser.py --verify, asserts Apple Metal and so can never be a gate). Registered because it was unreachable: before this entry `verify.py --explain apps/danse/engine/clock.js` selected only syntax-changed and diff-hygiene, so an agent could rewrite the engine, run the repo's own push gate, get exit 0, and ship a broken piece. No ci_job — apps/** is outside ci.yml's path filters, which makes the always-on registry-driven pr-gate this gate's only CI mirror. The count is floored and split: 39 portable invariants plus a declared 3 that need a local grain bank, because this gate's first CI run reported 39 where the artist's machine reported 42 — a total that silently shrinks by environment is the one number an agent must not trust, so an absent group is now named in the output rather than subtracted in silence."
+
   # ── predicate regression tests (scoped where verify-scoped.sh runs them today) ──
   merge-policy-test:
     command: "bash scripts/tests/merge-policy.test.sh"
@@ -140,7 +223,7 @@ gates:
     owner: merge-policy
     note: "Verdict-matrix regression for the self-merge predicate; gates.yaml is implicated because deploy_triggers feed the verdict (PR3)."
   merge-queue-contract-test:
-    command: "python3 scripts/tests/merge-queue-contract.test.py && python3 -m pytest cli/tests/test_pr_scan.py cli/tests/test_merge_drain.py cli/tests/test_self_heal.py cli/tests/test_tabularius.py -q"
+    command: "env GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_EDITOR=true GIT_SEQUENCE_EDITOR=true VISUAL=true EDITOR=true python3 scripts/tests/merge-queue-contract.test.py && bash scripts/run-pytest-hermetic.sh cli/tests/test_pr_scan.py cli/tests/test_merge_drain.py cli/tests/test_self_heal.py cli/tests/test_tabularius.py -q"
     paths: [".github/workflows/pr-gate.yml", ".github/workflows/auto-scale.yml", ".github/workflows/operate.yml", "cli/src/limen/tabularius.py", "cli/tests/test_pr_scan.py", "cli/tests/test_merge_drain.py", "cli/tests/test_self_heal.py", "cli/tests/test_tabularius.py", "scripts/tabularius-organ.py", "scripts/setup-rulesets.py", "scripts/_pr_scan.py", "scripts/merge-policy.sh", "scripts/await-pr.sh", "scripts/merge-drain.py", "scripts/self-heal.py", "scripts/verify.py", "scripts/tests/merge-queue-contract.test.py"]
     owner: merge-policy
     note: "Concurrent integration stays queue-native and fail-closed: merge_group runs scoped current-base proof, the no-bypass ruleset rejects direct main writes, board automation publishes through its exact-head PR branch, and no queue effect uses admin or a merge-method fallback."
@@ -150,6 +233,26 @@ gates:
     ci_job: "pr-gate.yml:pr-gate"
     owner: gitvs
     note: "Every executable Git push, GitHub Contents PUT, and literal default-ref seam is count-bound to a reviewed disposition; the lifecycle publisher additionally proves it refuses the actual default branch before any remote write."
+  worktree-preserve-dirty-test:
+    command: "bash scripts/run-pytest-hermetic.sh scripts/tests/test_worktree_preserve_dirty.py -q"
+    paths: ["scripts/worktree-preserve-dirty.py", "scripts/tests/test_worktree_preserve_dirty.py"]
+    owner: continuity
+    note: "Dirty-worktree custody stays bounded and loss-averse: binary patches stream under hard per-item and aggregate ceilings, untracked or changing sources fail before durable writes, public evidence is sampled and digested, and unchanged content-addressed receipts are byte-idempotent."
+  estate-audit-heal-test:
+    command: "python3 scripts/tests/estate-audit-heal.test.py"
+    paths: ["scripts/estate-audit-heal.py", "scripts/tests/estate-audit-heal.test.py"]
+    owner: estate-audit-heal
+    note: "Estate audit clones are invocation-owned disposable caches: failed, detection-only, no-value, and remotely pushed clones return to an absent fixed point, while any commit that fails to push remains locally retained for custody."
+  estate-audit-custody-test:
+    command: "bash scripts/run-pytest-hermetic.sh cli/tests/test_estate_audit_custody.py -q"
+    paths: ["cli/src/limen/estate_audit_custody.py", "cli/tests/test_estate_audit_custody.py", "scripts/estate-audit-custody.py"]
+    owner: lifecycle
+    note: "Generated estate-audit custody dynamically covers every exact HEAD, preserves non-HEAD working payloads content-addressably, proves fresh Git and payload restoration, rejects drift and ambient Git configuration, and emits only redacted bounded receipts."
+  estate-audit-paired-custody-test:
+    command: "bash scripts/run-pytest-hermetic.sh cli/tests/test_estate_audit_paired_custody.py -q"
+    paths: ["cli/src/limen/estate_audit_custody.py", "cli/src/limen/estate_audit_paired_custody.py", "cli/tests/test_estate_audit_custody.py", "cli/tests/test_estate_audit_paired_custody.py", "scripts/estate-audit-custody.py", "scripts/estate-audit-paired-custody.py", "institutio/governance/estate-audit-custody-targets.json", "docs/storage-evacuation-inventory-20260727.json", "docs/estate-audit-paired-custody.md"]
+    owner: lifecycle
+    note: "The generated-root denominator is derived from a fresh single-rail check, then the exact plan and working payload manifest are full-restored on two stable-media-bound devices under one heavy lease; stored pair records remain explicitly nonterminal until both bounded copies are reopened, and the terminal projection is path-free."
   sync-release-test:
     command: "bash scripts/tests/sync-release.test.sh"
     paths: ["scripts/sync-release.sh", "scripts/tests/sync-release.test.sh", "institutio/governance/parameters.yaml"]
@@ -165,6 +268,11 @@ gates:
     paths: ["scripts/verify.py", "scripts/tests/verify-resolver.test.sh", "institutio/governance/gates.yaml"]
     owner: verify
     note: "Selection-equivalence fixtures — the resolver must implicate exactly the registered gates."
+  verify-parallel-test:
+    command: "bash scripts/tests/verify-parallel.test.sh"
+    paths: ["scripts/verify.py", "scripts/tests/verify-parallel.test.sh", "institutio/governance/gates.yaml"]
+    owner: verify
+    note: "Independent scoped predicates overlap within each resource tier; the cheap wave precedes admission-gated heavy work, serialize:true remains ordered, and every gate has bounded time/output plus visible receipts."
   verify-ci-hardening-test:
     command: "bash scripts/tests/verify-ci-hardening.test.sh"
     paths: ["scripts/verify.py", "scripts/tests/verify-ci-hardening.test.sh"]
@@ -217,6 +325,12 @@ gates:
     scoped: false
     owner: lifecycle
     note: "Live-main commit deny matrix (hermetic fixture); transcribed when the hook landed on main in parallel with PR1."
+  outbound-preflight-test:
+    command: "bash scripts/tests/outbound-preflight-guard.test.sh && bash scripts/tests/preflight-thread-state.test.sh"
+    paths: ["scripts/hooks/outbound-preflight-guard.py", "scripts/preflight-receipt.py", "scripts/preflight-sent-state.py", "scripts/preflight-thread-state.py", "scripts/tests/outbound-preflight-guard.test.sh", "scripts/tests/preflight-thread-state.test.sh", "institutio/governance/outbound-effectors.yaml"]
+    scoped: false
+    owner: lifecycle
+    note: "Outward-action deny matrix (hermetic fixture): no send/comment without a fresh, target-bound proof-of-observation receipt. Negative cases are the deliverable — a guard with only happy-path tests is the 'HARD BLOCK' hook that blocks nothing. Landed after the 2026-07-31 duplicate-recruiter-reply escape, instance 33 of the act-on-an-artifact class. Second rung added 2026-07-31: the github.comment predicate's own exit contract, where the load-bearing row is that SKIP (77) still DENIES — a predicate that returns 0 when it could not look is the advisory hook all over again. This row was `scoped: false` with no ci_job and named by verify-whole.sh nowhere, so it ran NOWHERE from the day it landed until check-runner-coverage class F found it hours later; the wiring and the predicate that forbids its recurrence landed together."
   pytest-scope-guard-test:
     command: "bash scripts/tests/pytest-scope-guard.test.sh"
     paths: ["scripts/hooks/pytest-scope-guard.sh", "scripts/tests/pytest-scope-guard.test.sh"]
@@ -242,22 +356,22 @@ gates:
     owner: omega
     note: "The fixed-point composer's version/hash/tally/strict contract; SKIP is never a silent PASS."
   main-green-test:
-    command: "python3 -m pytest cli/tests/test_check_main_green.py -q"
+    command: "bash scripts/run-pytest-hermetic.sh cli/tests/test_check_main_green.py -q"
     paths: ["scripts/check-main-green.py", "cli/tests/test_check_main_green.py", "scripts/omega.sh"]
     owner: omega
-    note: "Workflow-filtered completed CI must match the full current origin/main head; a prior or pending run is never green proof."
+    note: "Workflow-filtered completed CI must match the full current origin/main head — or, path-aware, the newest green run when every commit past it implicates none of ci.yml's push paths (docs/board-only merges never trigger the workflow). A pending run or a red newest run is never green proof."
   orphan-watchers-test:
-    command: "python3 -m pytest cli/tests/test_orphan_watchers.py -q"
+    command: "bash scripts/run-pytest-hermetic.sh cli/tests/test_orphan_watchers.py -q"
     paths: ["scripts/orphan-watchers.py", "scripts/hooks/session-closeout.sh", "cli/tests/test_orphan_watchers.py"]
     owner: tabularius
     note: "Watcher detection stays honest: shell-snapshot poll loops classified, orphan age floor above await-pr's deadline, --check never signals, --reap kills only orphans, --session-end never blocks session end."
   handoff-relay-test:
-    command: "python3 -m pytest cli/tests/test_handoff_relay.py -q"
+    command: "bash scripts/run-pytest-hermetic.sh cli/tests/test_handoff_relay.py -q"
     paths: ["scripts/handoff-relay.py", "scripts/heartbeat-loop.sh", "scripts/metabolize.sh", "scripts/hooks/session-closeout.sh", "cli/tests/test_handoff_relay.py"]
     owner: continuity
     note: "The warm-resume packet carries authoritative budget/provider/next truth and refreshes across heartbeat, metabolize, and SessionEnd seams."
   autonomy-governor-test:
-    command: "python3 -m pytest cli/tests/test_autonomy_governor.py -q"
+    command: "bash scripts/run-pytest-hermetic.sh cli/tests/test_autonomy_governor.py -q"
     paths: ["scripts/autonomy-governor.py", "cli/tests/test_autonomy_governor.py"]
     owner: vigilia
     note: "Pause-release completion stays fail-closed: operator markers (merge-prohibiting / owner_surface-only) are never merged or cleared; PR-owned markers complete via merge-policy CLEARED -> head-pinned squash; every ambiguity keeps the estate paused."
@@ -274,6 +388,16 @@ gates:
     paths: ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "CONTRIBUTING.md", "docs/agent-instruction-standard.md", "scripts/check-agent-docs.py"]
     owner: docs
     note: "Agent-instruction docs match the canonical task-state vocabulary; referenced scripts exist."
+  session-phase:
+    command: "python3 scripts/check-session-phase.py"
+    paths: ["docs/plans/**", "scripts/check-session-phase.py", "scripts/session-plan.py", "institutio/governance/session-plan-baseline.txt"]
+    owner: docs
+    note: "The plan→issue→PR chain holds: every non-baselined dated plan declares `Issue: #N` and a `PR:` state (#M, (pending), or a reasoned Status:). Binds the entry joint of session-phases.yaml, which shipped advisory-only in Phase 1 and left this as its named Phase-2 gate. Chain organ: scripts/session-plan.py."
+  ledger-custody:
+    command: "python3 scripts/check-ledger-custody.py"
+    paths: ["docs/github-pr-debt-ledger.json", "scripts/pr-debt-trend.py", "scripts/gitvs.py", "scripts/diurnal.py", "scripts/check-ledger-custody.py", "institutio/governance/ledger-custody.yaml", "institutio/governance/ledger-custody-baseline.txt"]
+    owner: gitvs
+    note: "A governed measurement document is written only by its keeper: every commit touching it is a keeper ship (A), every production toucher is declared (B), every committed row is a distinct correctly-ordered census (C). tasks.yaml had this via task-writer-audit.py; the debt ledger had a convention and nothing enforcing it — five of its six observations rode in as passengers on unrelated feature PRs. Registry: institutio/governance/ledger-custody.yaml; adding a governed document is one entry."
   nomenclator:
     command: "python3 scripts/nomenclator.py"
     paths: ["spec/**", "organs/**", "organ-ladder.json", "scripts/nomenclator.py", "scripts/heartbeat-loop.sh"]
@@ -339,6 +463,108 @@ gates:
     ci_job: "pr-gate.yml:pr-gate"
     owner: governance
     note: "SENSORS registry drift: the beat's continuous-runtime sensors are declared data (sensors.yaml), the third VIGILIA axis beside GATES + PARAMETERS. Asserts schema, that every step's script exists, every gate is declared (panel or baseline), and every registry gate appears in the beat sources — a drifted sensor is a red check, not a memory chore."
+  check-diurnal:
+    command: "python3 scripts/check-diurnal.py"
+    paths: ["institutio/governance/diurnal.yaml", "scripts/check-diurnal.py", "scripts/diurnal.py"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: diurnal
+    note: "DIVRNAL registry drift: the daily emission's sections are declared data (diurnal.yaml), because the evening phase has authority to CUT one of its own sections and an auto-cut cannot edit Python source. Asserts every `render:` key resolves to a real renderer, and — the load-bearing rule — that `cuttable: true` implies both a `metric` and an `acted_when`. A cuttable section with no metric would accrue an unfalsifiable noop streak and eventually delete itself on no evidence at all, which is precisely the failure a self-pruning artifact must be unable to commit. Also holds protected ⟹ not cuttable (the cut loop must never be able to blind itself), and that `render: absent` carries a substantive reason — a declared gap beats a silent omission."
+  check-runner-coverage:
+    command: "python3 scripts/check-runner-coverage.py"
+    paths: ["institutio/governance/sensors.yaml", "institutio/governance/ideal-forms.yaml", "institutio/governance/outbound-effectors.yaml", "institutio/governance/unreachable-runners-baseline.txt", "censor/precedents.jsonl", "scripts/check-runner-coverage.py", "scripts/hooks/**", "container/launchd/**", ".github/workflows/**"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: governance
+    note: "RUNNER COVERAGE: the rest of the check-* family asks 'does the registry match the code?' — every member verifies declaration↔file parity and none asks who EXECUTES that file. metabolize.sh passes every existing check (it exists, its gate literals are present, check-sensors' F reachability check is scoped `if heartbeat in source`) while being invoked by no tracked plist, workflow, or script — so 43 sensors are declared, gated on, and have never run, and verify-whole.sh skips three rungs believing that beat covers them. This gate answers 'who runs you?' for every declared enforcement artifact: beat runners reachable from a repo-tracked entrypoint, ideal probes and effector predicates naming real scripts, hooks that claim to block actually emitting permissionDecision, and censor precedents citing scripts that exist. Reachability is proven from tracked artifacts only — the operator's live LaunchAgents are a host fact CI cannot observe. Known-open findings sit in unreachable-runners-baseline.txt; the gate fails on any NEW one."
+  paused-beat-test:
+    command: "bash scripts/tests/paused-sensing.test.sh && bash scripts/tests/paused-coherence.test.sh"
+    paths: ["scripts/heartbeat-loop.sh", "scripts/tests/paused-sensing.test.sh", "scripts/tests/paused-coherence.test.sh", "institutio/governance/parameters.yaml"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: governance
+    note: "What survives a pause. A pause withdraws the authority to act ON THE WORLD (dispatch, spend, send, merge); it was never a decision to stop LOOKING (run_monitoring) or to stop the machine keeping its own body coherent (run_release_sync). Both rungs sat BELOW the paused branch's `continue`, and both defects were invisible to any test that exercised the function in isolation — they were ordering bugs, so these fixtures are deliberately structural: they slice the paused branch and assert each rung appears before the `continue`, that each has exactly one implementation with two call sites, that each paused call keeps its escape hatch, and that the hatch is declared in the parameter panel. paused-coherence additionally carries a negative control against origin/main, because a guard test that passes on the buggy code proves nothing. paused-sensing.test.sh shipped in #1713 registered to NO gate and therefore never ran in CI — a declared-but-unwired artifact, which is the very class check-runner-coverage exists to catch; this row is its runner."
+  check-audience:
+    command: "python3 scripts/check-audience.py --check"
+    paths: ["institutio/github/estate.yaml", "institutio/github/access.yaml", "organs/consulting/constellation/registry.yaml", "scripts/check-audience.py"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: gitvs
+    note: "AUDIENCE drift: every surface faces the world, an invited collaborator, or nobody (2026-07-30 decision 4). The audience is DERIVED (public → world; private+grant → collab; else self), never stored as a third copy. --check exits 1 only on a structural BREAK — a bad enum value, or `collab` declared on a class access.yaml can never grant. Open judgments (a declared collab nobody was invited to; a partner lane also marked publish_candidate; the public-AND-granted fourth state the enum cannot express) are reported with named owners but do NOT halt the estate: holding every PR hostage to an open partner question is a worse failure than the question. --strict exits 1 on those too."
+  collaboration-operations-boundary:
+    command: "python3 scripts/check-collaboration-operations.py"
+    paths: ["institutio/collaboration-operations/**", "institutio/github/estate.yaml", "institutio/github/access.yaml", "organs/consulting/constellation/registry.yaml", "scripts/check-collaboration-operations.py"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: consulting
+    note: "The reusable collaboration-operations platform is project-neutral infrastructure, never another client lane. This predicate locks its private/no-grants/synthetic-only posture, David's mostly-complete Victoroff external references, Maddie's closed push-only lane, and Ari's transcript-vault custody gate to their typed owner registries."
+  check-plan-decisions:
+    command: "python3 scripts/check-plan-decisions.py --check"
+    paths: ["docs/plans/**", "scripts/check-plan-decisions.py"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: governance
+    note: "PLAN-DECISIONS drift: a decision recorded only in prose binds nothing. Every numbered decision under a '## Decision' heading must name where it binds — a registry path, a predicate script, a lever id, a precedent id — or write `owed:` and declare the vacuum out loud. Founded on the measured defect (PREC-2026-07-30-plan-decisions-dont-bind): the operator restated two decisions that were already committed to main in his own words, because docs/plans/ is a Tier-2 prose surface nothing reads. Pre-existing decisions sit in a shrink-only baseline; a baselined row that becomes homed, or vanishes, is itself a red check so the baseline cannot rot into a hiding place."
+  check-corpora:
+    command: "python3 scripts/check-corpora.py"
+    paths: ["institutio/governance/corpora.yaml", "institutio/governance/corpus-root-literals-baseline.txt", "scripts/check-corpora.py", "scripts/corpus_resolve.py", "scripts/constellation-dossier.py", "organs/consulting/constellation/check.py"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: governance
+    note: "CORPORA registry drift: where the conversation corpora live is declared data (corpora.yaml), the fourth axis beside GATES + PARAMETERS + SENSORS. Asserts schema, that every store root exists, that every corpus directory on disk has a row (the check that catches an undeclared corpus every declared-ids-only consumer silently drops), that nothing outside scripts/corpus_resolve.py hardcodes a corpus root (ratcheted via a literal-keyed baseline), and re-derives freshness from the store's own federation summary. Two consumers each carried their own wrong copy of these paths and the dossier tool reported an empty corpus while 371 MB sat on disk — nothing was checking."
+  check-convergence:
+    command: "python3 scripts/check-convergence.py"
+    paths: ["institutio/governance/convergence.yaml", "scripts/check-convergence.py", "docs/convergence/**"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: governance
+    note: "CONVERGENCE registry drift: one owner per capability, as declared data — the machine form of docs/convergence/*.md and the executable form of 'never build the 7th'. Asserts schema, that every owner actually resolves (in-repo path, local path, or estate-census repo), that unresolved rows are explicit counted vacuums (owner: null), and that every known duplicate carries a disposition (retire/tenant/lift). Founded on the measured baseline of ZERO cross-repo code sharing across ~310 repos."
+  check-atom-homing:
+    command: "python3 scripts/check-atom-homing.py"
+    paths: ["institutio/governance/atom-homing.yaml", "institutio/governance/atom-census.yaml", "institutio/governance/atom-residue-baseline.txt", "scripts/check-atom-homing.py", "scripts/brainstorm-harvest.py"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: governance
+    note: "ATOM-HOMING registry drift: where each kind of harvested semantic atom is allowed to land, as declared data — the sixth axis beside GATES + SENSORS + PARAMETERS + CORPORA + CONVERGENCE. Asserts schema, that every home resolves (host-aware, reusing check-convergence's resolver), completeness against the committed census, the leak rule (no extract signature and no literal atom id in the public tree — the executable form of `redacted: false ⇒ never leaves its store`), a monotonic residue ratchet, that brainstorm-harvest.py derives its kind list here instead of keeping a second copy, and that no kind fakes a home by deferring its whole population. Founded on the measured defect: of 4,099 drained atoms in 8 kinds, exactly one kind had a git-tracked owner — 3,658 had no declared home at all, resting in a `remote: none` store since cold-archived off the host."
+  check-custody:
+    command: "python3 scripts/check-custody.py"
+    paths: ["institutio/governance/custody.yaml", "institutio/governance/corpora.yaml", "scripts/check-custody.py", "scripts/reference_state.py", "docs/storage-evacuation-custody-receipts-20260727.jsonl"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: governance
+    note: "CUSTODY registry drift: for a reference ABSENT from this host, is that absence custodied or unaccounted? The eighth axis, and deliberately the narrowest — it does not ask whether a repo exists on GitHub (the estate census owns that), only whether a vanished root is provably archived. Asserts schema, that every declared custody_label appears in the committed receipts, that every archive-class root (no remote — receipts are its ONLY proof) satisfies restoration_passed + >=2 copies + independent physical devices, that every corpora.yaml store root either exists or is declared, and that a named vault's restore rail really exists in-tree. Founded on the measured defect: three predicates each carried their own copy of 'is this reference alive' and each broke differently when the 2026-07-27 evacuation archived 34 roots — check-corpora went green THROUGH absence, check-convergence read archived as deleted, check-atom-homing carried a third copy. The 87 receipts that resolve all three were already committed and read by nothing (Rule #7)."
+  check-ideal-forms:
+    command: "python3 scripts/check-ideal-forms.py"
+    paths: ["institutio/governance/ideal-forms.yaml", "scripts/check-ideal-forms.py", "scripts/check-live-checkout.py", "docs/IDEAL-FORMS-LEDGER.md"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: governance
+    note: "IDEAL-FORMS registry drift: every named ideal form with the COMMAND that measures its distance — the seventh axis beside GATES + SENSORS + PARAMETERS + CORPORA + CONVERGENCE + ATOM-HOMING. Asserts schema (and that NO row carries a hand-written distance or status — the session-streams check-F rule: there is no field to lie in), exact two-way parity with the `### IF-*` headings in the ledger, probe shape (environment enum, exactly one verdict rule, the named script exists, the extract compiles, and a cycle guard that SKIPS rather than merely reporting), the loop closing (a ledger **Status:** contradicting its own live probe is drift, not a stale note), and that every `probe: null` names its reason so an unmeasured ideal is a counted vacuum. Founded on the measured defect: the ledger carried 13 ideals with hand-written distances for 34 days while its own self-entry recorded 'not yet wired into a verification/heartbeat lane' — during which IF-LIVE-TREE-COHERENCE's distance drifted 5x (wrote 'behind 24'; measured behind 120, the fleet six days stale) and IF-SHARED-SUBSTRATE's counts went stale. A distance is now obtained by `--measure`, never by memory."
+  host-pressure-estate:
+    command: "python3 scripts/check-host-pressure-estate.py"
+    paths: ["institutio/governance/host-pressure-axes.yaml", "scripts/check-host-pressure-estate.py", "institutio/governance/sensors.yaml", "cli/src/limen/vigilia/vitals.py", "scripts/host-relief.py", "scripts/backblaze-exclusions.py", "scripts/disk-capacity.py", "scripts/claude-workflow-guard.py", "scripts/hooks/pytest-scope-guard.sh"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: vitals
+    note: "IF-HOST-PRESSURE, executably: every declared pressure axis keeps a gauge whose named symbol still exists in its source, and a valve that is ARMED-BY-DEFAULT. Deliberately NOT a pressure reading — the row sat probe:null on the correct objection that a one-shot probe would report the weather of whatever machine ran pr-gate; the ideal's own sentence is about the ESTATE ('has an executable gauge and a mechanical valve … and the gauges are watched'), which is a repo fact. So this is a ratchet: it cannot go red because the host is busy, only because a gauge was refactored away or a safety valve quietly defaulted to '0' — the SILENT-OFF class armed-valve-audit.py names, applied to the axes that actually thrash this 16 GB host. Check D asserts the watcher exists, because the 2026-07-15 stack was three individually-legitimate loads while nothing watched the watcher."
+  check-decorum:
+    command: "python3 scripts/check-decorum.py"
+    paths: ["institutio/governance/decorum-surfaces.yaml", "scripts/check-decorum.py", "scripts/decorum-keeper.py", "institutio/observatory/decorum-judgments.yaml"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: decorum
+    note: "DECORVM registry+wiring drift AND the offline egg-face gate: the professionalization keeper's sources are declared data (decorum-surfaces.yaml). Asserts registry schema + department addressability, that the keeper's own --doctor passes, the `decorum` sensor is beat-wired, the voice-judgment register pins every verdict to a content_sha256, and — the prevention — that no vendored misspelling exists in the tracked public prose (a typo cannot merge onto the front door; the network-dependent visual/experience classes stay in the continuous beat, not this gate)."
+  check-root-manifest:
+    command: "python3 scripts/check-root-manifest.py"
+    paths: ["*", "institutio/governance/root-manifest.yaml", "scripts/check-root-manifest.py", "cli/tests/test_root_manifest.py"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: governance
+    note: "ROOT-MANIFEST drift: the repo root is a curated surface, not a landing strip — every tracked top-level entry is declared in root-manifest.yaml (sanctioned, with kind/owner/why) or counted as grandfathered fat carrying its target home (or DELETE with the receipt authority). Asserts schema, exact two-way root↔registry parity via git ls-tree HEAD (committed truth — untracked bloat is the board's, e.g. #1260), and that a rehomed entry takes its row with it: deleting the row IS the receipt. The `*` path implicates the gate on any root-level change so new fat cannot land silently between full-matrix runs. Founded on the measured defect: 85 tracked root entries of which 22 were strays (a Beowulf composition kit, Shahnameh scrapers, dead one-shot patchers, an accidentally committed error.log/.coverage) — accumulated with no predicate watching the surface."
+  check-docs-manifest:
+    command: "python3 scripts/check-root-manifest.py --surface docs"
+    paths: ["docs/*", "institutio/governance/docs-manifest.yaml", "scripts/check-root-manifest.py", "cli/tests/test_root_manifest.py"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: governance
+    note: "DOCS-MANIFEST drift: docs/ top level is a curated surface, not a landing strip — same predicate as check-root-manifest, one surface below (`--surface docs` selects docs-manifest.yaml vs `git ls-tree HEAD -- docs/`). Every loose file is declared sanctioned (pinned by an exact-path consumer named in its why) or counted grandfathered fat carrying its target home; a rehomed file takes its row with it. Founded on the measured defect: 177 loose files at docs/ top level beside 17 proper subdirs, accumulated with no predicate watching the surface — the operator had to re-issue the rehoming directive across 3+ sessions because nothing red-checked a misplaced doc."
+  check-docs-exports:
+    command: "python3 scripts/check-docs-exports.py"
+    paths: ["docs/**", "institutio/governance/docs-exports.yaml", "scripts/check-docs-exports.py", "cli/tests/test_docs_exports.py"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: governance
+    note: "DOCS-EXPORTS drift: the cross-repo export program is a shrinking work-list, not a parity claim — every row names a limen doc whose SUBJECT another repo owns, and shipping the move DELETES the row. Without a predicate the two halves drift silently: the file leaves and the row lingers (a phantom work item an agent re-executes), or the row retires and the file stays (a claimed export that never happened). Checks every row's path is still tracked, every target is a real cross-repo destination or DELETE, and every declared patch-consumer is a real path. Scoped to docs/** because deleting a doc that still carries a row is exactly the drift this catches."
+  check-note-links:
+    command: "python3 scripts/check-note-links.py"
+    paths: ["**", "scripts/check-note-links.py", "institutio/governance/note-link-baseline.txt", "cli/tests/test_check_note_links.py"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: governance
+    note: "NOTE-LINK drift: a `[[wikilink]]` citation must resolve to a tracked file whose stem is that slug, or be recorded in the shrink-only note-link-baseline.txt. The `**` path implicates the gate on ANY change, the same idiom check-root-manifest uses with `*`: a citation can be introduced in any file, so path-scoping this gate would put the blind spot exactly where the defect lives. It costs ~0.4s, which is what makes always-on affordable — and `scoped: false` would have been WRONG here (that means whole-matrix-only, so a scoped push gate would never run it). Founded on the measured defect behind IF-GATEKEEPER-INERT: the root cause of the six-week `ClaudeCode.app is damaged` loop was homed in `[[macos-tcc-gatekeeper-dialogs-solved]]`, cited from FIVE registry surfaces (dialogs-silenced.sh x2, sensors.yaml, parameters.yaml, his-hand-levers.json x2) and written NOWHERE — so every session followed it, found nothing, and re-derived the root from an effector header carrying a false premise. Five cures shipped against that premise. A citation that resolves and one that dangles are byte-identical at the call site; only the filesystem knows, and nothing was asking it. Measured at introduction: 49 of 50 cited slugs dangled. The baseline can only shrink — a stale line (the note now exists) FAILS, so the ratchet cannot silently accumulate permission."
   check-mail-tiers:
     command: "python3 scripts/check-mail-tiers.py"
     paths: ["institutio/governance/mail-tiers.yaml", "scripts/check-mail-tiers.py"]
@@ -346,15 +572,40 @@ gates:
     owner: mail
     note: "MAIL-TIERS registry drift: the correspondence organ's send-tier decision is declared data (mail-tiers.yaml), the fourth VIGILIA-shaped panel. Asserts schema, well-formed no_reply suppressors, the hold-covers-{legal,money,verify_first} safety invariant that makes auto-send safe by construction, and bracket-free SAFE templates; when the UMA checkout is present it cross-checks every dangerous protocol class is held."
 
+  check-board-partition:
+    command: "python3 scripts/check-board-partition.py --check"
+    paths:
+      - "tasks.yaml"
+      - "institutio/github/estate.yaml"
+      - "organs/consulting/constellation/registry.yaml"
+      - "value-repos.json"
+      - "institutio/governance/board-partition-baseline.txt"
+      - "scripts/check-board-partition.py"
+      - "cli/src/limen/partition_lanes.py"
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: gitvs
+    note: "BOARD-PARTITION: tasks.yaml is 5.8MB, tracked, and in a PUBLIC repo — the largest published artifact in the estate and, until this gate, a consumer of no publication policy, while publication-policy.py's own doctrine already said named third parties stay off a public head. A partner lane is DERIVED (constellation register attaches a person AND estate classes it private), never a fourth list. Three finding classes: `row` (a task attributed to a partner lane), `content` (a row elsewhere naming one), and `slug` — the root cause, where the board still spells a lane with the owner it had before its 2026-07 transfer, so estate.yaml's private override misses and the organvm/** glob classes it governed_public. One repository, two names, opposite verdicts; estate.yaml:750 had written that hazard down in prose a month before it fired. Findings are baselined because agents never write the board (TABVLARIVS is its only logical writer) — the gate cannot fix what it finds, so it pins the known leak and fails on anything new. The baseline may only shrink."
+
+  check-effectors:
+    command: "python3 scripts/check-effectors.py"
+    # Both `dir/*.py` AND `dir/**/*.py` for every scanned root: in this glob dialect `**` requires
+    # at least one intervening segment, so `cli/src/limen/**/*.py` alone does NOT match
+    # cli/src/limen/dispatch.py — a direct child, and a live `gh pr merge` site. Scoping to .py
+    # (rather than `organs/**`) keeps an AST scan off markdown-only diffs.
+    paths: ["institutio/governance/outbound-effectors.yaml", "institutio/governance/ungated-effectors-baseline.txt", "scripts/check-effectors.py", "scripts/hooks/outbound-preflight-guard.py", "scripts/*.py", "cli/src/limen/*.py", "cli/src/limen/**/*.py", "mcp/*.py", "mcp/**/*.py", "ianva/*.py", "ianva/**/*.py", "organs/*.py", "organs/**/*.py"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: lifecycle
+    note: "OUTBOUND-EFFECTORS registry drift, the fifth VIGILIA-shaped panel's predicate. Class A holds declaration↔disk parity (a `predicate:` naming a file that does not exist would, because the guard fails CLOSED inside its match, deny EVERY matching action the moment the hook is armed — the live 2026-07-31 state of github.comment). Class B holds the single-capture-group bound the registry states in prose: the guard reads group(1) only, so a two-group target pattern silently discards the second half and runs the predicate against a PARTIAL target — checking the ambient repo's #N while the command addresses another repo's #N. Class C is the structural one: a PreToolUse(Bash) hook sees a COMMAND STRING, so it can never see subprocess.run([\"gh\",\"pr\",\"comment\",...]) inside a Python module — which is the form every dangerous outward action in this estate actually takes, unattended, on the beat. 24 such sites are baselined; the surface is now visible and cannot grow. A hand grep found only 17 of them (argv bound to a name, argv through a local sh() wrapper), which is why this is an AST walk and not a pattern."
+
   # ── GitHub estate (GITVS — the GitHub custodian) ────────────────────────────
   gitvs-parity:
     command: "python3 scripts/gitvs.py doctor --offline --parity-only"
-    paths: ["scripts/gitvs.py", "institutio/github/estate.yaml", "scripts/setup-rulesets.py", "scripts/reap-branches.py", "scripts/sync-marketplace-config.py"]
+    paths: ["scripts/gitvs.py", "institutio/github/estate.yaml", "institutio/github/access.yaml", "scripts/setup-rulesets.py", "scripts/reap-branches.py", "scripts/sync-marketplace-config.py"]
     owner: gitvs
     note: "The GitHub-estate registry's own drift predicate (deterministic class-H rung): schema, wiring-integrity (every status:active resource type + active integration is wired + its delegate/reap effector scripts exist — the sensor-without-effector law), required_checks name real .github/workflows jobs. Cheap + deterministic, so scoped: runs whenever its inputs change; the live A–G posture rungs run in the beat, never as a PR gate."
   gitvs-test:
     command: "bash scripts/tests/gitvs.test.sh"
-    paths: ["scripts/gitvs.py", "institutio/github/estate.yaml", "scripts/tests/gitvs.test.sh"]
+    paths: ["scripts/gitvs.py", "institutio/github/estate.yaml", "institutio/github/access.yaml", "scripts/tests/gitvs.test.sh"]
     owner: gitvs
     note: "Parity + drift fixtures for the GITVS predicate: an unwired active resource type, a bad required_check, and a missing effector script must each red the doctor; a clean estate must pass."
   sync-marketplace-config-test:
@@ -380,38 +631,52 @@ gates:
 
   # ── python estate ───────────────────────────────────────────────────────────
   ruff-lint:
-    command: "python3 -m ruff check cli/src cli/tests web/api mcp ianva"
+    command: "python3 scripts/check-ruff-pin.py && python3 -m ruff check cli/src cli/tests web/api mcp ianva"
     paths: ["cli/**", "web/api/**", "mcp/**", "ianva/**"]
     ci_job: "pr-gate.yml:pr-gate"
     owner: verify
-    note: "Lint the whole Python estate whenever any Python surface changes."
+    note: "Lint the whole Python estate whenever any Python surface changes. Version-locked to the ONE ruff pin in cli/pyproject.toml (issue #1658) — a mismatched host ruff fails loud instead of red-noising 1,300 findings."
   ruff-format:
-    command: "python3 -m ruff format --check cli/src cli/tests web/api mcp ianva"
+    command: "python3 scripts/check-ruff-pin.py && python3 -m ruff format --check cli/src cli/tests web/api mcp ianva"
     paths: ["cli/**", "web/api/**", "mcp/**", "ianva/**"]
     ci_job: "pr-gate.yml:pr-gate"
     owner: verify
-    note: "Format-check the same estate ruff-lint lints; ran unregistered in pr-gate until the scoped rewrite (issue #1048)."
+    note: "Format-check the same estate ruff-lint lints; ran unregistered in pr-gate until the scoped rewrite (issue #1048). Same #1658 version lock as ruff-lint."
   pytest-cli:
-    command: "env -u LIMEN_API_TOKEN -u LIMEN_OWNER_TOKEN -u LIMEN_CLIENT_TOKEN python3 -m pytest cli/tests -q"
-    paths: ["cli/**"]
+    command: "bash scripts/run-pytest-hermetic.sh cli/tests -q -n auto"
+    paths: ["cli/**", "his-hand-levers.json", "cloud-routines.json"]
     tier: heavy
     serialize: true
+    timeout_seconds: 1500
     ci_job: "pr-gate.yml:pr-gate"
     owner: verify
-    note: "Env-scrubbed: ambient persona tokens must not leak into test behavior. Serialized machine-wide (2026-07-15 host-thrash: two concurrent lawful verify.py runs each launched this full suite in parallel with the Backblaze crawl — the 1,200-test suite is a host-exhausting gate like the node/web estate; queueing is strictly cheaper than thrashing)."
+    note: "Env-scrubbed and no-modal: ambient persona tokens and editor configuration must not leak into test behavior. Serialized machine-wide (2026-07-15 host-thrash: two concurrent lawful verify.py runs each launched this full suite in parallel with the Backblaze crawl — the 1,200-test suite is a host-exhausting gate like the node/web estate; queueing is strictly cheaper than thrashing). -n auto is WITHIN-run xdist fan-out and orthogonal to that cross-run flock: one run at a time, that run uses the cores. THE NON-cli PATHS ARE NOT DECORATION: cli/tests asserts on root registries it does not live beside, so a change to one of them can break this suite while implicating nothing. Measured 2026-08-06 by shipping exactly that — a one-key edit to his-hand-levers.json passed verify-scoped.sh (the diff implicated no gate that runs pytest) and took main red on test_his_hand_registry.py. The full dependency set is `grep -o 'ROOT / \"<file>\"' cli/tests/*.py`: his-hand-levers.json, cloud-routines.json, and tasks.yaml. tasks.yaml is DELIBERATELY excluded — it is the board fast lane (see deploy_triggers) and publishes constantly; its shape is held by tasks-parse + task-board instead, and routing every board publish through a 10-minute suite would trade this defect for a worse one."
+  vendor-insights-test:
+    command: "bash scripts/run-pytest-hermetic.sh cli/tests/test_vendor_insights.py -q"
+    paths:
+      [
+        "scripts/vendor-insights.py",
+        "scripts/insight-cross-vendor-ingest.py",
+        "cli/tests/test_vendor_insights.py",
+        ".claude/skills/vendor-insights/SKILL.md",
+      ]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: censor
+    note: "The /vendor-insights engine's adapter tests, which NOTHING scoped ran before this row existed: pytest-cli's paths are cli/** plus root registries, so editing scripts/vendor-insights.py implicated no test at all — the same declared-but-unwired class check-runner-coverage exists to catch. Cheap tier: one file, hermetic, no xdist."
   pytest-api:
-    command: "env -u LIMEN_API_TOKEN -u LIMEN_OWNER_TOKEN -u LIMEN_CLIENT_TOKEN python3 -m pytest web/api/tests -q"
+    command: "bash scripts/run-pytest-hermetic.sh web/api/tests -q"
     paths: ["web/api/**", "cli/**"]
     tier: heavy
     serialize: true
+    timeout_seconds: 900
     ci_job: "pr-gate.yml:pr-gate"
     owner: verify
     note: "web/api imports limen — a cli change implicates the API suite too. Serialized machine-wide with pytest-cli (same 2026-07-15 rationale)."
 
   # ── node/web estate (the host-exhausting gates; serialized machine-wide) ────
   web-build:
-    command: "bash -c 'cd web/app && npm run generate:data && npm run build' && node scripts/validate-contract-schemas.mjs"
-    paths: ["web/app/**", "spec/**"]
+    command: "bash -c 'cd web/app && npm run generate:data && npm run build' && python3 scripts/assemble-dashboard-data.py --app web/app && node web/app/scripts/validate-exported-pages.mjs && node scripts/validate-contract-schemas.mjs"
+    paths: ["web/app/**", "spec/**", "scripts/assemble-dashboard-data.py", "scripts/tests/test_assemble_dashboard_data.py"]
     tier: heavy
     serialize: true
     ci_job: "ci.yml:web"
@@ -477,3 +742,11 @@ gates:
     ci_job: "pr-gate.yml:pr-gate"
     owner: identity
     note: "A form-filler may only consume personal-fact classes the registry HOMES. An un-homed atom in a CONSUMES manifest is RED before any fill — the phi.pdf chat-ask defect killed at the root."
+
+  # ── STREAMS registry drift net (the work-domain graph) ──────────────────────
+  session-streams-drift:
+    command: "python3 scripts/check-session-streams.py"
+    paths: ["institutio/governance/session-streams.yaml", "docs/continuations/*/intent.md", "scripts/check-session-streams.py", "organs/consulting/constellation/registry.yaml", "organs/consulting/constellation/derive-streams.py"]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: governance
+    note: "Work-domain graph self-coherence: acyclic requires/unblocks, intent files exist, predicate_status matches reality BOTH ways, no hand-written state (the ready-set is derived from git, so there is no field to lie in). Caught the plans doc claiming repo-genesis.py was still to-be-built when PR #1535 had already shipped it."

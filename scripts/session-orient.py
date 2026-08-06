@@ -33,6 +33,7 @@ ROOT = Path(os.environ.get("LIMEN_ROOT") or Path(__file__).resolve().parents[1])
 # The auto-memory index lives outside the repo (per-user projects dir); resolve it from
 # this repo's identity so the lookup is derived, never pinned to a machine path.
 MEMORY_INDEX = Path.home() / ".claude" / "projects" / "-Users-4jp-Workspace-limen" / "memory" / "MEMORY.md"
+TERMINAL_LEVER_STATUSES = {"discharged", "retired", "done", "closed"}
 
 
 def _read_text(path, limit_bytes=None):
@@ -58,6 +59,11 @@ def _trunc(s, n):
     return s if len(s) <= n else s[: n - 1].rstrip() + "…"
 
 
+def _lever_is_closed(lever):
+    """Read both the legacy flag and the normalized free-text lifecycle field."""
+    return bool(lever.get("discharged")) or str(lever.get("status", "")).strip().lower() in TERMINAL_LEVER_STATUSES
+
+
 # ── sections ──────────────────────────────────────────────────────────────────
 
 
@@ -81,7 +87,7 @@ def section_levers():
     levers = d.get("levers") if isinstance(d, dict) else (d if isinstance(d, list) else [])
     if not isinstance(levers, list):
         return ""
-    levers = [lev for lev in levers if isinstance(lev, dict) and not lev.get("discharged")]
+    levers = [lev for lev in levers if isinstance(lev, dict) and not _lever_is_closed(lev)]
     if not levers:
         return ""
     ids = [str(lev.get("id") or lev.get("label", "?")) for lev in levers]
@@ -293,9 +299,49 @@ def section_autonomy() -> str:
     return line
 
 
+def section_phase() -> str:
+    """Name the phase the session OPENS in, and the one command that closes the chain.
+
+    `.claude/settings.json` sets `permissions.defaultMode: "plan"` — the entry binding for
+    session-phases.yaml's `plan` phase (stage SHAPE), which shipped advisory-only in Phase 1.
+    A settings default is invisible unless something says it out loud, and a session that
+    doesn't know it is in the plan phase reads the read-only refusals as a malfunction.
+    Also surfaces any plan whose chain is still open, so `PR: (pending)` is a state someone
+    sees rather than a state that accumulates. Silent if the entry binding is not in effect."""
+    try:
+        settings = json.loads((ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    if (settings.get("permissions") or {}).get("defaultMode") != "plan":
+        return ""
+
+    line = (
+        "**Phase** — opens in PLAN (entry-bound; shift+tab or ExitPlanMode to build) · "
+        "chain: `scripts/session-plan.py open <slug> --title '...'` → plan + issue + PR"
+    )
+    try:
+        out = subprocess.run(
+            ["python3", str(ROOT / "scripts" / "session-plan.py"), "audit", "--json"],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        rows = json.loads(out.stdout) if out.returncode == 0 else []
+        pending = [r for r in rows if not r.get("baselined") and r.get("pr_pending") and not r.get("status")]
+        if pending:
+            names = ", ".join(Path(r["plan"]).stem for r in pending[:3])
+            more = f" +{len(pending) - 3} more" if len(pending) > 3 else ""
+            line += f"\n  plans awaiting an implementing PR: {names}{more}"
+    except Exception:
+        pass
+    return line
+
+
 def main():
     sections = (
         section_north_star,
+        section_phase,
         section_autonomy,
         section_omega,
         section_handoff,

@@ -18,9 +18,22 @@ set -euo pipefail
 #   6. --skip-ci-covered JOB → a gate whose ci_job mirror is a DIFFERENT workflow
 #      job defers (its own workflow runs on the same PR; merge-policy holds on red),
 #      while gates with no mirror or with the running job's mirror still run.
+#   7. LIMEN_VERIFY_NO_DEPLOY_ESCALATION=1 + --require-base + deploy-trigger hit →
+#      stays scoped (never execs the whole matrix), prints the suppression receipt,
+#      and still ends with the website-sensitive NOTE (merge-policy owns the full
+#      matrix pre-merge). The default (env unset) keeps escalating — fixture 4.
 #
 # Hermetic: verify.py resolves ROOT from its own location, so copying it into a
 # throwaway git repo with a minimal fixture registry sandboxes every run.
+#
+# Hermetic in ENV too: pr-gate's PR step exports the verify-family env (REQUIRE_BASE,
+# NO_DEPLOY_ESCALATION, NO_LOCK) for its own scoped run, and this test runs INSIDE
+# that step whenever verify.py changes — ambient values would silently flip what a
+# fixture exercises (fixture 4 escalates only when NO_DEPLOY_ESCALATION is unset).
+# Each fixture sets exactly the env it tests; everything ambient is stripped here.
+
+unset LIMEN_VERIFY_REQUIRE_BASE LIMEN_VERIFY_NO_DEPLOY_ESCALATION \
+  LIMEN_VERIFY_WHOLE_CMD LIMEN_VERIFY_NO_LOCK LIMEN_VERIFY_LOCK_FILE
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 fails=0
@@ -61,7 +74,7 @@ YAML
   touch "$dir/src/.keep" "$dir/web/app/.keep" "$dir/webish/.keep"
   git -C "$dir" init -q -b main
   git -C "$dir" -c user.email=t@t -c user.name=t add -A
-  git -C "$dir" -c user.email=t@t -c user.name=t commit -qm base
+  git -C "$dir" -c user.email=t@t -c user.name=t -c commit.gpgsign=false commit -qm base
   echo "$dir"
 }
 
@@ -69,7 +82,7 @@ commit_touch() { # sandbox path — commit a one-file change on top of base
   local dir="$1" path="$2"
   echo x >"$dir/$path"
   git -C "$dir" -c user.email=t@t -c user.name=t add "$path"
-  git -C "$dir" -c user.email=t@t -c user.name=t commit -qm "touch $path"
+  git -C "$dir" -c user.email=t@t -c user.name=t -c commit.gpgsign=false commit -qm "touch $path"
 }
 
 # ── 1: unresolvable merge-base fails closed (flag and env forms) ───────────────
@@ -141,7 +154,7 @@ out="$(python3 "$sb/scripts/verify.py" --changed --integration 2>&1)" \
 git -C "$sb" switch -qc competing-base "$base_sha"
 echo x >"$sb/src/competing.txt"
 git -C "$sb" -c user.email=t@t -c user.name=t add src/competing.txt
-git -C "$sb" -c user.email=t@t -c user.name=t commit -qm "competing base"
+git -C "$sb" -c user.email=t@t -c user.name=t -c commit.gpgsign=false commit -qm "competing base"
 competing_sha="$(git -C "$sb" rev-parse HEAD)"
 git -C "$sb" switch -q main
 out="$(python3 "$sb/scripts/verify.py" --changed --base "$competing_sha" --integration 2>&1)" \
@@ -174,6 +187,20 @@ out="$(python3 "$sb/scripts/verify.py" --changed --base "$base_sha" --require-ba
 [[ -f "$sb/ran-runs-here" && -f "$sb/ran-own-job" ]] \
   && pass own-job-still-runs \
   || flunk own-job-still-runs "unmirrored/own-job gates were skipped: $out"
+
+# ── 7: PR-lane opt-out — deploy diff stays scoped, never execs the matrix ──────
+sb="$(make_sandbox)"
+base_sha="$(git -C "$sb" rev-parse HEAD)"
+commit_touch "$sb" web/app/page.txt
+printf '#!/usr/bin/env bash\ntouch "%s/whole-ran"\n' "$sb" >"$sb/whole-marker.sh"
+out="$(LIMEN_VERIFY_WHOLE_CMD="$sb/whole-marker.sh" LIMEN_VERIFY_NO_DEPLOY_ESCALATION=1 \
+       python3 "$sb/scripts/verify.py" --changed --base "$base_sha" --require-base 2>&1)" \
+  || flunk no-escalation-optout "suppressed run exited non-zero: $out"
+[[ ! -f "$sb/whole-ran" ]] \
+  && grep -q "escalation suppressed" <<<"$out" \
+  && grep -q "website-sensitive" <<<"$out" \
+  && pass no-escalation-optout \
+  || flunk no-escalation-optout "whole matrix ran or suppression receipt missing: $out"
 
 if ((fails)); then
   printf '\nverify-ci-hardening: %d case(s) FAILED\n' "$fails"

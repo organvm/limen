@@ -43,18 +43,38 @@ DEFAULT_WINDOW_DAYS = 30
 VENDOR_REGISTRY = {
     "claude": {
         "path": HOME / ".claude" / "projects",
+        # 2026-08: the estate migrated — live transcripts now land per-workspace under
+        # <workspace>/.agent-runtime/claude/projects/. The legacy path holds history only;
+        # adapters must walk BOTH (observed: legacy dir has zero JSONL newer than the window).
+        "extra_root_globs": [str(HOME / "Workspace" / "*" / ".agent-runtime" / "claude" / "projects")],
         "dormant": False,
-        "description": "Claude Code session JSONL transcripts",
+        "description": "Claude Code session JSONL transcripts (legacy ~/.claude/projects + per-workspace .agent-runtime roots)",
     },
     "codex": {
         "path": HOME / ".local" / "share" / "codex" / "history.jsonl",
+        # Full transcripts live in rollout JSONL files (recon 2026-08-06): one file per
+        # session, date-partitioned, plus a flat archive. history.jsonl is only the
+        # cross-session user-prompt log. Consumed by scripts/vendor-insights.py.
+        "sessions_roots": [
+            str(HOME / ".codex" / "sessions"),
+            str(HOME / ".codex" / "archived_sessions"),
+        ],
         "dormant": False,
-        "description": "Codex history JSONL",
+        "description": "Codex history JSONL + rollout session transcripts under ~/.codex",
     },
     "opencode": {
         "path": HOME / ".local" / "share" / "opencode" / "opencode.db",
         "dormant": False,
         "description": "OpenCode SQLite session store",
+    },
+    "copilot": {
+        "path": HOME / ".copilot" / "session-store.db",
+        # session-store.db is a thin cache (recon 2026-08-06: 10 sessions/22 turns vs
+        # 25k+ events in the per-session store). The authoritative transcripts live in
+        # session-state/<sid>/{workspace.yaml,events.jsonl}. Consumed by vendor-insights.
+        "session_state_root": str(HOME / ".copilot" / "session-state"),
+        "dormant": False,
+        "description": "GitHub Copilot CLI: session-store.db cache + session-state/<sid>/ transcripts",
     },
     "antigravity": {
         "path": HOME / ".gemini" / "antigravity-cli",
@@ -65,6 +85,15 @@ VENDOR_REGISTRY = {
         "path": HOME / ".cline" / "data",
         "dormant": False,
         "description": "Cline data directory (minimal session signals)",
+    },
+    "gemini": {
+        # Gemini CLI proper (NOT antigravity, which shares ~/.gemini): one JSONL per
+        # session under tmp/<project-slug>/chats/, cwd via tmp/<slug>/.project_root.
+        # Added 2026-08-06 — this estate was silent in the registry, violating the
+        # "every vendor must appear here" rule above.
+        "path": HOME / ".gemini" / "tmp",
+        "dormant": False,
+        "description": "Gemini CLI session JSONL under ~/.gemini/tmp/<project>/chats/",
     },
     "jules": {
         "path": HOME / ".jules",
@@ -90,13 +119,30 @@ def _atomic_write(path: Path, text: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Adapter: Claude Code — ~/.claude/projects/ JSONL sessions
+# Adapter: Claude Code — legacy ~/.claude/projects/ + per-workspace
+# <workspace>/.agent-runtime/claude/projects/ JSONL sessions
 # ---------------------------------------------------------------------------
 
+
+def claude_estate_roots() -> list[Path]:
+    """Every directory whose children are claude project dirs holding session JSONL.
+
+    Single source for the migrated layout: legacy root plus each workspace's
+    .agent-runtime root (extra_root_globs on the registry entry). Shared with
+    scripts/vendor-insights.py — change the registry entry, never a caller."""
+    import glob as _glob
+
+    meta = VENDOR_REGISTRY["claude"]
+    roots = [meta["path"]] if meta["path"].is_dir() else []
+    for pattern in meta.get("extra_root_globs", []):
+        roots.extend(Path(p) for p in sorted(_glob.glob(pattern)) if Path(p).is_dir())
+    return roots
+
+
 def _ingest_claude(window_start: datetime) -> dict:
-    root = VENDOR_REGISTRY["claude"]["path"]
-    if not root.is_dir():
-        return _empty_packet("claude", window_start, ["estate directory not found"])
+    roots = claude_estate_roots()
+    if not roots:
+        return _empty_packet("claude", window_start, ["no estate roots found (legacy + .agent-runtime globs)"])
 
     sessions_seen = 0
     error_count = 0
@@ -105,13 +151,21 @@ def _ingest_claude(window_start: datetime) -> dict:
     total_turns = 0
     # Correction keywords — checked per line (no DOTALL), case-insensitive fast scan
     CORRECTION_SUBSTRINGS = (
-        "that's wrong", "not right", "incorrect", "actually,", "wait,",
-        "nevermind", "try again", "wrong approach", "undo that", "revert that",
+        "that's wrong",
+        "not right",
+        "incorrect",
+        "actually,",
+        "wait,",
+        "nevermind",
+        "try again",
+        "wrong approach",
+        "undo that",
+        "revert that",
     )
     MAX_SESSIONS = 500  # hard cap to prevent runaway I/O on 1316 project dirs
     # Each project dir contains JSONL files directly.
     # Fast path: use os.scandir + stat for mtime pre-filter on project dirs.
-    project_dirs = list(root.iterdir()) if root.is_dir() else []
+    project_dirs = [d for r in roots for d in r.iterdir()]
     for proj_dir in project_dirs:
         if not proj_dir.is_dir():
             continue
@@ -165,18 +219,40 @@ def _ingest_claude(window_start: datetime) -> dict:
         "other": 0,
     }
     PERMISSION_PAT = (
-        "permission denied", "permissiondenied", "eperm", "operation not permitted",
-        "permission_error", "permission-error", "allowlist", "allow_list",
-        "not allowed", "not permitted", "denied",
+        "permission denied",
+        "permissiondenied",
+        "eperm",
+        "operation not permitted",
+        "permission_error",
+        "permission-error",
+        "allowlist",
+        "allow_list",
+        "not allowed",
+        "not permitted",
+        "denied",
     )
     FILE_PAT = (
-        "no such file", "enoent", "file not found", "not found", "does not exist",
-        "cannot find", "no_such_file",
+        "no such file",
+        "enoent",
+        "file not found",
+        "not found",
+        "does not exist",
+        "cannot find",
+        "no_such_file",
     )
     NETWORK_PAT = (
-        "timeout", "timed out", "econnrefused", "econnreset", "network", "etimedout",
-        "connection refused", "connection reset", "socket", "mcp",
-        "fetch failed", "failed to fetch",
+        "timeout",
+        "timed out",
+        "econnrefused",
+        "econnreset",
+        "network",
+        "etimedout",
+        "connection refused",
+        "connection reset",
+        "socket",
+        "mcp",
+        "fetch failed",
+        "failed to fetch",
     )
     BASH_EXIT_PAT = ("exit code", "exit status", "exited with", "non-zero", "error code", "returned")
     PARSE_PAT = ("parse error", "json", "invalid", "syntax error", "unexpected token", "decode")
@@ -233,25 +309,31 @@ def _ingest_claude(window_start: datetime) -> dict:
 
     friction_signals = []
     if error_count > 0:
-        friction_signals.append({
-            "signal": "tool_errors",
-            "count": error_count,
-            "description": f"{error_count} tool_result errors across {sessions_seen} sessions in window",
-            # D-gap-2 classification (counts only; no text stored)
-            "classification": error_class,
-        })
+        friction_signals.append(
+            {
+                "signal": "tool_errors",
+                "count": error_count,
+                "description": f"{error_count} tool_result errors across {sessions_seen} sessions in window",
+                # D-gap-2 classification (counts only; no text stored)
+                "classification": error_class,
+            }
+        )
     if correction_count > 0:
-        friction_signals.append({
-            "signal": "user_corrections",
-            "count": correction_count,
-            "description": f"{correction_count} apparent user-correction turns detected",
-        })
+        friction_signals.append(
+            {
+                "signal": "user_corrections",
+                "count": correction_count,
+                "description": f"{correction_count} apparent user-correction turns detected",
+            }
+        )
     if stall_count > 0:
-        friction_signals.append({
-            "signal": "stall_sessions",
-            "count": stall_count,
-            "description": f"{stall_count} sessions with few turns relative to file size (stall indicator)",
-        })
+        friction_signals.append(
+            {
+                "signal": "stall_sessions",
+                "count": stall_count,
+                "description": f"{stall_count} sessions with few turns relative to file size (stall indicator)",
+            }
+        )
 
     notable_patterns = []
     if sessions_seen > 0 and total_turns > 0:
@@ -276,6 +358,7 @@ def _ingest_claude(window_start: datetime) -> dict:
 # ---------------------------------------------------------------------------
 # Adapter: Codex — ~/.local/share/codex/history.jsonl
 # ---------------------------------------------------------------------------
+
 
 def _ingest_codex(window_start: datetime) -> dict:
     path = VENDOR_REGISTRY["codex"]["path"]
@@ -316,11 +399,13 @@ def _ingest_codex(window_start: datetime) -> dict:
 
     friction_signals = []
     if abandon_count > 0:
-        friction_signals.append({
-            "signal": "single_entry_sessions",
-            "count": abandon_count,
-            "description": f"{abandon_count} sessions with only one history entry (likely abandoned)",
-        })
+        friction_signals.append(
+            {
+                "signal": "single_entry_sessions",
+                "count": abandon_count,
+                "description": f"{abandon_count} sessions with only one history entry (likely abandoned)",
+            }
+        )
 
     avg_entries = total_entries / sessions_seen if sessions_seen else 0
     notable_patterns = [f"avg_history_entries_per_session: {avg_entries:.1f}"]
@@ -343,6 +428,7 @@ def _ingest_codex(window_start: datetime) -> dict:
 # ---------------------------------------------------------------------------
 # Adapter: OpenCode — ~/.local/share/opencode/opencode.db SQLite
 # ---------------------------------------------------------------------------
+
 
 def _ingest_opencode(window_start: datetime) -> dict:
     db_path = VENDOR_REGISTRY["opencode"]["path"]
@@ -468,29 +554,35 @@ def _ingest_opencode(window_start: datetime) -> dict:
 
     friction_signals = []
     if zero_cost_count > 0:
-        friction_signals.append({
-            "signal": "zero_cost_sessions",
-            "count": zero_cost_count,
-            "description": f"{zero_cost_count} sessions with $0 cost (likely errored or empty)",
-        })
+        friction_signals.append(
+            {
+                "signal": "zero_cost_sessions",
+                "count": zero_cost_count,
+                "description": f"{zero_cost_count} sessions with $0 cost (likely errored or empty)",
+            }
+        )
     if error_part_count > 0:
-        friction_signals.append({
-            "signal": "error_parts",
-            "count": error_part_count,
-            "description": f"{error_part_count} message parts contain 'error' substring",
-        })
+        friction_signals.append(
+            {
+                "signal": "error_parts",
+                "count": error_part_count,
+                "description": f"{error_part_count} message parts contain 'error' substring",
+            }
+        )
     if abandoned_count > 0:
-        friction_signals.append({
-            "signal": "rapid_abandon_sessions",
-            "count": abandoned_count,
-            "description": f"{abandoned_count} sessions updated within 30s of creation (rapid abandon)",
-            # D-gap-1 classification (counts only; no text stored)
-            "classification": {
-                "empty_shell": abandon_empty_shell,
-                "aborted_after_content": abandon_aborted_after_content,
-                "completed_fast": abandon_completed_fast,
-            },
-        })
+        friction_signals.append(
+            {
+                "signal": "rapid_abandon_sessions",
+                "count": abandoned_count,
+                "description": f"{abandoned_count} sessions updated within 30s of creation (rapid abandon)",
+                # D-gap-1 classification (counts only; no text stored)
+                "classification": {
+                    "empty_shell": abandon_empty_shell,
+                    "aborted_after_content": abandon_aborted_after_content,
+                    "completed_fast": abandon_completed_fast,
+                },
+            }
+        )
 
     notable_patterns = []
     if sessions_seen > 0:
@@ -512,9 +604,7 @@ def _ingest_opencode(window_start: datetime) -> dict:
 
     quality_notes.append(f"All queries bounded with LIMIT; window filter on time_created >= {window_ms}")
     quality_notes.append("Data field (JSON blob) not parsed — pattern match only for error detection")
-    quality_notes.append(
-        "D-gap-1 classification: token/message presence only; no message text read (PII firewall)"
-    )
+    quality_notes.append("D-gap-1 classification: token/message presence only; no message text read (PII firewall)")
 
     return {
         "vendor": "opencode",
@@ -529,6 +619,7 @@ def _ingest_opencode(window_start: datetime) -> dict:
 # ---------------------------------------------------------------------------
 # Adapter: Antigravity/Gemini — ~/.gemini/antigravity-cli/
 # ---------------------------------------------------------------------------
+
 
 def _ingest_antigravity(window_start: datetime) -> dict:
     root = VENDOR_REGISTRY["antigravity"]["path"]
@@ -620,17 +711,21 @@ def _ingest_antigravity(window_start: datetime) -> dict:
             con.close()
 
             if killed_count > 0:
-                friction_signals.append({
-                    "signal": "killed_conversations",
-                    "count": killed_count,
-                    "description": f"{killed_count} conversations were killed (user-interrupted or timed-out)",
-                })
+                friction_signals.append(
+                    {
+                        "signal": "killed_conversations",
+                        "count": killed_count,
+                        "description": f"{killed_count} conversations were killed (user-interrupted or timed-out)",
+                    }
+                )
             if single_step_count > 0:
-                friction_signals.append({
-                    "signal": "single_step_conversations",
-                    "count": single_step_count,
-                    "description": f"{single_step_count} conversations with <=1 step (likely abandoned)",
-                })
+                friction_signals.append(
+                    {
+                        "signal": "single_step_conversations",
+                        "count": single_step_count,
+                        "description": f"{single_step_count} conversations with <=1 step (likely abandoned)",
+                    }
+                )
             if avg_steps > 0:
                 notable_patterns.append(f"avg_steps_per_conversation: {avg_steps:.1f}")
 
@@ -665,6 +760,7 @@ def _ingest_antigravity(window_start: datetime) -> dict:
 # ---------------------------------------------------------------------------
 # Adapter: Cline — ~/.cline/data/ minimal signals
 # ---------------------------------------------------------------------------
+
 
 def _ingest_cline(window_start: datetime) -> dict:
     root = VENDOR_REGISTRY["cline"]["path"]
@@ -720,17 +816,21 @@ def _ingest_cline(window_start: datetime) -> dict:
     sessions_seen = workspace_count  # best proxy available
 
     if error_log_lines > 0:
-        friction_signals.append({
-            "signal": "log_errors",
-            "count": error_log_lines,
-            "description": f"{error_log_lines} error/fatal level log entries",
-        })
+        friction_signals.append(
+            {
+                "signal": "log_errors",
+                "count": error_log_lines,
+                "description": f"{error_log_lines} error/fatal level log entries",
+            }
+        )
     if debug_auth_failures > 0:
-        friction_signals.append({
-            "signal": "auth_failures",
-            "count": debug_auth_failures,
-            "description": f"{debug_auth_failures} authentication-related log messages",
-        })
+        friction_signals.append(
+            {
+                "signal": "auth_failures",
+                "count": debug_auth_failures,
+                "description": f"{debug_auth_failures} authentication-related log messages",
+            }
+        )
 
     notable_patterns.append(f"workspace_count: {workspace_count}")
     notable_patterns.append(f"total_log_lines_in_window: {log_lines}")
@@ -748,8 +848,193 @@ def _ingest_cline(window_start: datetime) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Adapter: GitHub Copilot CLI — ~/.copilot/session-store.db SQLite
+# ---------------------------------------------------------------------------
+#
+# Store shape (v1.0.x): the live session data lives in session-store.db, NOT
+# data.db (data.db.sessions is empty by design — it holds project/workspace
+# metadata; the session-store is authoritative). Three tables carry signal:
+#   sessions               (id, repository, branch, created_at, updated_at)  — datetime('now') text
+#   turns                  (session_id, turn_index, timestamp)               — user↔assistant pairs
+#   assistant_usage_events (session_id, model, *_tokens, total_nano_aiu,
+#                           duration_ms, time_to_first_token_ms, finish_reason,
+#                           content_filter_triggered)                        — per-model-call rows
+#
+# PII firewall: we read integer/enum columns only (token counts, timestamps,
+# finish_reason enum, content_filter flag, model id). We NEVER read the text
+# columns turns.user_message / turns.assistant_response / sessions.summary.
+
+
+def _ingest_copilot(window_start: datetime) -> dict:
+    db_path = VENDOR_REGISTRY["copilot"]["path"]
+    if not db_path.exists():
+        return _empty_packet("copilot", window_start, ["session-store.db not found"])
+
+    # sessions.created_at is SQLite datetime('now') → "YYYY-MM-DD HH:MM:SS" (UTC).
+    # Lexical string comparison on this ISO-like format is a correct window filter.
+    window_iso = window_start.strftime("%Y-%m-%d %H:%M:%S")
+    quality_notes: list[str] = []
+
+    try:
+        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=10)
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+
+        # Session count in window
+        cur.execute("SELECT COUNT(*) FROM sessions WHERE created_at >= ? LIMIT 1", (window_iso,))
+        sessions_seen = int(cur.fetchone()[0] or 0)
+
+        # Turn totals + single-turn (abandon) sessions in window, bounded
+        cur.execute(
+            """
+            SELECT COUNT(*) AS turn_total FROM turns
+            WHERE session_id IN (SELECT id FROM sessions WHERE created_at >= ? LIMIT 5000)
+            LIMIT 1
+            """,
+            (window_iso,),
+        )
+        turn_total = int(cur.fetchone()[0] or 0)
+
+        cur.execute(
+            """
+            SELECT COUNT(*) FROM sessions s
+            WHERE s.created_at >= ?
+            AND (SELECT COUNT(*) FROM turns t WHERE t.session_id = s.id) <= 1
+            LIMIT 1
+            """,
+            (window_iso,),
+        )
+        single_turn_count = int(cur.fetchone()[0] or 0)
+
+        # Usage-event aggregates for in-window sessions (bounded subquery)
+        cur.execute(
+            """
+            SELECT
+                COALESCE(SUM(input_tokens), 0)  AS in_tok,
+                COALESCE(SUM(output_tokens), 0) AS out_tok,
+                COALESCE(SUM(total_nano_aiu), 0) AS nano_aiu,
+                AVG(duration_ms)                AS avg_dur,
+                AVG(time_to_first_token_ms)     AS avg_ttft,
+                COALESCE(SUM(content_filter_triggered), 0) AS cf_hits,
+                COUNT(*)                        AS event_count
+            FROM assistant_usage_events
+            WHERE session_id IN (SELECT id FROM sessions WHERE created_at >= ? LIMIT 5000)
+            LIMIT 1
+            """,
+            (window_iso,),
+        )
+        row = cur.fetchone()
+        total_input_tokens = int(row["in_tok"] or 0)
+        total_output_tokens = int(row["out_tok"] or 0)
+        total_nano_aiu = int(row["nano_aiu"] or 0)
+        avg_duration_ms = float(row["avg_dur"] or 0)
+        avg_ttft_ms = float(row["avg_ttft"] or 0)
+        content_filter_hits = int(row["cf_hits"] or 0)
+        event_count = int(row["event_count"] or 0)
+
+        # finish_reason distribution (enum only, no text). 'stop'/'tool_calls'/
+        # 'tool_use' are normal terminations; everything else (length,
+        # content_filter, error, …) is an abnormal finish = friction.
+        cur.execute(
+            """
+            SELECT finish_reason, COUNT(*) AS cnt
+            FROM assistant_usage_events
+            WHERE session_id IN (SELECT id FROM sessions WHERE created_at >= ? LIMIT 5000)
+            GROUP BY finish_reason
+            ORDER BY cnt DESC
+            LIMIT 20
+            """,
+            (window_iso,),
+        )
+        finish_dist: dict[str, int] = {}
+        normal_finish = {"stop", "tool_calls", "tool_use", "end_turn", None, ""}
+        abnormal_finish_count = 0
+        for r in cur.fetchall():
+            fr = r["finish_reason"]
+            finish_dist[str(fr)] = int(r["cnt"] or 0)
+            if fr not in normal_finish:
+                abnormal_finish_count += int(r["cnt"] or 0)
+
+        # Model distribution (top-10)
+        cur.execute(
+            """
+            SELECT model, COUNT(*) AS cnt
+            FROM assistant_usage_events
+            WHERE session_id IN (SELECT id FROM sessions WHERE created_at >= ? LIMIT 5000)
+              AND model IS NOT NULL
+            GROUP BY model ORDER BY cnt DESC LIMIT 10
+            """,
+            (window_iso,),
+        )
+        model_dist = {r["model"]: r["cnt"] for r in cur.fetchall()}
+
+        con.close()
+
+    except sqlite3.Error as e:
+        return _empty_packet("copilot", window_start, [f"SQLite error: {type(e).__name__}"])
+
+    friction_signals = []
+    if single_turn_count > 0:
+        friction_signals.append(
+            {
+                "signal": "single_turn_sessions",
+                "count": single_turn_count,
+                "description": f"{single_turn_count} sessions with <=1 turn (opened then abandoned)",
+            }
+        )
+    if abnormal_finish_count > 0:
+        friction_signals.append(
+            {
+                "signal": "abnormal_finish_reasons",
+                "count": abnormal_finish_count,
+                "description": f"{abnormal_finish_count} model calls ended on a non-normal finish_reason "
+                f"(length/content_filter/error)",
+                "classification": finish_dist,
+            }
+        )
+    if content_filter_hits > 0:
+        friction_signals.append(
+            {
+                "signal": "content_filter_triggered",
+                "count": content_filter_hits,
+                "description": f"{content_filter_hits} model calls tripped the content filter",
+            }
+        )
+
+    notable_patterns = []
+    if sessions_seen > 0:
+        avg_turns = turn_total / sessions_seen
+        notable_patterns.append(f"avg_turns_per_session: {avg_turns:.1f}")
+    if event_count > 0:
+        notable_patterns.append(f"total_tokens: input={total_input_tokens} output={total_output_tokens}")
+        notable_patterns.append(f"total_nano_aiu: {total_nano_aiu} (Copilot AI-unit cost proxy)")
+        notable_patterns.append(f"avg_response_latency_ms: ttft={avg_ttft_ms:.0f} duration={avg_duration_ms:.0f}")
+        if model_dist:
+            top_model = max(model_dist, key=model_dist.get)
+            notable_patterns.append(f"top_model: {top_model} ({model_dist[top_model]} calls)")
+    if sessions_seen > 0 and single_turn_count / sessions_seen > 0.4:
+        notable_patterns.append("HIGH single-turn rate: >40% of sessions abandoned after one turn")
+
+    quality_notes.append(f"session-store.db queried read-only; window filter created_at >= '{window_iso}'")
+    quality_notes.append("data.db.sessions is empty by design — session-store.db is the live store")
+    quality_notes.append(
+        "Text columns (turns.user_message/assistant_response, sessions.summary) NOT read (PII firewall)"
+    )
+
+    return {
+        "vendor": "copilot",
+        "description": VENDOR_REGISTRY["copilot"]["description"],
+        "sessions_seen": sessions_seen,
+        "friction_signals": friction_signals,
+        "notable_patterns": notable_patterns,
+        "data_quality_notes": quality_notes,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _empty_packet(vendor: str, window_start: datetime, notes: list[str]) -> dict:
     return {
@@ -776,19 +1061,91 @@ def _make_packet(vendor: str, window_days: int, window_start: datetime, run_at: 
 # Main
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Adapter: Gemini CLI — ~/.gemini/tmp/<project-slug>/chats/session-*.jsonl
+# (one JSONL per session; message lines carry type 'user' | 'gemini')
+# ---------------------------------------------------------------------------
+
+
+def _ingest_gemini(window_start: datetime) -> dict:
+    root = VENDOR_REGISTRY["gemini"]["path"]
+    if not root.is_dir():
+        return _empty_packet("gemini", window_start, ["~/.gemini/tmp not found"])
+
+    sessions_seen = 0
+    user_msgs = 0
+    gemini_msgs = 0
+    no_reply_sessions = 0
+    for chat in root.glob("*/chats/session-*.jsonl"):
+        try:
+            mtime = datetime.fromtimestamp(chat.stat().st_mtime, tz=timezone.utc)
+            if mtime < window_start:
+                continue
+            sessions_seen += 1
+            file_user = 0
+            file_gemini = 0
+            # Line-by-line substring scan — same fast approximate idiom as _ingest_claude.
+            with chat.open(encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    if '"type": "user"' in line or '"type":"user"' in line:
+                        file_user += 1
+                    elif '"type": "gemini"' in line or '"type":"gemini"' in line:
+                        file_gemini += 1
+            user_msgs += file_user
+            gemini_msgs += file_gemini
+            if file_user > 0 and file_gemini == 0:
+                no_reply_sessions += 1
+        except OSError:
+            continue
+
+    friction_signals = []
+    if no_reply_sessions > 0:
+        friction_signals.append(
+            {
+                "signal": "no_reply_sessions",
+                "count": no_reply_sessions,
+                "description": f"{no_reply_sessions} sessions have user turns but zero gemini replies captured",
+            }
+        )
+
+    notable_patterns = []
+    if sessions_seen > 0:
+        notable_patterns.append(f"user_msgs={user_msgs} gemini_msgs={gemini_msgs}")
+        if user_msgs > 0 and gemini_msgs / max(1, user_msgs) < 0.5:
+            notable_patterns.append("SKEWED turn ratio: <50% of user turns received a captured reply")
+
+    return {
+        "vendor": "gemini",
+        "description": VENDOR_REGISTRY["gemini"]["description"],
+        "sessions_seen": sessions_seen,
+        "friction_signals": friction_signals,
+        "notable_patterns": notable_patterns,
+        "data_quality_notes": [
+            "Message text NOT read (PII firewall); substring type-counting only",
+            "Session = one chats/session-*.jsonl file, window-filtered by file mtime",
+        ],
+    }
+
+
 ADAPTERS = {
     "claude": _ingest_claude,
     "codex": _ingest_codex,
     "opencode": _ingest_opencode,
+    "copilot": _ingest_copilot,
     "antigravity": _ingest_antigravity,
     "cline": _ingest_cline,
+    "gemini": _ingest_gemini,
 }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Cross-vendor friction ingest for insight-cadence organ")
-    parser.add_argument("--window-days", type=int, default=DEFAULT_WINDOW_DAYS,
-                        help=f"Ingest window in days (default: {DEFAULT_WINDOW_DAYS})")
+    parser.add_argument(
+        "--window-days",
+        type=int,
+        default=DEFAULT_WINDOW_DAYS,
+        help=f"Ingest window in days (default: {DEFAULT_WINDOW_DAYS})",
+    )
     parser.add_argument("--vendor", help="Run only this vendor adapter (default: all)")
     parser.add_argument("--dry-run", action="store_true", help="Print packets, write nothing")
     args = parser.parse_args()
@@ -813,31 +1170,43 @@ def main() -> int:
             run_stats[vendor] = f"sessions={sess} friction_signals={sigs}"
         except Exception as e:
             # Never crash the whole run on one vendor failure
-            error_packet = _make_packet(vendor, args.window_days, window_start, now, {
-                "vendor": vendor,
-                "description": VENDOR_REGISTRY.get(vendor, {}).get("description", ""),
-                "sessions_seen": 0,
-                "friction_signals": [],
-                "notable_patterns": [],
-                "data_quality_notes": [f"Adapter raised {type(e).__name__}: {e}"],
-            })
+            error_packet = _make_packet(
+                vendor,
+                args.window_days,
+                window_start,
+                now,
+                {
+                    "vendor": vendor,
+                    "description": VENDOR_REGISTRY.get(vendor, {}).get("description", ""),
+                    "sessions_seen": 0,
+                    "friction_signals": [],
+                    "notable_patterns": [],
+                    "data_quality_notes": [f"Adapter raised {type(e).__name__}: {e}"],
+                },
+            )
             packets.append(error_packet)
             run_stats[vendor] = f"ERROR: {type(e).__name__}"
 
     # Record dormant vendors explicitly (no-silent-caps rule)
     for vendor, meta in VENDOR_REGISTRY.items():
         if meta.get("dormant") and vendor not in target_vendors:
-            dormant_packet = _make_packet(vendor, args.window_days, window_start, now, {
-                "vendor": vendor,
-                "description": meta["description"],
-                "sessions_seen": 0,
-                "friction_signals": [],
-                "notable_patterns": [],
-                "data_quality_notes": [
-                    "DORMANT: vendor estate exists on host but has no session data to ingest",
-                    f"Path: {meta['path']}",
-                ],
-            })
+            dormant_packet = _make_packet(
+                vendor,
+                args.window_days,
+                window_start,
+                now,
+                {
+                    "vendor": vendor,
+                    "description": meta["description"],
+                    "sessions_seen": 0,
+                    "friction_signals": [],
+                    "notable_patterns": [],
+                    "data_quality_notes": [
+                        "DORMANT: vendor estate exists on host but has no session data to ingest",
+                        f"Path: {meta['path']}",
+                    ],
+                },
+            )
             packets.append(dormant_packet)
             run_stats[vendor] = "dormant"
 
