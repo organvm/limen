@@ -925,6 +925,23 @@
         "Build, deploy, migrate, restore-test, and close only on the plan's executable predicates"
       ],
       "issue": 1779
+    },
+    {
+      "id": "L-DANSE-ARTISTIC-APPROVAL",
+      "label": "After the agent-owned score research and synchronized audiovisual proof exist, review THE THING WITHOUT A NAME's proposed score language and actual new cut. Approve or redirect the repertoire/score direction; then approve the final audiovisual cut and its factual rights/biographical assertions before any upload, filing, public post, fee, agreement, or identity claim. The current 5:13 technical package is explicitly provisional and cannot satisfy this lever.",
+      "owner": "yours",
+      "cost": "deferred until agent prerequisites exist; then one bounded artistic review plus final-cut/signoff review",
+      "status": "deferred — not actionable during the 2026-08-03 pause; reversible Agy/OpenCode lanes proceed without it",
+      "gate": "artistic judgment, factual/rights attestations, and irreversible account/public actions cannot be inferred or automated",
+      "unlocks": "the score-driven final cut, submission filing, public presentation, and archival Omega release",
+      "source_task": "organvm/the-thing-without-a-name Alpha → Omega epic #7; score/repertoire #8, shared score clock #9, re-cut #10, rights #16, submission #2",
+      "steps": [
+        "Wait until standalone issues #8 and #9 carry their executable receipts; no decision is requested before then",
+        "Review the proposed owned score language and synchronized A/B evidence; approve or redirect it on the owning standalone issue",
+        "Review the actual #10 cut and approve only the factual final-cut, biography, and rights assertions that are true",
+        "Perform or authorize any upload, filing, public post, fee, agreement, or identity claim only when its owner issue is ready"
+      ],
+      "issue": 1792
     }
   ]
 }
