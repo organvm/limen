@@ -23,7 +23,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `work/truth-session-breadcrumb-20260721` — 26a808ad fix: close SessionEnd review gaps
 - `worktree-feat-decorum-keeper` — 50145954 feat(decorum): complete the mentor loop — self-closing issues, recurrence ratchet, offline gate
 
-## Live-work branches (471) — decide each
+## Live-work branches (468) — decide each
 
 - `_pr198` — 4cd0dbaa fix(ci): heal main CI-poison — remove dead `import time` in dispatch.py (F401)
 - `agent/codex-sessions-adapter-0713` — 4f56aa95 fix(prompt): adapt Codex session records exactly
@@ -88,8 +88,6 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `feat/depends-on-sequencer` — b83a5d0b feat: seq-depends.py — append depends_on edges via the keeper (concern 11)
 - `feat/hospes-podcast-os-audit` — 4523e8db feat(hospes): register organvm/hospes as value repo, positioning seed awaiting_publish
 - `feat/insights-suggestion-ledger` — ab946e5d style: ruff format test_insight_cadence.py
-- `feat/jules-flywheel` — 000b814d feat(flywheel): THE predicate — exit 0 iff quota consumed AND landing holds AND debt non-increasing
-- `feat/lifecycle-cohort-manifests` — 0d88b347 feat(lifecycle): estate manifest v2 — per-cohort dispositions, SHA-pinned, private rows via --facts
 - `feat/local-floor-routing` — 1646e63c fix(params): declare LIMEN_LOCAL_FLOOR + LIMEN_LOCAL_FLOOR_CLASSES in the parameter panel
 - `feat/mail-story-mining-20260706` — d76726f3 feat: complete mail story mining outputs
 - `feat/outbound-valve-registry` — c281b297 feat: tiered outbound valve registry (concern 4) — all tiers coexist, configurable
@@ -120,7 +118,6 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `fix/autonomy-timegate-throughput-correction-v2` — 41ab3e91 fix: disable generated cleanup in reclaim tranche
 - `fix/dispatch-admission-ci-768` — 96f6c10b Merge remote-tracking branch 'origin/main' into fix/dispatch-admission-ci-768
 - `fix/fork-safety-predicate` — 09b6eb0c style(fork-safety): ruff format the predicate + its test
-- `fix/handoff-hold-labels` — 8a4a525f fix(handoff): dispatch admission honors the canonical hold-label set — operator-paused tasks stop surfacing as dispatchable_next
 - `fix/heartbeat-refresh-web-wedge` — 0a512024 fix(heartbeat): stop refresh-web piping into tail — it wedges the daemon (regression reintroduced in loop refactor)
 - `fix/ianva-secret-redaction` — c67b9889 fix(ianva): write enableBearerAuth explicitly — loopback /mcp was 401ing every agent
 - `fix/needs-human-truth` — ed62e484 feat(board): beat-wire the needs_human reclassify pass (0g6) — visibility + FLIP valve
