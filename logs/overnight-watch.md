@@ -1,12 +1,12 @@
 # Overnight Watch
 
 - Status: `ok`
-- Updated: `2026-08-07T21:03:33+00:00`
-- Log age: `35` seconds
+- Updated: `2026-08-07T21:21:56+00:00`
+- Log age: `41` seconds
 - Launchd: `active`
-- Latest tick: `tick emitted: 2026-08-07T20:59:40+00:00 total=3111 open=829 spent=8/600`
+- Latest tick: `tick emitted: 2026-08-07T21:09:43+00:00 total=3111 open=829 spent=8/600`
 - Latest async: `None`
-- Stale tick samples: `0`
+- Stale tick samples: `1`
 - Active workers: `0`
 - Heartbeat child processes: `1`
 
@@ -23,13 +23,13 @@
 
 ## Gate Checks
 
-- Handoff refresh: `0`; check: `0`.
+- Handoff refresh: `1`; check: `0`.
 - Value gate: `0`; action: `continue_direct_product_work`.
 - Dispatch control: dispatch allowed.
 - Selected owner: `none`.
 
 ## Throughput
 
-- Recent per-60min completions: `[0, 0, 0]` (derived floor `0.0`, median `0.0`).
+- Recent per-60min completions: `[0, 0, 0]` (derived floor `0.0`, median `0`).
 - Below floor: `false`; suppressed: `no`.
-  - child `59320` `S` `01:43:08` `/bin/bash /Users/4jp/Workspace/limen/scripts/heartbeat-loop.sh`
+  - child `59320` `S` `02:01:31` `/bin/bash /Users/4jp/Workspace/limen/scripts/heartbeat-loop.sh`
