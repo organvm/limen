@@ -23,13 +23,12 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `work/truth-session-breadcrumb-20260721` — 26a808ad fix: close SessionEnd review gaps
 - `worktree-feat-decorum-keeper` — 50145954 feat(decorum): complete the mentor loop — self-closing issues, recurrence ratchet, offline gate
 
-## Live-work branches (465) — decide each
+## Live-work branches (457) — decide each
 
 - `_pr198` — 4cd0dbaa fix(ci): heal main CI-poison — remove dead `import time` in dispatch.py (F401)
 - `agent/codex-sessions-adapter-0713` — 4f56aa95 fix(prompt): adapt Codex session records exactly
 - `agent/handoff-runtime-readiness-0713` — 2b434e2e fix(dispatch): close runtime readiness claim seams
 - `agent/opencode-db-prompt-adapter-20260713` — e267e576 fix(prompt-corpus): adapt OpenCode task prompts
-- `archive/danse-predecessor-experiments-20260802` — a232f2d7 archive(danse): preserve predecessor experiments
 - `capture/main-2026-07-02T01-03-35Z` — 71b48852 capture: off-disk sync 2026-07-02T01:03:35Z (main behind origin → side ref, HEAD untouched)
 - `capture/main-2026-07-02T18-41-47Z` — eaca4510 capture: off-disk sync 2026-07-02T18:41:47Z (main behind origin → side ref, HEAD untouched)
 - `capture/main-2026-07-03T18-23-54Z` — b53f0abc capture: off-disk sync 2026-07-03T18:23:54Z (main behind origin → side ref, HEAD untouched)
@@ -67,11 +66,9 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `docs/diurnal-20260802100422` — 72f04e7f docs(diurnal): 2026-08-02 INDEX
 - `docs/diurnal-first-live-day` — 3c8d8480 docs(diurnal): day one — the organ's first emission against the live body
 - `docs/enc1101-eot-catchalls-20260804` — d86a575d capture(sync-release): preserve parked dirt before unpark [skip ci]
-- `docs/pr-debt-observation-20260806033359` — 7739086a docs(gitvs): record open-PR debt observation (1293 open)
 - `docs/quicken-residue` — 1890688b docs: QUICKEN residue — irreducible human atoms (daemon capture)
 - `docs/reap-acceptance-0709-final-20260709115323` — 00cd21ce docs: accept reap of final aged straggler (4th in-session round, standing grant noted) — operator in-session
 - `docs/reap-acceptance-0709-final2-20260709115636` — cdef6573 docs: accept reap of final aged straggler (4th in-session round, standing grant noted) — operator in-session
-- `docs/uig-planfill` — 8bf193b6 docs(plan): R2 harvest folded — six lane suggestions, six dispositions, zero parked
 - `feat-58-referral-program` — b4c56d9d chore: fix validation errors in tasks.yaml
 - `feat-59-waitlist-landing` — 42e1dea4 feat: Closed beta waitlist landing page - pre-launch acquisition funnel
 - `feat-60-fury-taxonomy` — b4c56d9d chore: fix validation errors in tasks.yaml
@@ -86,12 +83,10 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `feat/depends-on-sequencer` — b83a5d0b feat: seq-depends.py — append depends_on edges via the keeper (concern 11)
 - `feat/hospes-podcast-os-audit` — 4523e8db feat(hospes): register organvm/hospes as value repo, positioning seed awaiting_publish
 - `feat/insights-suggestion-ledger` — ab946e5d style: ruff format test_insight_cadence.py
-- `feat/jules-flywheel` — 000b814d feat(flywheel): THE predicate — exit 0 iff quota consumed AND landing holds AND debt non-increasing
 - `feat/local-floor-routing` — 1646e63c fix(params): declare LIMEN_LOCAL_FLOOR + LIMEN_LOCAL_FLOOR_CLASSES in the parameter panel
 - `feat/mail-story-mining-20260706` — d76726f3 feat: complete mail story mining outputs
 - `feat/outbound-valve-registry` — c281b297 feat: tiered outbound valve registry (concern 4) — all tiers coexist, configurable
 - `feat/receipt-classifier` — 45672027 feat: receipt-classifier.py — flag receipt-only diffs behind shipped-X claims (concern 9)
-- `feat/session-contention-receipt` — 24a0c747 fix(contention): the guard could go blind quietly, and the gate graded text
 - `feat/session-streams-registry` — 2e5e0494 heal(streams): record s1-homing-spine settled by #1608, and correct its edges
 - `feat/studium-deepen-bhagavad-gita` — b79d0fae studium: deepen bhagavad-gita — chapters 2-4 (3 arcs)
 - `feat/studium-deepen-mahabharata-books-5-8` — fd8dbae6 studium: deepen mahabharata — parvas 5-8 (Udyoga, Bhishma, Drona, Karna)
@@ -123,9 +118,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `fix/next-audit-bump` — ba9227b7 chore(web/app): bump next to 16.2.11 — clears fresh npm-audit advisories breaking trunk CI
 - `fix/pr-1325-migration-wedge` — 128dca24 fix: heal interrupted legacy→scoped migration write in _load()
 - `fix/pr-debt-trend-names-the-real-producer` — ff3e42bc fix(gitvs): the trend predicate named the wrong producer in its own escalation
-- `fix/pr-debt-trend-owner-assertion` — c1c1f840 fix(tests): derive the producer's owner, don't re-pin it — main is red on a stale literal
 - `fix/pubpolicy-doc-secret-false-positive` — 63901080 fix(publish): documentation-about-secrets is not a secret — kill the sweep false-positive class
-- `fix/settles-trailer-test-not-universal` — fdc22a72 fix(tests): the Claude-Session trailer-parser gap is per-commit, not universal
 - `heal-pr-621` — af456827 Build the first working vertical slice of the health organ
 - `heal/608-declare-param` — a63e6db7 chore(governance): declare LIMEN_WORKSPACE_UNIT_TIMEOUT_SEC for preserve_workspace()
 - `heal/aw-tabvlarivs-846-rebase` — dfeb06ed Finish single-writer status/result mutation conversion
@@ -205,7 +198,6 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `limen/heal-cifix-organvm-limen-412-2d0dda2c` — 179b2e4f fix: ruff format in cli.py workstream command options
 - `limen/heal-cifix-organvm-limen-412-2e191c19` — 6ceb44ed Gemini daily capacity-fill packet 04
 - `limen/heal-cifix-organvm-limen-413-491f6092` — 91ab4a76 Gemini daily capacity-fill packet 02
-- `limen/heal-cifix-organvm-limen-414-361fb12b` — 03883783 fix(ci): redact live root paths in absorption cadence
 - `limen/heal-cifix-organvm-limen-414-4e02d6f1` — 03883783 fix(ci): redact live root paths in absorption cadence
 - `limen/heal-cifix-organvm-limen-415-7db396da` — 20cd1a3f OpenCode daily capacity-fill packet 01
 - `limen/heal-cifix-organvm-limen-416-2dce14dc` — 04f14e28 Agy daily capacity-fill packet 02
