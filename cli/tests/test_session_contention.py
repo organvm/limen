@@ -21,6 +21,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -102,6 +103,87 @@ def test_an_unavailable_probe_fails_OPEN(occupancy):
     """Inverts the sibling probe deliberately: failing closed here means never syncing again."""
     occupancy({Path("/"): -1})
     assert liveness.live_checkout_occupant(ROOT) is None
+
+
+# ── what the runtime was INVOKED as, read off real `ps` lines from the operator host ───────
+
+
+def _fake_ps(monkeypatch, comm, command):
+    """`_is_session` asks two questions with two `ps` calls; answer them by which field was asked."""
+
+    def run(cmd, *a, **k):
+        return SimpleNamespace(stdout=(comm if "comm=" in cmd else command))
+
+    monkeypatch.setattr(liveness.subprocess, "run", run)
+
+
+def test_a_pre_warmed_spare_is_not_an_interactive_session(monkeypatch):
+    """The fourth load-bearing exclusion, found the same way as the other three — by running the
+    probe on the operator host (2026-08-07). A `claude bg-spare` is a session process pre-warmed
+    ahead of demand: argv[0] identical to a real session, sitting in tracked root content, outside
+    every linked worktree, and doing nothing at all. Nine were alive at once and every one of the
+    eight records in logs/session-contention.jsonl named one of these shapes, so sync-release
+    declined the fast-forward for eight straight beats while the checkout fell 37 commits behind
+    release with no interactive session anywhere in it.
+    """
+    _fake_ps(monkeypatch, "claude bg-spare\n", "claude bg-spare --bg-spare /tmp/x.claim.sock\n")
+    assert liveness._is_session(1) is False
+
+
+def test_a_spares_pty_host_is_not_an_interactive_session(monkeypatch):
+    _fake_ps(
+        monkeypatch,
+        "claude bg-pty-host\n",
+        "claude bg-pty-host --bg-pty-host /tmp/x.pty.sock 200 50 -- /v/2.1.224 --bg-spare /tmp/x.sock\n",
+    )
+    assert liveness._is_session(1) is False
+
+
+def test_the_fleetview_viewer_is_not_an_interactive_session(monkeypatch):
+    """Why `command=` and not `comm=`: this process's comm is a bare binary path with no subcommand
+    in it at all, so the title cannot tell it from an operator's own session. Its argv can. It is a
+    viewer — the same kind of thing as the MCP server this module already excluded, and it was the
+    live occupant of the checkout while this was being written.
+    """
+    _fake_ps(monkeypatch, "/Users/4jp/.local/bin/claude\n", "/Users/4jp/.local/bin/claude agents\n")
+    assert liveness._is_session(1) is False
+
+
+def test_an_operators_own_session_in_the_live_checkout_still_counts(monkeypatch):
+    """The protective direction, which narrowing this guard must not weaken: a real session carries
+    no subcommand, keeps its trusted cwd, and goes on blocking the sync organ.
+    """
+    _fake_ps(monkeypatch, "/Users/4jp/.local/bin/claude\n", "/Users/4jp/.local/bin/claude\n")
+    assert liveness._is_session(1) is True
+
+
+def test_a_leading_flag_is_not_mistaken_for_a_subcommand(monkeypatch):
+    """`claude --permission-mode plan` is a session, and argv[1] is a flag rather than a verb — so
+    the parse must reject flags outright instead of testing the next bare word it can find, which
+    would read "plan" (or a prompt's first word) as a subcommand.
+    """
+    _fake_ps(monkeypatch, "claude\n", "claude --permission-mode plan\n")
+    assert liveness._is_session(1) is True
+
+
+def test_a_non_runtime_is_still_rejected_without_consulting_argv(monkeypatch):
+    """Order matters: the program check comes first, so a service never reaches the argv read."""
+    _fake_ps(monkeypatch, "node\n", "node /srv/http-server .\n")
+    assert liveness._is_session(1) is False
+
+
+def test_an_unreadable_argv_leaves_the_runtime_verdict_standing(monkeypatch):
+    """Opposite fail-direction from the program check, deliberately: being unable to read argv is no
+    evidence that a runtime is a service, so a matched runtime stays an occupant.
+    """
+
+    def run(cmd, *a, **k):
+        if "comm=" in cmd:
+            return SimpleNamespace(stdout="claude\n")
+        raise OSError("no ps")
+
+    monkeypatch.setattr(liveness.subprocess, "run", run)
+    assert liveness._is_session(1) is True
 
 
 def test_an_unavailable_probe_is_distinguishable_from_a_free_tree(occupancy):
@@ -320,13 +402,90 @@ def test_probe_counts_unshipped_local_incidents(probe, tmp_path):
 
 
 def test_probe_counts_committed_incidents(probe, tmp_path):
+    """A scalar claim above the recorded array is unreconcilable — and must not discount to zero.
+
+    Classifying holds from breaches means reading `incidents`, so the scalar `incident_count` is no
+    longer the source of truth. It is still ASSERTED against: `ship` keeps the two equal, so a
+    ledger claiming more than it records is unauditable, and an unauditable record counts as
+    distance for the same reason an unparseable one does.
+    """
     ledger = tmp_path / "docs/receipts/session-contention-ledger.json"
     ledger.parent.mkdir(parents=True, exist_ok=True)
     ledger.write_text(json.dumps({"incident_count": 3, "incidents": []}), encoding="utf-8")
 
     findings, incidents = probe.check_incidents()
     assert incidents == 3
-    assert "3 committed" in findings[0]
+    assert "unreconcilable" in findings[0]
+
+
+def test_a_declined_action_is_a_guard_hold_not_a_breach(probe, tmp_path, capsys):
+    """The inversion this gate shipped with: `sync-release.sh`'s `_contended()` records what it
+    DECLINED to do, so every `skipped-*` entry is the guard holding — nothing touched the occupied
+    tree, which is the ideal being met. Counting those as "it DID happen" made the gate permanently
+    red on a 100%-success record (2026-08-07: all 7 records were `skipped-stash-push`) and blocked
+    every PR touching cli/src/limen/dispatch.py, one of this gate's own declared paths."""
+    ledger = tmp_path / "docs/receipts/session-contention-ledger.json"
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text(
+        json.dumps(
+            {
+                "incident_count": 2,
+                "incidents": [
+                    {"action": "skipped-stash-push", "observed_at": "2026-08-07T01:49:15Z"},
+                    {"action": "skipped-reset", "observed_at": "2026-08-07T02:00:00Z"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    findings, incidents = probe.check_incidents()
+    assert findings == []
+    assert incidents == 0
+    # Held, not hidden: a session parked on the live checkout still gets said out loud.
+    assert "2 guard hold(s)" in capsys.readouterr().out
+
+
+def test_an_actual_breach_still_counts_and_reds_the_gate(probe, tmp_path):
+    """The other half. Relaxing declines must not relax a path that really did rewrite the tree."""
+    ledger = tmp_path / "docs/receipts/session-contention-ledger.json"
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text(
+        json.dumps(
+            {
+                "incident_count": 2,
+                "incidents": [
+                    {"action": "skipped-stash-push", "observed_at": "2026-08-07T01:49:15Z"},
+                    {"action": "rebased-live-session", "observed_at": "2026-08-07T02:00:00Z"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    findings, incidents = probe.check_incidents()
+    assert incidents == 1
+    assert "1 committed contention breach(es)" in findings[0]
+    assert "rebased-live-session" in findings[0]
+
+
+def test_unshipped_holds_do_not_red_the_gate_but_unshipped_breaches_do(probe, tmp_path):
+    log = tmp_path / "logs/session-contention.jsonl"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text(
+        json.dumps({"pid": 1, "action": "skipped-stash-push", "shipped": False}) + "\n",
+        encoding="utf-8",
+    )
+    findings, incidents = probe.check_incidents()
+    assert (findings, incidents) == ([], 0)
+
+    log.write_text(
+        json.dumps({"pid": 2, "action": "switched-live-session", "shipped": False}) + "\n",
+        encoding="utf-8",
+    )
+    findings, incidents = probe.check_incidents()
+    assert incidents == 1
+    assert "not yet shipped" in findings[0]
 
 
 def test_probe_treats_an_unreadable_ledger_as_distance(probe, tmp_path):

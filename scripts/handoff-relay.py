@@ -31,9 +31,18 @@ CODE_ROOT = Path(__file__).resolve().parents[1]
 ROOT = Path(os.environ.get("LIMEN_ROOT", CODE_ROOT))
 sys.path.insert(0, str(CODE_ROOT / "cli" / "src"))
 
+from limen.progress_selection import HOLD_LABELS  # noqa: E402
 from limen.runtime_requirements import task_execution_ready  # noqa: E402
 from limen.work_loan import task_work_loan_readiness  # noqa: E402
 from limen.workstream_contract import WORKSTREAM_SUCCESSOR_REQUIRED_LABEL  # noqa: E402
+
+# One reason code per canonical hold label; a label added to HOLD_LABELS without a
+# name here still gates admission (generic "hold_label") instead of silently passing.
+_HOLD_LABEL_REASONS = {
+    "needs-human": "human_gate",
+    "operator-paused": "operator_paused",
+    WORKSTREAM_SUCCESSOR_REQUIRED_LABEL: "successor_required",
+}
 
 HANDOFF = ROOT / "logs" / "handoff.json"
 TASKS = Path(os.environ.get("LIMEN_TASKS") or ROOT / "tasks.yaml")
@@ -321,10 +330,9 @@ def _dispatch_admission(
         if _has_terminal_transition(task):
             reason = "terminal_history"
         labels = {str(label) for label in task.get("labels") or []}
-        if reason is None and "needs-human" in labels:
-            reason = "human_gate"
-        if reason is None and WORKSTREAM_SUCCESSOR_REQUIRED_LABEL in labels:
-            reason = "successor_required"
+        held = labels & HOLD_LABELS
+        if reason is None and held:
+            reason = _HOLD_LABEL_REASONS.get(min(held), "hold_label")
         deps = [str(value) for value in task.get("depends_on") or []]
         if reason is None and any(not _dependency_merged(by_id.get(dep)) for dep in deps):
             reason = "dependencies"
@@ -490,6 +498,35 @@ def render(data: dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
+def print_handoff() -> int:
+    """Render the stored handoff — loudly distinguishing absence from a real empty board.
+
+    A missing/corrupt/unstamped handoff.json used to collapse to {} and render as a
+    healthy-looking "0 open across 0 lanes"; absence must never look like health.
+    """
+    data = _load_json(HANDOFF, None)
+    if not isinstance(data, dict) or not data.get("generated"):
+        print(
+            "**Resume from (handoff)** — NO HANDOFF RECORDED "
+            "(logs/handoff.json missing, corrupt, or unstamped) — "
+            "run `python3 scripts/handoff-relay.py` to scan"
+        )
+        return 1
+    try:
+        age_min = (_now() - dt.datetime.fromisoformat(str(data["generated"]))).total_seconds() / 60
+    except Exception:
+        print(
+            "**Resume from (handoff)** — NO HANDOFF RECORDED "
+            "(logs/handoff.json missing, corrupt, or unstamped) — "
+            "run `python3 scripts/handoff-relay.py` to scan"
+        )
+        return 1
+    if age_min > FRESH_MAX_MINUTES:
+        print(f"⚠ handoff is {age_min:.0f}m old (> {FRESH_MAX_MINUTES}m) — seam may be cold")
+    print(render(data))
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="seam-survival handoff relay")
     ap.add_argument("--check", action="store_true", help="predicate: fresh+complete handoff exists")
@@ -498,8 +535,7 @@ def main() -> int:
     if args.check:
         return check()
     if args.do_print:
-        print(render(_load_json(HANDOFF, {})))
-        return 0
+        return print_handoff()
     return write()
 
 

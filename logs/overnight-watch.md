@@ -1,10 +1,10 @@
 # Overnight Watch
 
-- Status: `ok`
-- Updated: `2026-08-07T15:10:12+00:00`
-- Log age: `0` seconds
+- Status: `alert`
+- Updated: `2026-08-07T15:22:53+00:00`
+- Log age: `104` seconds
 - Launchd: `active`
-- Latest tick: `tick emitted: 2026-08-07T15:03:07+00:00 total=3111 open=829 spent=8/600`
+- Latest tick: `tick emitted: 2026-08-07T15:15:13+00:00 total=3111 open=829 spent=8/600`
 - Latest async: `None`
 - Stale tick samples: `1`
 - Active workers: `0`
@@ -14,22 +14,25 @@
 
 - Launched: `0`; harvested: `0`; reaped: `0`.
 - Done: `0`; failed: `0`; no-op: `0`; timed out: `0`.
-- Stale handoff: `false`.
-- Gate action: `bootstrap_idle_dispatch` (exit `0`).
-- Dispatch allowed: `true`.
+- Stale handoff: `true`.
+- Gate action: `continue_direct_product_work` (exit `0`).
+- Dispatch allowed: `false`.
 - Lane switch: `not_requested`; owner packet: `none`; tickets: `0`.
 - Lane blocker: `none`.
-- Next command: `python3 -m limen dispatch --agent jules --limit 1`.
+- Next command: `python3 scripts/handoff-relay.py && python3 scripts/handoff-relay.py --check`.
 
 ## Gate Checks
 
-- Handoff refresh: `0`; check: `0`.
-- Value gate: `0`; action: `bootstrap_idle_dispatch`.
-- Dispatch control: dispatch allowed.
+- Handoff refresh: `1`; check: `1`.
+- Value gate: `0`; action: `continue_direct_product_work`.
+- Dispatch control: handoff relay check failed; refresh handoff before launching workers.
 - Selected owner: `none`.
 
 ## Throughput
 
 - Recent per-60min completions: `[0, 0, 0]` (derived floor `0.0`, median `0`).
 - Below floor: `false`; suppressed: `no`.
-  - child `24403` `S` `03:11:23` `/bin/bash /Users/4jp/Workspace/limen/scripts/heartbeat-loop.sh`
+  - child `24403` `S` `03:24:04` `/bin/bash /Users/4jp/Workspace/limen/scripts/heartbeat-loop.sh`
+
+## WATCH_ALERT
+- `handoff-relay-stale`: Command '['/Users/4jp/.local/share/limen/runtimes/06f96a8f41bcba81ee4b5989939f5114fb7ba8f4/venv/bin/python', '/Users/4jp/Workspace/limen/scripts/handoff-relay.py', '--check']' timed out after 20 seconds

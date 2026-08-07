@@ -1,10 +1,10 @@
 # Always-Working Reconciliation
 
-Generated: `2026-08-07T14:43:34+00:00`
+Generated: `2026-08-07T15:25:28+00:00`
 Status: `needs-work`
-Required open: `6`
+Required open: `5`
 Blocked: `1`
-Done from receipt: `4`
+Done from receipt: `5`
 
 ## Contract
 
@@ -31,12 +31,12 @@ Done from receipt: `4`
 | 0 | `SUBSTRATE-DISK-TEMP` | `assigned_from_existing_work` | substrate lifecycle predicate is failing |
 | 5 | `ESTATE-CUSTODY` | `done_from_receipt` | run-and-gun laptop cache and external estate custody have implementation receipts |
 | 10 | `PUBLIC-FACE-PROFILE` | `blocked` | profile repo README missing |
-| 15 | `PUBLIC-FACE-CONTRIBUTION-BALANCE` | `assigned_from_existing_work` | GitHub activity mix needs owner action: commits 70.9%, PRs 17.6%, issues 10.5%, reviews 0.9% |
+| 15 | `PUBLIC-FACE-CONTRIBUTION-BALANCE` | `assigned_from_existing_work` | GitHub activity mix needs owner action: commits 70.9%, PRs 17.7%, issues 10.5%, reviews 0.9% |
 | 18 | `CREDENTIAL-WALL-TOKEN-HYGIENE` | `done_from_receipt` | credential wall and historical token tombstone receipt are present |
 | 20 | `MAIL-ACTIVE-FLAGGED` | `assigned_from_existing_work` | 236 active flagged non-deleted messages require classification |
-| 30 | `MAIL-HISTORICAL-BACKLOG` | `done_from_receipt` | 500 historical messages atomized in this bounded batch; 102154 indexed non-deleted messages remain for future batches |
+| 30 | `MAIL-HISTORICAL-BACKLOG` | `done_from_receipt` | 500 historical messages atomized in this bounded batch; 102210 indexed non-deleted messages remain for future batches |
 | 40 | `REPO-BOIL-UP` | `needs_assignment` | repo surface ledger missing; assignment must refresh existing roots before new work |
-| 50 | `PROMPT-PACKETS` | `assigned_from_existing_work` | packet ledger clear from receipts |
+| 50 | `PROMPT-PACKETS` | `done_from_receipt` | packet ledger clear from receipts |
 | 60 | `VALUE-REPOS` | `assigned_from_existing_work` | 19 value repos define the funded work lane |
 | 70 | `TABVLARIVS-STATUS-WRITERS` | `done_from_receipt` | status-mutator tier is recorded closed |
 
@@ -127,19 +127,6 @@ Done from receipt: `4`
   - `~/Workspace/limen/docs/consolidation/EXECUTION-MANIFEST.md`
   - `~/Workspace/limen/scripts/repo-surface-ledger.py`
   - `~/Workspace/limen/scripts/salvage-yard-map.py`
-
-### PROMPT-PACKETS
-
-- Lane fit: `codex-conductor`
-- Repo/root: `organvm/limen`
-- Task: Map each open prompt packet to merged PR, open PR, owner task, supersession, or precise blocker.
-- Predicate: `python3 scripts/prompt-packet-ledger.py --write`
-- Receipt target: `git:organvm/limen:docs/prompt-packet-ledger.md`
-- Stop condition: open prompt packet count is zero or every packet has an owner receipt
-- Existing receipts:
-  - `~/Workspace/limen/docs/prompt-packet-ledger.md`
-  - `~/Workspace/limen/docs/prompt-packet-resolution-receipts.json`
-  - `~/Workspace/limen/docs/current-session-fanout.md`
 
 ### VALUE-REPOS
 
