@@ -23,7 +23,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `work/truth-session-breadcrumb-20260721` — 26a808ad fix: close SessionEnd review gaps
 - `worktree-feat-decorum-keeper` — 50145954 feat(decorum): complete the mentor loop — self-closing issues, recurrence ratchet, offline gate
 
-## Live-work branches (467) — decide each
+## Live-work branches (471) — decide each
 
 - `_pr198` — 4cd0dbaa fix(ci): heal main CI-poison — remove dead `import time` in dispatch.py (F401)
 - `agent/codex-sessions-adapter-0713` — 4f56aa95 fix(prompt): adapt Codex session records exactly
@@ -43,6 +43,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `codex/claude-permission-preflight-0713` — 2597ad48 fix(claude): preflight unattended permission conflicts
 - `codex/claude-projects-adapter-20260713` — b0c3676a fix(prompt-corpus): narrow alias target type for mypy
 - `codex/codex-attachments-gap-0713` — c33b9a4f fix(prompt): admit exact Codex attachment parents
+- `codex/discovery-disposition-ledger-20260712` — 6f2c9397 Merge remote-tracking branch 'origin/main' into codex/discovery-disposition-ledger-20260712
 - `codex/financial-codex-finish-0704` — 65f20fcb limen: add financial obligation action plan
 - `codex/limen-main-trench-20260628` — c5fb867f limen: preserve overnight autonomous receipts
 - `codex/network-substrate-healing-20260628` — 5ba52e5d capture: autonomic off-disk sync 2026-06-29T10:39:58Z
@@ -88,6 +89,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `feat/hospes-podcast-os-audit` — 4523e8db feat(hospes): register organvm/hospes as value repo, positioning seed awaiting_publish
 - `feat/insights-suggestion-ledger` — ab946e5d style: ruff format test_insight_cadence.py
 - `feat/jules-flywheel` — 000b814d feat(flywheel): THE predicate — exit 0 iff quota consumed AND landing holds AND debt non-increasing
+- `feat/lifecycle-cohort-manifests` — 0d88b347 feat(lifecycle): estate manifest v2 — per-cohort dispositions, SHA-pinned, private rows via --facts
 - `feat/local-floor-routing` — 1646e63c fix(params): declare LIMEN_LOCAL_FLOOR + LIMEN_LOCAL_FLOOR_CLASSES in the parameter panel
 - `feat/mail-story-mining-20260706` — d76726f3 feat: complete mail story mining outputs
 - `feat/outbound-valve-registry` — c281b297 feat: tiered outbound valve registry (concern 4) — all tiers coexist, configurable
@@ -118,6 +120,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `fix/autonomy-timegate-throughput-correction-v2` — 41ab3e91 fix: disable generated cleanup in reclaim tranche
 - `fix/dispatch-admission-ci-768` — 96f6c10b Merge remote-tracking branch 'origin/main' into fix/dispatch-admission-ci-768
 - `fix/fork-safety-predicate` — 09b6eb0c style(fork-safety): ruff format the predicate + its test
+- `fix/handoff-hold-labels` — 8a4a525f fix(handoff): dispatch admission honors the canonical hold-label set — operator-paused tasks stop surfacing as dispatchable_next
 - `fix/heartbeat-refresh-web-wedge` — 0a512024 fix(heartbeat): stop refresh-web piping into tail — it wedges the daemon (regression reintroduced in loop refactor)
 - `fix/ianva-secret-redaction` — c67b9889 fix(ianva): write enableBearerAuth explicitly — loopback /mcp was 401ing every agent
 - `fix/needs-human-truth` — ed62e484 feat(board): beat-wire the needs_human reclassify pass (0g6) — visibility + FLIP valve
@@ -127,6 +130,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `fix/pr-debt-trend-owner-assertion` — c1c1f840 fix(tests): derive the producer's owner, don't re-pin it — main is red on a stale literal
 - `fix/pubpolicy-doc-secret-false-positive` — 63901080 fix(publish): documentation-about-secrets is not a secret — kill the sweep false-positive class
 - `fix/settles-trailer-test-not-universal` — fdc22a72 fix(tests): the Claude-Session trailer-parser gap is per-commit, not universal
+- `flywheel-merge-heal` — f7341bf9 merge origin/main — pick up ianva census heal (#1946) and merge-ready removal-ban heal (#1962)
 - `heal-pr-621` — af456827 Build the first working vertical slice of the health organ
 - `heal/608-declare-param` — a63e6db7 chore(governance): declare LIMEN_WORKSPACE_UNIT_TIMEOUT_SEC for preserve_workspace()
 - `heal/aw-tabvlarivs-846-rebase` — dfeb06ed Finish single-writer status/result mutation conversion
