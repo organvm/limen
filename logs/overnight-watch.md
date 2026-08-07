@@ -1,12 +1,12 @@
 # Overnight Watch
 
 - Status: `ok`
-- Updated: `2026-08-07T07:46:27+00:00`
-- Log age: `0` seconds
+- Updated: `2026-08-07T08:05:11+00:00`
+- Log age: `154` seconds
 - Launchd: `active`
-- Latest tick: `tick emitted: 2026-08-07T07:46:05+00:00 total=3111 open=829 spent=8/600`
+- Latest tick: `tick emitted: 2026-08-07T07:54:35+00:00 total=3111 open=829 spent=8/600`
 - Latest async: `None`
-- Stale tick samples: `0`
+- Stale tick samples: `1`
 - Active workers: `0`
 - Heartbeat child processes: `1`
 
@@ -32,4 +32,4 @@
 
 - Recent per-60min completions: `[0, 0, 0]` (derived floor `0.0`, median `0`).
 - Below floor: `false`; suppressed: `no`.
-  - child `2720` `S` `03-20:30:28` `/bin/bash /Users/4jp/Workspace/limen/scripts/heartbeat-loop.sh`
+  - child `2720` `S` `03-20:49:12` `/bin/bash /Users/4jp/Workspace/limen/scripts/heartbeat-loop.sh`
