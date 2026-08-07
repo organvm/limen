@@ -283,6 +283,11 @@ gates:
     paths: ["scripts/sync-release.sh", "scripts/tests/sync-release.test.sh", "institutio/governance/parameters.yaml"]
     owner: continuity
     note: "The live daemon preserves only real topic branches before unpark; a mutable release override cannot reclassify, commit, or push the repository's actual default branch."
+  live-checkout-currency-test:
+    command: "bash scripts/tests/live-checkout-currency.test.sh"
+    paths: ["scripts/check-live-checkout.py", "scripts/tests/live-checkout-currency.test.sh", "institutio/governance/sensors.yaml"]
+    owner: substrate
+    note: "The deployment-currency probe must persist its answer: coherent/drift/unverifiable-here are three RECORDED states, never two plus a silence. `unverifiable-here` is the load-bearing case — a consumer that cannot establish currency must be able to tell that apart from established-fine, which is the 2026-08-07 defect class in one assertion. The receipt body carries no wall-clock, so consecutive runs are byte-identical and every diff is a real change."
   await-pr-test:
     command: "bash scripts/tests/await-pr.test.sh"
     paths: ["scripts/await-pr.sh", "scripts/tests/await-pr.test.sh", "scripts/merge-policy.sh"]
@@ -703,6 +708,21 @@ gates:
     ci_job: "pr-gate.yml:pr-gate"
     owner: censor
     note: "The /vendor-insights engine's adapter tests plus the cross-vendor health-sensor tests, which NOTHING scoped ran before this row existed: pytest-cli's paths are cli/** plus root registries, so editing scripts/vendor-insights.py implicated no test at all — the same declared-but-unwired class check-runner-coverage exists to catch. insight-cadence.py is a path because test_health_packet_is_consumed_by_insight_cadence binds its packet loop to the health packet's declared owner/severity. Cheap tier: two files, hermetic, no xdist."
+  hot-cache-test:
+    command: "bash scripts/run-pytest-hermetic.sh cli/tests/test_verify_hot_cache.py cli/tests/test_check_foreign_litter.py cli/tests/test_residue_census.py -q"
+    paths:
+      [
+        "scripts/verify-hot-cache.sh",
+        "scripts/residue-census.py",
+        "scripts/check-foreign-litter.py",
+        "cli/tests/test_verify_hot_cache.py",
+        "cli/tests/test_check_foreign_litter.py",
+        "cli/tests/test_residue_census.py",
+        "mise.toml",
+      ]
+    ci_job: "pr-gate.yml:pr-gate"
+    owner: continuity
+    note: "The disposability predicate, the census it consults, and the litter sensor — none of which anything scoped ran before this row existed: pytest-cli's paths are cli/** plus root registries, so editing scripts/verify-hot-cache.sh implicated no test at all, the same declared-but-unwired class check-runner-coverage exists to catch. These tests drive the SHIPPED script (bash scripts/verify-hot-cache.sh under a tmp LIMEN_ROOT and a narrowed PATH), never an extracted copy of a rung, because the defects they pin are rungs that reported GREEN: R6 derived its verdict from parsed BREACH lines, so a census that died any other way named nothing and PASSED; R5 printed '0 clone(s) clean, pushed, stash-free' for a walk that never happened; and a failed `cd $ROOT` still reached DISPOSABLE. An extracted-copy test is what let the previous 'bidirectional proof' pass against a file it had already diverged from. mise.toml is a path because R4 asserts every tool THIS repo declares is in force — a mise query answers for the config merged from the CWD upward, so a declaration change must re-run the rung that reads it. Cheap tier: three files, hermetic, no xdist."
   pytest-api:
     command: "bash scripts/run-pytest-hermetic.sh web/api/tests -q"
     paths: ["web/api/**", "cli/**"]
