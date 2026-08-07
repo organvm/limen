@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 
 import rfc8785
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ValidationInfo, ConfigDict, Field, field_validator, model_validator
 
 from limen.work_loan import WorkLoanV1
 
@@ -29,13 +29,13 @@ def canonical_hash(value: Any) -> str:
     return hashlib.sha256(rfc8785.dumps(value)).hexdigest()
 
 
-def _identifier(value: str, field_name: str) -> str:
+def _identifier(value: str, field_name: str | None) -> str:
     if not _IDENTIFIER_RE.fullmatch(value):
         raise ValueError(f"{field_name} must be a bounded protocol identifier")
     return value
 
 
-def _bounded_text(value: str, field_name: str) -> str:
+def _bounded_text(value: str, field_name: str | None) -> str:
     normalized = value.strip()
     if not normalized or "\x00" in normalized or len(normalized) > 8192:
         raise ValueError(f"{field_name} must be a non-empty bounded string")
@@ -56,7 +56,7 @@ class AgentIdentityV1(ProtocolModel):
 
     @field_validator("agent", "surface", "session_id")
     @classmethod
-    def validate_identifiers(cls, value: str, info) -> str:
+    def validate_identifiers(cls, value: str, info: ValidationInfo) -> str:
         return _identifier(value, info.field_name)
 
 
@@ -71,7 +71,7 @@ class ConductPrincipalV1(ProtocolModel):
 
     @field_validator("principal_id", "agent", "surface")
     @classmethod
-    def validate_identifiers(cls, value: str, info) -> str:
+    def validate_identifiers(cls, value: str, info: ValidationInfo) -> str:
         return _identifier(value, info.field_name)
 
     @model_validator(mode="after")
@@ -111,7 +111,7 @@ class ConductorSessionV1(ProtocolModel):
 
     @field_validator("session_id", "transport", "harvest_method")
     @classmethod
-    def validate_identifiers(cls, value: str, info) -> str:
+    def validate_identifiers(cls, value: str, info: ValidationInfo) -> str:
         return _identifier(value, info.field_name)
 
     @field_validator("capabilities")
@@ -123,7 +123,7 @@ class ConductorSessionV1(ProtocolModel):
 
     @field_validator("supersedes")
     @classmethod
-    def validate_supersedes(cls, value: str | None, info) -> str | None:
+    def validate_supersedes(cls, value: str | None, info: ValidationInfo) -> str | None:
         return None if value is None else _identifier(value, info.field_name)
 
     @model_validator(mode="after")
@@ -156,7 +156,7 @@ class AuthorityEnvelopeV1(ProtocolModel):
 
     @field_validator("actions", "repositories", "external_effects")
     @classmethod
-    def validate_atoms(cls, value: frozenset[str], info) -> frozenset[str]:
+    def validate_atoms(cls, value: frozenset[str], info: ValidationInfo) -> frozenset[str]:
         for atom in value:
             if atom != "*":
                 _identifier(atom, info.field_name)
@@ -217,7 +217,7 @@ class CampaignPacketV1(ProtocolModel):
 
     @field_validator("failed_predicate", "owner", "next_action")
     @classmethod
-    def validate_bounded_text(cls, value: str, info) -> str:
+    def validate_bounded_text(cls, value: str, info: ValidationInfo) -> str:
         return _bounded_text(value, info.field_name)
 
 
@@ -253,7 +253,7 @@ class WorkPacketV1(ProtocolModel):
 
     @field_validator("work_id", "work_key")
     @classmethod
-    def validate_work_identifiers(cls, value: str, info) -> str:
+    def validate_work_identifiers(cls, value: str, info: ValidationInfo) -> str:
         return _identifier(value, info.field_name)
 
     @field_validator("preferred_agent")
@@ -270,7 +270,7 @@ class WorkPacketV1(ProtocolModel):
 
     @field_validator("predicate", "receipt_target")
     @classmethod
-    def validate_contract_text(cls, value: str, info) -> str:
+    def validate_contract_text(cls, value: str, info: ValidationInfo) -> str:
         return _bounded_text(value, info.field_name)
 
     @model_validator(mode="after")
@@ -339,7 +339,7 @@ class ExecutorAttemptV1(ProtocolModel):
 
     @field_validator("attempt_id", "run_id", "lease_id", "adapter")
     @classmethod
-    def validate_identifiers(cls, value: str, info) -> str:
+    def validate_identifiers(cls, value: str, info: ValidationInfo) -> str:
         return _identifier(value, info.field_name)
 
     @field_validator("provider_run_id")
@@ -349,7 +349,7 @@ class ExecutorAttemptV1(ProtocolModel):
 
     @field_validator("provider_run_url", "detail")
     @classmethod
-    def validate_bounded_text(cls, value: str | None, info) -> str | None:
+    def validate_bounded_text(cls, value: str | None, info: ValidationInfo) -> str | None:
         if value is not None and ("\x00" in value or len(value) > 4096):
             raise ValueError(f"{info.field_name} must be bounded and contain no NUL")
         return value
@@ -412,7 +412,7 @@ class CampaignBlockerV1(ProtocolModel):
 
     @field_validator("owner", "failed_predicate", "next_action")
     @classmethod
-    def validate_bounded_text(cls, value: str, info) -> str:
+    def validate_bounded_text(cls, value: str, info: ValidationInfo) -> str:
         return _bounded_text(value, info.field_name)
 
 
@@ -470,7 +470,7 @@ class CampaignRelayReceiptV1(ProtocolModel):
         "startup_stderr_sha256",
     )
     @classmethod
-    def validate_digests(cls, value: str | None, info) -> str | None:
+    def validate_digests(cls, value: str | None, info: ValidationInfo) -> str | None:
         if value is not None and not _SHA256_RE.fullmatch(value):
             raise ValueError(f"{info.field_name} must be a lowercase SHA-256 digest")
         return value
@@ -484,7 +484,7 @@ class CampaignRelayReceiptV1(ProtocolModel):
         "publication_receipt_blob",
     )
     @classmethod
-    def validate_git_objects(cls, value: str | None, info) -> str | None:
+    def validate_git_objects(cls, value: str | None, info: ValidationInfo) -> str | None:
         if value is not None and not _GIT_OBJECT_RE.fullmatch(value):
             raise ValueError(f"{info.field_name} must be a lowercase Git object id")
         return value
@@ -498,7 +498,7 @@ class CampaignRelayReceiptV1(ProtocolModel):
         "terminal_code",
     )
     @classmethod
-    def validate_identifiers(cls, value: str | None, info) -> str | None:
+    def validate_identifiers(cls, value: str | None, info: ValidationInfo) -> str | None:
         return _identifier(value, info.field_name) if value is not None else None
 
     @field_validator("selected_capabilities")
@@ -607,7 +607,7 @@ class CampaignReceiptV1(ProtocolModel):
 
     @field_validator("campaign_id", "value_unit")
     @classmethod
-    def validate_identifiers(cls, value: str, info) -> str:
+    def validate_identifiers(cls, value: str, info: ValidationInfo) -> str:
         return _identifier(value, info.field_name)
 
     @field_validator("actual_value", mode="before")
@@ -654,7 +654,7 @@ class RunReceiptV1(ProtocolModel):
 
     @field_validator("receipt_id", "run_id", "lease_id")
     @classmethod
-    def validate_identifiers(cls, value: str, info) -> str:
+    def validate_identifiers(cls, value: str, info: ValidationInfo) -> str:
         return _identifier(value, info.field_name)
 
     @model_validator(mode="after")
