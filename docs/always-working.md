@@ -1,6 +1,6 @@
 # Always-Working Reconciliation
 
-Generated: `2026-08-07T16:16:03+00:00`
+Generated: `2026-07-15T23:38:30+00:00`
 Status: `needs-work`
 Required open: `5`
 Blocked: `1`
@@ -21,8 +21,8 @@ Done from receipt: `5`
 - Status: `assigned_from_existing_work`
 - Verdict: substrate lifecycle predicate is failing
 - Lane fit: `codex-local`
-- Predicate: `python3 -m pytest cli/tests/test_reclaim_worktrees.py -q`
-- Receipt target: `git:organvm/limen:docs/worktree-preservation-receipts.json`
+- Predicate: run `python3 scripts/reclaim-tool-caches.py --check --json`, review its exact candidate manifest, then run `python3 scripts/reclaim-tool-caches.py --apply --expected-plan-sha <plan_sha256>`; continue the other proof-gated substrate reclaimers and require `python3 scripts/cvstos-organ.py --check` plus `python3 scripts/worktree-debt.py --fail-on-debt --fail-reapable-over-cap`
+- Receipt target: `git:organvm/limen:docs/estate-custody-implementation-receipts.json`
 
 ## Workstreams
 
@@ -30,14 +30,14 @@ Done from receipt: `5`
 |---:|---|---|---|
 | 0 | `SUBSTRATE-DISK-TEMP` | `assigned_from_existing_work` | substrate lifecycle predicate is failing |
 | 5 | `ESTATE-CUSTODY` | `done_from_receipt` | run-and-gun laptop cache and external estate custody have implementation receipts |
-| 10 | `PUBLIC-FACE-PROFILE` | `blocked` | profile repo README missing |
-| 15 | `PUBLIC-FACE-CONTRIBUTION-BALANCE` | `assigned_from_existing_work` | GitHub activity mix needs owner action: commits 70.9%, PRs 17.7%, issues 10.5%, reviews 0.9% |
+| 10 | `PUBLIC-FACE-PROFILE` | `blocked` | visible profile README is current; GitHub sidebar bio/link needs profile-settings scope |
+| 15 | `PUBLIC-FACE-CONTRIBUTION-BALANCE` | `assigned_from_existing_work` | GitHub activity mix needs owner action: commits 73.6%, PRs 14.3%, issues 11.3%, reviews 0.9% |
 | 18 | `CREDENTIAL-WALL-TOKEN-HYGIENE` | `done_from_receipt` | credential wall and historical token tombstone receipt are present |
-| 20 | `MAIL-ACTIVE-FLAGGED` | `assigned_from_existing_work` | 236 active flagged non-deleted messages require classification |
-| 30 | `MAIL-HISTORICAL-BACKLOG` | `done_from_receipt` | 500 historical messages atomized in this bounded batch; 102252 indexed non-deleted messages remain for future batches |
-| 40 | `REPO-BOIL-UP` | `needs_assignment` | repo surface ledger missing; assignment must refresh existing roots before new work |
+| 20 | `MAIL-ACTIVE-FLAGGED` | `assigned_from_existing_work` | 144 active flagged non-deleted messages require classification |
+| 30 | `MAIL-HISTORICAL-BACKLOG` | `done_from_receipt` | 500 historical messages atomized in this bounded batch; 85117 indexed non-deleted messages remain for future batches |
+| 40 | `REPO-BOIL-UP` | `assigned_from_existing_work` | broad repo surface ledger exists, but it is stale for current boil-up work |
 | 50 | `PROMPT-PACKETS` | `done_from_receipt` | packet ledger clear from receipts |
-| 60 | `VALUE-REPOS` | `assigned_from_existing_work` | 19 value repos define the funded work lane |
+| 60 | `VALUE-REPOS` | `assigned_from_existing_work` | value repo product ledger exists, but it is stale for current funded-lane steering |
 | 70 | `TABVLARIVS-STATUS-WRITERS` | `done_from_receipt` | status-mutator tier is recorded closed |
 
 ## Assignment Packets
@@ -46,10 +46,10 @@ Done from receipt: `5`
 
 - Lane fit: `codex-local`
 - Repo/root: `organvm/limen`
-- Task: Run exactly one accepted worktree-reclaim tranche from an isolated Limen owner worktree: LIMEN_RECLAIM_GENERATED=0 LIMEN_RECLAIM_MAX=3 python3 scripts/reclaim-worktrees.py --apply --force --json. The generated-cleanup disable is mandatory: do not run generated-state, tool-cache, Ollama, or clone reclaimers in this packet. Record each removed root and the exact apply receipt in docs/worktree-preservation-receipts.json, then push one narrow owner PR.
-- Predicate: `python3 -m pytest cli/tests/test_reclaim_worktrees.py -q`
-- Receipt target: `git:organvm/limen:docs/worktree-preservation-receipts.json`
-- Stop condition: one tranche removes at most three accepted roots or records that no accepted root remains; every residual root stays preserved for a later packet
+- Task: Reclaim ignored generated state, preserve or owner-route local-only payloads, and keep Scratch as the active work substrate.
+- Predicate: run `python3 scripts/reclaim-tool-caches.py --check --json`, review its exact candidate manifest, then run `python3 scripts/reclaim-tool-caches.py --apply --expected-plan-sha <plan_sha256>`; continue the other proof-gated substrate reclaimers and require `python3 scripts/cvstos-organ.py --check` plus `python3 scripts/worktree-debt.py --fail-on-debt --fail-reapable-over-cap`
+- Receipt target: `git:organvm/limen:docs/estate-custody-implementation-receipts.json`
+- Stop condition: free disk is at target, temp writes are usable, worktree debt is exactly zero, and reapable roots are zero
 - Existing receipts:
   - `~/Workspace/limen/logs/heartbeat.out.log`
   - `~/Workspace/limen/logs/reclaim-generated-state.jsonl`
@@ -87,8 +87,8 @@ Done from receipt: `5`
 
 - Lane fit: `codex-conductor`
 - Repo/root: `organvm/limen`
-- Task: Run python3 scripts/github-contribution-balance.py --login 4444J99 --json and use the live contribution balance as a value gate: route the next public work to substantive PR review first, then real issue criteria and PR packaging, before more commit-heavy implementation churn.
-- Predicate: `python3 -m pytest cli/tests/test_github_contribution_balance.py -q`
+- Task: Use the live contribution balance as a value gate: route the next public work to substantive PR review first, then real issue criteria and PR packaging, before more commit-heavy implementation churn.
+- Predicate: `python3 scripts/github-contribution-balance.py --login 4444J99 --json`
 - Receipt target: `git:organvm/limen:docs/always-working.md`
 - Stop condition: reviews/issues/PRs have owner receipts and commit-only churn is no longer the next public action
 - Existing receipts:
@@ -102,8 +102,8 @@ Done from receipt: `5`
 
 - Lane fit: `local-codex-or-opencode`
 - Repo/root: `organvm/limen`
-- Task: Run python3 scripts/mail-story-ledger.py --scope flagged --write. Use existing mail-story atoms and UMA obligations to classify the active flagged set; draft/park, never send.
-- Predicate: `python3 -m pytest cli/tests/test_mail_story_ledger.py -q`
+- Task: Use existing mail-story atoms and UMA obligations to classify the active flagged set; draft/park, never send.
+- Predicate: `python3 scripts/mail-story-ledger.py --scope flagged --write`
 - Receipt target: `git:organvm/limen:docs/mail-story-ledger.md`
 - Stop condition: flagged set has classified atoms, obligations, and needs-human buckets
 - Existing receipts:
@@ -117,8 +117,8 @@ Done from receipt: `5`
 
 - Lane fit: `agy-or-opencode-readonly`
 - Repo/root: `organvm/limen`
-- Task: Run python3 scripts/repo-surface-ledger.py --scan-root ~/Workspace --max-depth 6 --write. Harvest existing repo-surface and consolidation receipts, then assign only missing classifications.
-- Predicate: `scripts/verify-scoped.sh`
+- Task: Harvest existing repo-surface and consolidation receipts, then assign only missing classifications.
+- Predicate: `python3 scripts/repo-surface-ledger.py --scan-root ~/Workspace --max-depth 6 --write`
 - Receipt target: `git:organvm/limen:docs/repo-surface-ledger.md`
 - Stop condition: all discovered roots are classified or recorded with blocker/gate
 - Existing receipts:
@@ -140,4 +140,3 @@ Done from receipt: `5`
   - `~/Workspace/limen/value-repos.json`
   - `~/Workspace/limen/docs/product-ledger.md`
   - `~/Workspace/limen/docs/positioning/_frontdoor.md`
-
