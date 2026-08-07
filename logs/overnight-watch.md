@@ -1,12 +1,12 @@
 # Overnight Watch
 
 - Status: `alert`
-- Updated: `2026-08-05T13:59:34+00:00`
-- Log age: `117` seconds
+- Updated: `2026-08-07T00:19:33+00:00`
+- Log age: `52` seconds
 - Launchd: `active`
-- Latest tick: `None`
+- Latest tick: `tick emitted: 2026-08-07T00:07:59+00:00 total=3111 open=829 spent=8/600`
 - Latest async: `None`
-- Stale tick samples: `918`
+- Stale tick samples: `1`
 - Active workers: `0`
 - Heartbeat child processes: `1`
 
@@ -14,27 +14,25 @@
 
 - Launched: `0`; harvested: `0`; reaped: `0`.
 - Done: `0`; failed: `0`; no-op: `0`; timed out: `0`.
-- Stale handoff: `true`.
-- Gate action: `stop_no_durable_progress` (exit `20`).
+- Stale handoff: `false`.
+- Gate action: `switch_to_packetization` (exit `10`).
 - Dispatch allowed: `false`.
-- Lane switch: `blocked`; owner packet: `none`; tickets: `0`.
-- Lane blocker: `overnight-handoff-blocked`.
-- Next command: `python3 scripts/handoff-relay.py && python3 scripts/handoff-relay.py --check`.
+- Lane switch: `blocked`; owner packet: `AW-VALUE-REPOS-77d88c87bfb2`; tickets: `1`.
+- Lane blocker: `overnight-owner-conduct-unavailable`.
+- Next command: `PYTHONPATH=cli/src limen conduct capabilities`.
 
 ## Gate Checks
 
-- Handoff refresh: `0`; check: `1`.
-- Value gate: `20`; action: `stop_no_durable_progress`.
-- Dispatch control: handoff relay is not fresh enough to transfer one owner packet.
+- Handoff refresh: `1`; check: `0`.
+- Value gate: `10`; action: `switch_to_packetization`.
+- Dispatch control: authenticated conduct is unavailable for exact owner packet AW-VALUE-REPOS-77d88c87bfb2: conduct broker is not configured; set LIMEN_CONDUCT_URL and LIMEN_CONDUCT_TOKEN (LIMEN_CONDUCT_STATE is an explicit local test adapter).
 - Selected owner: `organvm/limen`.
 
 ## Throughput
 
-- Recent per-60min completions: `None` (derived floor `None`, median `None`).
+- Recent per-60min completions: `[0, 0, 0]` (derived floor `0.0`, median `0.0`).
 - Below floor: `false`; suppressed: `no`.
-  - child `2720` `S` `02-02:43:35` `/bin/bash /Users/4jp/Workspace/limen/scripts/heartbeat-loop.sh`
+  - child `2720` `S` `03-13:03:34` `/bin/bash /Users/4jp/Workspace/limen/scripts/heartbeat-loop.sh`
 
 ## WATCH_ALERT
-- `heartbeat-tick-missing`: no tick emitted line found in recent heartbeat log
-- `handoff-relay-stale`: handoff-relay --check: FAIL — provider headroom stale (4363m > 90m)
-- `overnight-lane-switch-blocked`: blocker=overnight-handoff-blocked owner=organvm/limen reason=handoff relay is not fresh enough to transfer one owner packet
+- `overnight-lane-switch-blocked`: blocker=overnight-owner-conduct-unavailable owner=organvm/limen reason=authenticated conduct is unavailable for exact owner packet AW-VALUE-REPOS-77d88c87bfb2: conduct broker is not configured; set LIMEN_CONDUCT_URL and LIMEN_CONDUCT_TOKEN (LIMEN_CONDUCT_STATE is an explicit local test adapter)
