@@ -1,6 +1,6 @@
 # Always-Working Reconciliation
 
-Generated: `2026-08-07T14:32:36+00:00`
+Generated: `2026-08-07T14:43:34+00:00`
 Status: `needs-work`
 Required open: `6`
 Blocked: `1`
@@ -34,7 +34,7 @@ Done from receipt: `4`
 | 15 | `PUBLIC-FACE-CONTRIBUTION-BALANCE` | `assigned_from_existing_work` | GitHub activity mix needs owner action: commits 70.9%, PRs 17.6%, issues 10.5%, reviews 0.9% |
 | 18 | `CREDENTIAL-WALL-TOKEN-HYGIENE` | `done_from_receipt` | credential wall and historical token tombstone receipt are present |
 | 20 | `MAIL-ACTIVE-FLAGGED` | `assigned_from_existing_work` | 236 active flagged non-deleted messages require classification |
-| 30 | `MAIL-HISTORICAL-BACKLOG` | `done_from_receipt` | 500 historical messages atomized in this bounded batch; 102136 indexed non-deleted messages remain for future batches |
+| 30 | `MAIL-HISTORICAL-BACKLOG` | `done_from_receipt` | 500 historical messages atomized in this bounded batch; 102154 indexed non-deleted messages remain for future batches |
 | 40 | `REPO-BOIL-UP` | `needs_assignment` | repo surface ledger missing; assignment must refresh existing roots before new work |
 | 50 | `PROMPT-PACKETS` | `assigned_from_existing_work` | packet ledger clear from receipts |
 | 60 | `VALUE-REPOS` | `assigned_from_existing_work` | 19 value repos define the funded work lane |
