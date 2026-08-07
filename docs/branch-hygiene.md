@@ -23,7 +23,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `work/truth-session-breadcrumb-20260721` — 26a808ad fix: close SessionEnd review gaps
 - `worktree-feat-decorum-keeper` — 50145954 feat(decorum): complete the mentor loop — self-closing issues, recurrence ratchet, offline gate
 
-## Live-work branches (468) — decide each
+## Live-work branches (469) — decide each
 
 - `_pr198` — 4cd0dbaa fix(ci): heal main CI-poison — remove dead `import time` in dispatch.py (F401)
 - `agent/codex-sessions-adapter-0713` — 4f56aa95 fix(prompt): adapt Codex session records exactly
@@ -49,6 +49,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `codex/network-substrate-healing-20260628` — 5ba52e5d capture: autonomic off-disk sync 2026-06-29T10:39:58Z
 - `codex/progress-universe-0713` — 45a7aa40 docs(cli): document progress ledger command
 - `codex/resource-safe-closeout` — d682600e limen: format lifecycle pressure tests
+- `codex/runtime-probe-retry-0713` — 6f0307fc Merge remote-tracking branch 'origin/main' into codex/runtime-probe-retry-0713
 - `codex/safe-storage-reclaim-20260709` — 49bd86b7 reclaim: preserve and reap safe storage roots
 - `codex/session-scope-boundary-closeout` — c4bace4c fix(hooks): scope task sessions to worktree
 - `codex/student-email-doctrine-cleanup-20260709` — 00e05587 Merge remote-tracking branch 'origin/main' into codex/student-email-doctrine-cleanup-20260709
