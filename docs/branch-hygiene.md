@@ -23,7 +23,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `work/truth-session-breadcrumb-20260721` — 26a808ad fix: close SessionEnd review gaps
 - `worktree-feat-decorum-keeper` — 50145954 feat(decorum): complete the mentor loop — self-closing issues, recurrence ratchet, offline gate
 
-## Live-work branches (466) — decide each
+## Live-work branches (467) — decide each
 
 - `_pr198` — 4cd0dbaa fix(ci): heal main CI-poison — remove dead `import time` in dispatch.py (F401)
 - `agent/codex-sessions-adapter-0713` — 4f56aa95 fix(prompt): adapt Codex session records exactly
@@ -79,6 +79,7 @@ Push them as a follow-up PR, or delete if the extra commits are throwaway.
 - `feat-63-ugc-moderation` — b4c56d9d chore: fix validation errors in tasks.yaml
 - `feat/bhagavad-gita-arcs-5-8` — 13a810c3 feat(studium): author metamorphoses books 2 and 3 arcs
 - `feat/censor-monthly-tier` — a89dd048 censor: add MONTHLY cadence (2592000s) to TIER_SECONDS
+- `feat/charles-rose-toners-post` — 876e6033 Add Charles rose toners closeout relay capsule
 - `feat/clavis-credential-provisioning` — 028faaa9 feat(clavis): credential-provisioning organ — own the service account + its one vault as code
 - `feat/cli-watch-subcommand` — 7f17d103 feat(cli): wire watch subcommand with --compact/--once modes
 - `feat/conversion-funnel` — 0eba9cca feat(conversion): measure the public face — traffic collector + funnel leak-diagnosis
