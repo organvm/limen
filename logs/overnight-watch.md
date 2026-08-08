@@ -1,12 +1,12 @@
 # Overnight Watch
 
 - Status: `ok`
-- Updated: `2026-08-08T01:50:30+00:00`
-- Log age: `72` seconds
+- Updated: `2026-08-08T02:14:18+00:00`
+- Log age: `587` seconds
 - Launchd: `active`
-- Latest tick: `tick emitted: 2026-08-08T01:41:32+00:00 total=3111 open=829 spent=8/600`
+- Latest tick: `tick emitted: 2026-08-08T01:58:55+00:00 total=3111 open=829 spent=8/600`
 - Latest async: `None`
-- Stale tick samples: `1`
+- Stale tick samples: `2`
 - Active workers: `0`
 - Heartbeat child processes: `1`
 
@@ -15,16 +15,16 @@
 - Launched: `0`; harvested: `0`; reaped: `0`.
 - Done: `0`; failed: `0`; no-op: `0`; timed out: `0`.
 - Stale handoff: `false`.
-- Gate action: `continue_direct_product_work` (exit `0`).
+- Gate action: `bootstrap_idle_dispatch` (exit `0`).
 - Dispatch allowed: `true`.
 - Lane switch: `not_requested`; owner packet: `none`; tickets: `0`.
 - Lane blocker: `none`.
-- Next command: `python3 scripts/product-ledger.py --refresh --redacted-summary`.
+- Next command: `python3 -m limen dispatch --agent jules --limit 1`.
 
 ## Gate Checks
 
 - Handoff refresh: `0`; check: `0`.
-- Value gate: `0`; action: `continue_direct_product_work`.
+- Value gate: `0`; action: `bootstrap_idle_dispatch`.
 - Dispatch control: dispatch allowed.
 - Selected owner: `none`.
 
@@ -32,4 +32,4 @@
 
 - Recent per-60min completions: `[0, 0, 0]` (derived floor `0.0`, median `0`).
 - Below floor: `false`; suppressed: `no`.
-  - child `84915` `S` `01:58:35` `/bin/bash /Users/4jp/Workspace/limen/scripts/heartbeat-loop.sh`
+  - child `84915` `S` `02:22:23` `/bin/bash /Users/4jp/Workspace/limen/scripts/heartbeat-loop.sh`
