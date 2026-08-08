@@ -64,32 +64,48 @@ scout/fieldwork vetting; adoption and every send stay human-gated.
 
 | dependency | used across our repos |
 |---|---|
-| pytest | 35 |
-| typescript | 30 |
-| vitest | 24 |
-| ruff | 23 |
-| pyyaml | 22 |
-| eslint | 21 |
-| react | 15 |
-| react-dom | 14 |
-| node | 13 |
-| pytest-cov | 12 |
-| js | 10 |
-| httpx | 9 |
+| pyyaml | 4 |
+| playwright | 3 |
+| pydantic | 3 |
+| pytest | 3 |
+| typescript | 3 |
+| httpx | 2 |
+| node | 2 |
+| requests | 2 |
+| ruff | 2 |
+| test | 2 |
+| tsx | 2 |
+| uvicorn | 2 |
 
 ## Backflow (the inward product)
 
-- **ORGAN-III** — 2 signal(s) routed inward
-- **ORGAN-IV** — 3 signal(s) routed inward
-- **ORGAN-V** — 2 signal(s) routed inward
-- **ORGAN-VI** — 22 signal(s) routed inward
-- **ORGAN-VII** — 21 signal(s) routed inward
+- backflow manifest not readable from this host — the tally renders where it is.
 
 ## Estate register (`ESTATE.yaml`)
 
-42 artifacts registered — 38 verified present locally, 3 cited (remote/receipt), 0 DRIFT, 1 optional-absent.
+43 artifacts registered — 21 verified present locally, 3 cited (remote/receipt), 17 DRIFT, 2 optional-absent.
 
-_Optional-absent (expected): `hub-seed-root`_
+**DRIFT — registered artifacts gone absent (repair or re-home, never delete the entry):**
+
+- `backflow-knowledge`
+- `backflow-manifest`
+- `bodi-charter`
+- `captains-log`
+- `chronicle-epoch-012`
+- `engine-a`
+- `engine-a-tests`
+- `engine-b`
+- `essay-recursive-proof`
+- `inbound-contributing`
+- `memory-constellation`
+- `memory-engine-design`
+- `memory-specvlvm`
+- `memory-sweep`
+- `outreach-protocol`
+- `plan-vacuums`
+- `pr-status-checker`
+
+_Optional-absent (expected): `hub-seed-root`, `session-discovery-worktrees`_
 
 ## The estate this mirror reflects
 
