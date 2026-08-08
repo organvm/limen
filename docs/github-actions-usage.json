@@ -3,26 +3,26 @@
     "application-pipeline": 119,
     "domus": 120,
     "domus-genoma": 149,
-    "limen": 13680,
+    "limen": 13681,
     "metasystem-master": 120,
     "my-knowledge-base": 54,
     "organvm-corpvs-testamentvm": 225,
     "render-second-amendment": 45,
-    "the-thing-without-a-name": 728,
+    "the-thing-without-a-name": 733,
     "universal-mail--automation": 70
   },
   "as_of_day": 8,
   "billing_canary": {
-    "detail": "newest run 31240402361 concluded 'success'",
+    "detail": "newest run 31242129782 concluded 'success'",
     "green": true,
     "repo": "organvm/limen"
   },
   "budget_net_usd": 25.0,
   "by_product": {
     "actions": {
-      "gross_usd": 96.59,
+      "gross_usd": 96.62,
       "net_usd": 0.0,
-      "quantity": 15927.35
+      "quantity": 15934.12
     },
     "code_quality": {
       "gross_usd": 3.13,
@@ -37,10 +37,10 @@
     "git_lfs": {
       "gross_usd": 0.37,
       "net_usd": 0.0,
-      "quantity": 3961.96
+      "quantity": 3984.31
     }
   },
-  "gross_usd_total": 111.16,
+  "gross_usd_total": 111.19,
   "month": "2026-08",
   "net_usd_projected_month_end": 55.02,
   "net_usd_total": 14.2,

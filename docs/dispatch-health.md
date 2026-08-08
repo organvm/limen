@@ -1,6 +1,6 @@
 # Campaign Heartbeat Health
 
-Generated: `2026-08-08T03:36:49+00:00`
+Generated: `2026-08-08T06:31:14+00:00`
 
 Status: `blocked`
 
@@ -27,7 +27,7 @@ Status: `blocked`
 - Loaded LIMEN_WORKTREES: `/Volumes/Scratch/limen-worktrees`.
 - Loaded LIMEN_WORKTREE_ROOT: `/Volumes/Scratch/limen-worktrees`.
 - Loaded LIMEN_CAMPAIGN_WAKE_TIMEOUT: `300`.
-- Watchdog dry-run healthy: `True`; `[watchdog] 2026-08-08T03:36:50.409515+00:00 HEALTHY sig=healthy`.
+- Watchdog dry-run healthy: `True`; `[watchdog] 2026-08-08T06:31:14.857795+00:00 HEALTHY sig=healthy`.
 
 ## Legacy Manual Async Diagnostic
 
@@ -69,11 +69,15 @@ Status: `blocked`
 - HEAD: `bf68718fdc05a22a561e558850f2cfc301ec3277`.
 - origin/main: `f57b27434ae1fa45281983a18faa298ddf059038`.
 - Matches origin/main: `False`; ahead `0` behind `10`.
-- Dirty entries: `39`.
+- Dirty entries: `44`.
+- Ignored generated receipt dirty entries: `1`.
+  - `docs/dispatch-health.md`
+  - `docs/RECLASSIFY-PROPOSAL.md`
   - `docs/always-working.md`
   - `docs/branch-hygiene.md`
   - `docs/capacity-fill.md`
   - `docs/diurnal/INDEX.md`
+  - `docs/github-actions-usage.json`
   - `docs/receipts/session-contention-ledger.json`
   - `docs/receipts/tcc-track-c-1703/closeout-latest.json`
   - `logs/overnight-watch.md`
@@ -98,8 +102,6 @@ Status: `blocked`
   - `docs/receipts/tcc-track-c-1703/closeout-20260807T015152Z.json`
   - `docs/receipts/tcc-track-c-1703/closeout-20260807T032817Z.json`
   - `docs/receipts/tcc-track-c-1703/closeout-20260807T051706Z.json`
-  - `docs/receipts/tcc-track-c-1703/closeout-20260807T070333Z.json`
-  - `docs/receipts/tcc-track-c-1703/closeout-20260807T084228Z.json`
   - `<truncated>`
 
 ## Verified Worktree
@@ -111,7 +113,7 @@ Status: `blocked`
 ## Blockers
 
 - `live-root-not-at-origin-main`: live root branch main head bf68718fdc05 differs from origin/main f57b27434ae1.
-- `live-root-dirty`: live root has 39 dirty entries.
+- `live-root-dirty`: live root has 44 dirty entries.
 - `always-working-required-work-open`: 5 required promise workstream(s) remain open; next item SUBSTRATE-DISK-TEMP.
 
 ## Commands
