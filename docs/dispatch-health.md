@@ -1,6 +1,6 @@
 # Campaign Heartbeat Health
 
-Generated: `2026-08-08T10:43:02+00:00`
+Generated: `2026-08-08T13:34:51+00:00`
 
 Status: `blocked`
 
@@ -27,7 +27,7 @@ Status: `blocked`
 - Loaded LIMEN_WORKTREES: `/Volumes/Scratch/limen-worktrees`.
 - Loaded LIMEN_WORKTREE_ROOT: `/Volumes/Scratch/limen-worktrees`.
 - Loaded LIMEN_CAMPAIGN_WAKE_TIMEOUT: `300`.
-- Watchdog dry-run healthy: `True`; `[watchdog] 2026-08-08T10:43:03.219986+00:00 HEALTHY sig=healthy`.
+- Watchdog dry-run healthy: `True`; `[watchdog] 2026-08-08T13:34:52.521949+00:00 HEALTHY sig=healthy`.
 
 ## Legacy Manual Async Diagnostic
 
@@ -57,7 +57,7 @@ Status: `blocked`
 - Next item: `SUBSTRATE-DISK-TEMP` (`assigned_from_existing_work`).
 - Public reconciliation: `~/Workspace/limen/docs/always-working.md`.
   - `SUBSTRATE-DISK-TEMP`: `substrate` / `assigned_from_existing_work`; substrate lifecycle predicate is failing.
-  - `PUBLIC-FACE-CONTRIBUTION-BALANCE`: `contribution-balance` / `assigned_from_existing_work`; GitHub activity mix needs owner action: commits 70.7%, PRs 17.8%, issues 10.5%, reviews 0.9%.
+  - `PUBLIC-FACE-CONTRIBUTION-BALANCE`: `contribution-balance` / `assigned_from_existing_work`; GitHub activity mix needs owner action: commits 70.5%, PRs 17.8%, issues 10.7%, reviews 0.9%.
   - `MAIL-ACTIVE-FLAGGED`: `mail-active` / `assigned_from_existing_work`; 236 active flagged non-deleted messages require classification.
   - `REPO-BOIL-UP`: `repo-boil-up` / `needs_assignment`; repo surface ledger missing; assignment must refresh existing roots before new work.
   - `VALUE-REPOS`: `revenue-value-repos` / `assigned_from_existing_work`; 19 value repos define the funded work lane.
@@ -65,11 +65,11 @@ Status: `blocked`
 ## Live Root
 
 - Live root: `~/Workspace/limen`.
-- Branch: `main`; status `## main...origin/main [behind 11]`.
+- Branch: `main`; status `## main...origin/main [behind 15]`.
 - HEAD: `bf68718fdc05a22a561e558850f2cfc301ec3277`.
-- origin/main: `59f69a824eb550c3961266e085df9cb4b5860093`.
-- Matches origin/main: `False`; ahead `0` behind `11`.
-- Dirty entries: `47`.
+- origin/main: `3739cced390804e5306a47c59df1292bee075d8b`.
+- Matches origin/main: `False`; ahead `0` behind `15`.
+- Dirty entries: `49`.
 - Ignored generated receipt dirty entries: `1`.
   - `docs/dispatch-health.md`
   - `docs/RECLASSIFY-PROPOSAL.md`
@@ -107,13 +107,13 @@ Status: `blocked`
 ## Verified Worktree
 
 - Verified worktree: `~/Workspace/limen`.
-- Branch: `main`; status `## main...origin/main [behind 11]`.
+- Branch: `main`; status `## main...origin/main [behind 15]`.
 - HEAD matches origin/main: `False`.
 
 ## Blockers
 
-- `live-root-not-at-origin-main`: live root branch main head bf68718fdc05 differs from origin/main 59f69a824eb5.
-- `live-root-dirty`: live root has 47 dirty entries.
+- `live-root-not-at-origin-main`: live root branch main head bf68718fdc05 differs from origin/main 3739cced3908.
+- `live-root-dirty`: live root has 49 dirty entries.
 - `always-working-required-work-open`: 5 required promise workstream(s) remain open; next item SUBSTRATE-DISK-TEMP.
 
 ## Commands

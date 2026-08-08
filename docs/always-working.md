@@ -1,6 +1,6 @@
 # Always-Working Reconciliation
 
-Generated: `2026-08-08T12:06:28+00:00`
+Generated: `2026-08-08T13:29:55+00:00`
 Status: `needs-work`
 Required open: `5`
 Blocked: `1`
@@ -31,10 +31,10 @@ Done from receipt: `5`
 | 0 | `SUBSTRATE-DISK-TEMP` | `assigned_from_existing_work` | substrate lifecycle predicate is failing |
 | 5 | `ESTATE-CUSTODY` | `done_from_receipt` | run-and-gun laptop cache and external estate custody have implementation receipts |
 | 10 | `PUBLIC-FACE-PROFILE` | `blocked` | profile repo README missing |
-| 15 | `PUBLIC-FACE-CONTRIBUTION-BALANCE` | `assigned_from_existing_work` | GitHub activity mix needs owner action: commits 70.7%, PRs 17.8%, issues 10.5%, reviews 0.9% |
+| 15 | `PUBLIC-FACE-CONTRIBUTION-BALANCE` | `assigned_from_existing_work` | GitHub activity mix needs owner action: commits 70.5%, PRs 17.8%, issues 10.7%, reviews 0.9% |
 | 18 | `CREDENTIAL-WALL-TOKEN-HYGIENE` | `done_from_receipt` | credential wall and historical token tombstone receipt are present |
 | 20 | `MAIL-ACTIVE-FLAGGED` | `assigned_from_existing_work` | 236 active flagged non-deleted messages require classification |
-| 30 | `MAIL-HISTORICAL-BACKLOG` | `done_from_receipt` | 500 historical messages atomized in this bounded batch; 102870 indexed non-deleted messages remain for future batches |
+| 30 | `MAIL-HISTORICAL-BACKLOG` | `done_from_receipt` | 500 historical messages atomized in this bounded batch; 102958 indexed non-deleted messages remain for future batches |
 | 40 | `REPO-BOIL-UP` | `needs_assignment` | repo surface ledger missing; assignment must refresh existing roots before new work |
 | 50 | `PROMPT-PACKETS` | `done_from_receipt` | packet ledger clear from receipts |
 | 60 | `VALUE-REPOS` | `assigned_from_existing_work` | 19 value repos define the funded work lane |
