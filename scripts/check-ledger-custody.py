@@ -177,8 +177,8 @@ def check_b_touchers(ledger_id: str, spec: dict[str, Any]) -> list[str]:
     return findings
 
 
-def check_c_series(ledger_id: str, spec: dict[str, Any]) -> list[str]:
-    """Committed rows are distinct and strictly ordered by the ledger's own clock."""
+def check_c_series(ledger_id: str, spec: dict[str, Any], baseline: set[tuple[str, str]]) -> list[str]:
+    """Non-baselined committed rows are distinct and strictly ordered by the ledger's own clock."""
     series_key = spec.get("series_key")
     if not series_key:
         return []
@@ -188,13 +188,21 @@ def check_c_series(ledger_id: str, spec: dict[str, Any]) -> list[str]:
     seen: dict[str, str] = {}
     previous: tuple[str, str] | None = None
     for sha, _subject in rows:
+        baselined = (sha, ledger_id) in baseline
         data = blob_at(sha, spec["path"])
         if data is None:
-            findings.append(f"[C] {ledger_id}: {sha[:8]} committed an unreadable ledger")
+            if not baselined:
+                findings.append(f"[C] {ledger_id}: {sha[:8]} committed an unreadable ledger")
             continue
         stamp = data.get(series_key)
         if not isinstance(stamp, str) or not stamp:
             # Pre-keeper commits may predate the field; that is history, not a live violation.
+            continue
+        if baselined:
+            # Baselining suppresses findings against immutable history; it must not erase
+            # that row from the ordering state used to judge every fresh successor.
+            seen.setdefault(stamp, sha)
+            previous = (sha, stamp)
             continue
         if stamp in seen:
             findings.append(
@@ -244,7 +252,7 @@ def main() -> int:
         baseline = load_baseline(spec.get("baseline"))
         findings.extend(check_a_passengers(ledger_id, spec, baseline))
         findings.extend(check_b_touchers(ledger_id, spec))
-        findings.extend(check_c_series(ledger_id, spec))
+        findings.extend(check_c_series(ledger_id, spec, baseline))
 
     if findings:
         sys.stdout.write(f"check-ledger-custody: FAIL — {len(findings)} finding(s)\n\n")
